@@ -1,6 +1,3 @@
-// TODO: SEPARATOR SHOULD BE IN A COMMON FILE
-
-#include <iostream>
 #include <string>
 #include <fstream>
 #include <sstream>
@@ -16,11 +13,8 @@
 using namespace std::chrono_literals;
 
 #include "predictor.hpp"
-
-std::unordered_map<std::string, events_t> std_event_map = {
-    {"r", RD}, {"w", WR}, {"fork", FORK}, {"join", JOIN}, {"acq", LK}, {"rel", UK}
-};
-
+#include "logger.hpp"
+#include "util.hpp"
 
 // Maps for converting from std format
 size_t std_lock_id_counter = 0;
@@ -80,10 +74,10 @@ EventInfo from_std(const std::vector<std::string>& current_result) {
         auto target = current_result.at(1).substr(event_len + 1, current_result.at(1).length() - event_len - 2);
 
         // Update maps depending on operation
-        if(result.event_type == FORK || result.event_type == JOIN) {
+        if(result.event_type == EventsT::FORK || result.event_type == EventsT::JOIN) {
           result.target = get_id(std_thread_map, std_thread_counter, target);
         } 
-        else if(result.event_type == LK || result.event_type == UK) {  
+        else if(result.event_type == EventsT::LK || result.event_type == EventsT::UK) {  
           result.target = get_id(std_lock_id_map, std_lock_id_counter , target);
         }      
 	    else{
@@ -93,24 +87,10 @@ EventInfo from_std(const std::vector<std::string>& current_result) {
       // Set src code location
       result.src_loc = std::stoi(current_result.at(2));
     } else { // Event not found
-      result.event_type = NONE;
+      result.event_type = EventsT::NONE;
     }
 
     std_evt_counter += 1;
-
-    return result;
-}
-
-// Splits str by sep
-std::vector<std::string> split(const std::string& str, char sep){
-    std::stringstream ss(str);
-    std::vector<std::string> result;
-
-    while(ss.good()) {
-        std::string substring;
-        getline(ss, substring, sep);
-        result.push_back(substring);
-    }
 
     return result;
 }
@@ -121,15 +101,13 @@ void parse_trace(std::ifstream& file, std::string pred_name) {
 
     std::string evt_str;
     int line_index = 0;
-    const char sep = '|';
-    const uint8_t exp_split_trace_size = 3;
 
     while(std::getline(file, evt_str)) {
         line_index++;
-        std::vector<std::string> evt_str_split = split(evt_str, sep);
+        std::vector<std::string> evt_str_split = split(evt_str, trace_sep);
 
         if(evt_str_split.size() != exp_split_trace_size) {
-            std::cout << "[WARN]: Bad file format on line " << line_index << ": " << evt_str << std::endl;
+            Logger::print(LogType::WARN, "Bad file format on line %d: %s", line_index, evt_str.c_str());
             continue;
         }
         
@@ -139,15 +117,15 @@ void parse_trace(std::ifstream& file, std::string pred_name) {
         
         bool is_val_evt = predictor.handle_event(event);
         if (!is_val_evt)
-            std::cout << "[WARN]: Invalid event on line " << line_index << ": " << evt_str << std::endl;
+            Logger::print(LogType::WARN, "Invalid event on line %d: %s", line_index, evt_str.c_str());
 
-        event.print();
+        Logger::print(LogType::DBG, event.show().c_str());
     }
 
     auto end_time_1 = std::chrono::steady_clock::now();
     size_t run_time_1 = std::chrono::duration_cast<std::chrono::milliseconds>(end_time_1 - start_time_1).count();
 
-    std::cout << "[INFO]: Parsed and processed" << line_index << " lines in " << run_time_1 << "ms." << std::endl;
+    Logger::print(LogType::INFO, "Parsed and processed %d lines in %zums.", line_index, run_time_1);
 }
 
 // Arg1 : trace file
@@ -157,7 +135,7 @@ void parse_trace(std::ifstream& file, std::string pred_name) {
 int main(int argc, char *argv[]) {
     const uint8_t exp_args = 3;
     if (argc != exp_args){
-        std::cout << "Usage: ./main.exe [input_file] [test_name]";
+        Logger::print(LogType::ERR, "Usage: ./main.exe [input_file] [test_name]");
         return 1; 
     }
 
@@ -167,7 +145,7 @@ int main(int argc, char *argv[]) {
 
     std::ifstream file(input_file);
     if(!file.good()) {
-        std::cout << "[ERROR]: File not found: " << input_file << std::endl;
+        Logger::print(LogType::ERR, "File not found: %s", input_file.c_str());
         return 1;
     }
 

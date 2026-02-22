@@ -2,14 +2,16 @@
 
 #include <string>
 #include <vector>
+#include <format>
+#include "util.hpp"
 
-typedef int thread_id_t;
-typedef int trace_pos_t;
-typedef int resource_name_t;
-typedef int src_loc_t;
+typedef int ThreadIdT;
+typedef int TracePosT;
+typedef int ResourceNameT;
+typedef int SrcLocT;
 
 // Event stuff
-enum events_t {
+enum class EventsT {
   RD = 1,
   WR = 2,
   FORK = 3,
@@ -19,15 +21,38 @@ enum events_t {
   NONE = 7
 };
 
-struct EventInfo{
-  thread_id_t thread_id;
-  events_t event_type;
-  resource_name_t target;
-  src_loc_t src_loc;
-  trace_pos_t line; // line in trace file 
+std::unordered_map<std::string, EventsT> std_event_map = {
+    {"r", EventsT::RD}, {"w", EventsT::WR}, {"fork", EventsT::FORK}, {"join", EventsT::JOIN}, {"acq", EventsT::LK}, {"rel", EventsT::UK}
+};
 
-  void print(){
-    std::cout << "Line " << line << ": " << thread_id << "|" << event_type << "(" << target << ")" << "|" << src_loc << std::endl;
+// Formats EventsT
+// Needed when calling std::format
+template <>
+struct std::formatter<EventsT> : std::formatter<std::string> {
+    auto format(EventsT e, format_context& ctx) const {
+        std::string name;
+        switch (e) {
+            case EventsT::RD: name = "r"; break;
+            case EventsT::WR:  name = "w"; break;
+            case EventsT::FORK: name = "fork"; break;
+            case EventsT::JOIN: name = "join"; break;
+            case EventsT::LK: name = "acq"; break;
+            case EventsT::UK: name = "rel"; break;
+            default: name = "UNKNOWN"; break;
+        }
+        return formatter<std::string>::format(name, ctx);
+    }
+};
+
+struct EventInfo{
+  ThreadIdT thread_id;
+  EventsT event_type;
+  ResourceNameT target;
+  SrcLocT src_loc;
+  TracePosT line; // line in trace file 
+
+  std::string show(){
+    return std::format("Line {}: {}|{}({})|{}", line, thread_id, event_type, target, src_loc);
   }
 };
 
