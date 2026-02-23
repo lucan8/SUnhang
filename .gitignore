@@ -1,3 +1,4 @@
 *.txt
 *.std
 *.exe
+build/
