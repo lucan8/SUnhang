@@ -13,10 +13,10 @@
 #include <cassert>
 using namespace std::chrono_literals;
 
-#include "predictor.hpp"
-#include "logger.hpp"
-#include "util.hpp"
-#include "test_vectorclock.cpp"
+#include "../include/predictor.hpp"
+#include "../include/logger.hpp"
+#include "../include/util.hpp"
+#include "../include/test_vectorclock.hpp"
 
 // Maps for converting from std format
 size_t std_lock_id_counter = 0;
