@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 #include <format>
-#include "util.hpp"
+#include <unordered_map>
 
 typedef int ThreadIdT;
 typedef int TracePosT;
@@ -21,7 +21,7 @@ enum class EventsT {
   NONE = 7
 };
 
-std::unordered_map<std::string, EventsT> std_event_map = {
+inline std::unordered_map<std::string, EventsT> std_event_map = {
     {"r", EventsT::RD}, {"w", EventsT::WR}, {"fork", EventsT::FORK}, {"join", EventsT::JOIN}, {"acq", EventsT::LK}, {"rel", EventsT::UK}
 };
 
@@ -55,4 +55,3 @@ struct EventInfo{
     return std::format("Line {}: {}|{}({})|{}", line, thread_id, event_type, target, src_loc);
   }
 };
-

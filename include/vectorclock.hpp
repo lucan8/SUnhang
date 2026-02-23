@@ -1,10 +1,8 @@
 #pragma once
 
 #include <unordered_map>
-#include <map>
-#include <vector>
-#include <iterator>
 #include "vectorclock_types.hpp"
+#include "predictor_types.hpp"
 
 struct VectorClock {
     std::unordered_map<ThreadIdT, VCValueT> _vector_clock = {};
