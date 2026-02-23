@@ -1,3 +1,5 @@
+//TODO: Add automatic formatting for your code
+
 #include <string>
 #include <fstream>
 #include <sstream>
@@ -7,14 +9,14 @@
 #include <unordered_map>
 #include <set>
 #include <optional>
-
 #include <future>
-
+#include <cassert>
 using namespace std::chrono_literals;
 
 #include "predictor.hpp"
 #include "logger.hpp"
 #include "util.hpp"
+#include "test_vectorclock.cpp"
 
 // Maps for converting from std format
 size_t std_lock_id_counter = 0;
@@ -148,6 +150,8 @@ int main(int argc, char *argv[]) {
         Logger::print(LogType::ERR, "File not found: %s", input_file.c_str());
         return 1;
     }
+
+    TestVectorClock::test();
 
     reset_cnt_map();
     parse_trace(file,pred_name);
