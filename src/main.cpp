@@ -1,4 +1,6 @@
 //TODO: Add automatic formatting for your code
+//TODO: Either use format everywhere or show, not both(USE PRINT!)
+//TODO: Functions for stats and tests for graph construction (dependencies, locks, variables, events)
 
 #include <string>
 #include <fstream>
@@ -17,6 +19,7 @@ using namespace std::chrono_literals;
 #include "../include/logger.hpp"
 #include "../include/util.hpp"
 #include "../include/test_vectorclock.hpp"
+#include "../include/test_predictor.hpp"
 
 // Maps for converting from std format
 size_t std_lock_id_counter = 0;
@@ -97,9 +100,8 @@ EventInfo from_std(const std::vector<std::string>& current_result) {
     return result;
 }
 
-void parse_trace(std::ifstream& file, std::string pred_name) {
+void parse_trace(Predictor& predictor, std::ifstream& file, std::string pred_name) {
     auto start_time_1 = std::chrono::steady_clock::now();
-    Predictor predictor;
 
     std::string evt_str;
     int line_index = 0;
@@ -151,9 +153,15 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    // Test stuff
     TestVectorClock::test();
+    TestPredictor::test();
 
     reset_cnt_map();
-    parse_trace(file,pred_name);
+    Predictor predictor;
+    parse_trace(predictor, file, pred_name);
+
+    predictor.print_abs_deps();
+
     return 0;
 }
