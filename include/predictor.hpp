@@ -14,14 +14,14 @@ struct Predictor{
   // Return true if event if valid, false otherwise
   bool handle_event(const EventInfo& evt);
   
-  void read_event(const EventInfo& trace_line);
-  void write_event(const EventInfo& trace_line);
+  void read_event(const EventInfo& evt);
+  void write_event(const EventInfo& evt);
 
-  void acquire_event(const EventInfo& trace_line);
-  void release_event(const EventInfo& trace_line);
+  void acquire_event(const EventInfo& evt);
+  void release_event(const EventInfo& evt);
   
-  void fork_event(const EventInfo& trace_line);
-  void join_event(const EventInfo& trace_line);
+  void fork_event(const EventInfo& evt);
+  void join_event(const EventInfo& evt);
 
   void print_abs_deps() const;
 };

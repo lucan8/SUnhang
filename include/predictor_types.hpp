@@ -83,6 +83,10 @@ struct EventInfo{
   SrcLocT src_loc;
   TracePosT line; // line in trace file 
 
+  EventInfo(){}
+  EventInfo(ThreadIdT thread_id, EventsT event_type, ResourceIdT target, SrcLocT src_loc, TracePosT line)
+    : thread_id(thread_id), event_type(event_type), target(target), src_loc(src_loc), line(line){}
+
   std::string show() const{
     return std::format("Line {}: {}|{}({})|{}", line, thread_id, event_type, target, src_loc);
   }
