@@ -1,5 +1,6 @@
 //TODO: Add automatic formatting for your code
 //TODO: Either use format everywhere or show, not both(USE PRINT!)
+//TODO: Functions for stats and tests for graph construction (dependencies, locks, variables, events)
 
 #include <string>
 #include <fstream>
@@ -18,6 +19,7 @@ using namespace std::chrono_literals;
 #include "../include/logger.hpp"
 #include "../include/util.hpp"
 #include "../include/test_vectorclock.hpp"
+#include "../include/test_predictor.hpp"
 
 // Maps for converting from std format
 size_t std_lock_id_counter = 0;
@@ -151,7 +153,9 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    // Test stuff
     TestVectorClock::test();
+    TestPredictor::test();
 
     reset_cnt_map();
     Predictor predictor;

@@ -1,13 +1,17 @@
 #include "../include/test_vectorclock.hpp"
 #include "../include/vectorclock.hpp"
+#include "../include/logger.hpp"
 #include <cassert>
 
 void TestVectorClock::test(){
+    Logger::print(LogType::INFO, "Running tests on vector clocks...");
     _test_setters();
 
     _test_comp();
 
     _test_merge();
+
+    Logger::print(LogType::INFO, "All vector clock tests passed!");
 }
 
 // Tests increment, set and decrement
@@ -23,6 +27,8 @@ void TestVectorClock::_test_setters(){
     vc1.decrement(1);
     vc1.decrement(1);
     assert(vc1._vector_clock[1] == 0);
+
+    Logger::print(LogType::INFO, "_test_setters passed");
 }
 
 // Test <= and ==
@@ -41,6 +47,8 @@ void TestVectorClock::_test_comp(){
     vc2.decrement(5);
     assert ((vc2 <= vc1) == true);
     assert ((vc2 == vc1) == true);
+
+    Logger::print(LogType::INFO, "_test_comp passed");
 }
 
 // Tests merge and merge_into
@@ -67,4 +75,6 @@ void TestVectorClock::_test_merge(){
 
     // Make sure merge results match gt
     assert (merge_res == gt);
+
+    Logger::print(LogType::INFO, "_test_merge passed");
 }
