@@ -1,7 +1,7 @@
 //TODO: Add automatic formatting for your code
 //TODO: Either use format everywhere or show, not both(USE PRINT!)
 //TODO: Functions for stats and tests for graph construction (dependencies, locks, variables, events)
-
+//TODO: Create namespace for util
 #include <string>
 #include <fstream>
 #include <sstream>
@@ -161,6 +161,9 @@ int main(int argc, char *argv[]) {
     Predictor predictor;
     parse_trace(predictor, file, pred_name);
 
+    predictor.build_neigh_list();
+    
+    predictor.print_neigh_list();
     predictor.print_lock_deps_map();
     predictor.print_abs_deps();
 
