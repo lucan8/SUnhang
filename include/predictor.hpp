@@ -9,10 +9,12 @@
 struct Predictor{
   std::unordered_map<ThreadIdT, ThreadInfo> thread_map;
 
+  // AbsDependency represents a node the graph
   std::map<AbsDependency, std::vector<VectorClock>> abs_deps_map;
+
   // Intermediary step that helps to build the neighbour list
   std::unordered_map<ResourceIdT, std::vector<const AbsDependency*>> lock_dep_map;
-  std::unordered_map<AbsDependency*, std::vector<const AbsDependency*>> neigh_list; 
+  std::unordered_map<const AbsDependency*, std::vector<const AbsDependency*>> neigh_list; 
 
   std::unordered_map<ResourceIdT, VectorClock> last_write;
 
@@ -29,6 +31,9 @@ struct Predictor{
   void fork_event(const EventInfo& evt);
   void join_event(const EventInfo& evt);
 
+  void build_neigh_list();
+
   void print_abs_deps() const;
   void print_lock_deps_map() const;
+  void print_neigh_list() const;
 };
