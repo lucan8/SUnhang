@@ -48,7 +48,13 @@ void Predictor::acquire_event(const EventInfo& evt) {
 
     // Create abstract dependency and add it's instance's timestamp to the vector
     AbsDependency dep(evt.thread_id, evt.target, th_info.lockset);
-    abs_deps_map[dep].push_back(th_info.vec_clock);
+    auto [it, inserted] = abs_deps_map.try_emplace(std::move(dep), std::vector<VectorClock>{});
+    it->second.push_back(th_info.vec_clock);
+
+    // Locks from lockset should point to this dependency
+    if (inserted)
+        for (const auto lock : th_info.lockset)
+            lock_dep_map[lock].push_back(&(it->first));
 
     // Add lock to lockset
     th_info.lockset.insert(evt.target);
@@ -74,6 +80,20 @@ void Predictor::print_abs_deps() const{
 
     for (const auto& [dep, timestamps] : abs_deps_map){
         Logger::print(LogType::DBG, "%s: %d", dep.show().c_str() ,timestamps.size());
+    }
+
+    Logger::print(LogType::INFO, "Num deps: %d", abs_deps_map.size());
+    Logger::print(LogType::INFO, "------------------------------------");
+}
+
+void Predictor::print_lock_deps_map() const{
+    Logger::print(LogType::INFO, "LOCK DEPENDENCIES MAP");
+    Logger::print(LogType::INFO, "------------------------------------");
+
+    for (const auto& [lock, dep_vec] : lock_dep_map){
+        Logger::print(LogType::DBG, "(Lock)%d: %d(Dep count)", lock, dep_vec.size());
+        for (const auto dep : dep_vec)
+            Logger::print(LogType::DBG, "%s", dep->show().c_str());
     }
 
     Logger::print(LogType::INFO, "Num deps: %d", abs_deps_map.size());
