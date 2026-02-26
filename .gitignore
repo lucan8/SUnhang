@@ -2,3 +2,4 @@
 *.std
 *.exe
 build/
+resources/

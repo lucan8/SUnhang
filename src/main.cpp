@@ -161,6 +161,7 @@ int main(int argc, char *argv[]) {
     Predictor predictor;
     parse_trace(predictor, file, pred_name);
 
+    predictor.print_lock_deps_map();
     predictor.print_abs_deps();
 
     return 0;
