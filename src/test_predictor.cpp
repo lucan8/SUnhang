@@ -61,6 +61,9 @@ void TestPredictor::_test_acquire_event(){
 
     // Dependency is the one we expect
     assert (dep->first.thread_id == 1 && dep->first.resource_id == 1 && dep->first.lockset.empty());
+    
+    // First level lock acq are ignored by lock_dep_map
+    assert (pred.lock_dep_map.empty() == true);
 
     // Remove lock from lockset and add it back to recreate the dependency
     ev.event_type = EventsT::UK;
@@ -73,6 +76,20 @@ void TestPredictor::_test_acquire_event(){
     assert (pred.abs_deps_map.size() == 1);
     assert (dep->second.size() == 2);
 
+    // Check that lock_dep_map remained unchanged
+    assert (pred.lock_dep_map.empty() == true);
+
+    // Create new dependency
+    ev.target = 2;
+    pred.handle_event(ev);
+    
+    // Make sure the entry for the old lock(1) was created
+    auto lock_it = pred.lock_dep_map.find(1);
+    assert (lock_it != pred.lock_dep_map.end());
+
+    // Make sure the corr dep has old lock in it's lockset
+    auto& ls = lock_it->second.at(0)->lockset;
+    assert (ls.find(lock_it->first) != ls.end());
     Logger::print(LogType::INFO, "test_acquire_event passed");
 }
 
