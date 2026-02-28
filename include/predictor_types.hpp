@@ -7,6 +7,7 @@
 #include <unordered_set>
 #include "vectorclock.hpp"
 #include "comm_types.hpp"
+#include "util.hpp"
 
 
 // Format for LocksetT
@@ -40,6 +41,16 @@ struct AbsDependency{
 
   // Implements all comparison operators in the default way(first compare by thread, then resource, then lockset)
   auto operator<=>(const AbsDependency&) const = default;
+
+  // return true if thread_ids and resource_ids differ and locksets don't intersect, false otherwise
+  bool is_valid_neigh_cand(const AbsDependency& other) const{
+    return thread_id != other.thread_id && resource_id != other.resource_id && !lockset_intersection(lockset, other.lockset);
+  }
+  
+  // return true if thread_ids differ and locksets don't intersect, false otherwise
+  bool is_valid_neigh_cand_opt(const AbsDependency& other) const{
+    return thread_id != other.thread_id && !lockset_intersection(lockset, other.lockset);
+  }
 };
 
 // Event stuff
