@@ -2,6 +2,13 @@
 //TODO: Either use format everywhere or show, not both(USE PRINT!)
 //TODO: Functions for stats and tests for graph construction (dependencies, locks, variables, events)
 //TODO: Create namespace for util
+// SIMPLE OPTIMIZATION: IGNORE FIRST LEVEL LOCK ACQUISITIONS!
+//OPTIMIZATION:
+// Instead of recomputing the SCCs everytime on the subgraph, take only the SCC from which the node was removed
+// And run the algorithm only on that subgraph
+
+// TODO: Bensalem asserts!
+// Graph info for bensalem: 12 nodes, only 3 with outgoing neighbours, graph on the second to last page of your notebook
 #include <string>
 #include <fstream>
 #include <sstream>
@@ -20,6 +27,7 @@ using namespace std::chrono_literals;
 #include "../include/util.hpp"
 #include "../include/test_vectorclock.hpp"
 #include "../include/test_predictor.hpp"
+#include "../include/scc_enumerator.hpp"
 
 // Maps for converting from std format
 size_t std_lock_id_counter = 0;
@@ -166,6 +174,10 @@ int main(int argc, char *argv[]) {
     predictor.print_neigh_list();
     predictor.print_lock_deps_map();
     predictor.print_abs_deps();
+
+    SCCEnumerator scc_enumerator(predictor.abs_deps_map, predictor.neigh_list);
+    scc_enumerator.get_min_strong_conn_comp();
+    scc_enumerator.print_info();
 
     return 0;
 }

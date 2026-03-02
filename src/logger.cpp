@@ -31,3 +31,7 @@ void Logger::_print_log_type(LogType log_type){
             break;
     }
 }
+
+void Logger::print_dash_line(){
+    Logger::print(LogType::INFO, "------------------------------------");
+}

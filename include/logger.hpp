@@ -13,6 +13,7 @@ struct Logger {
     // 2 and 3 represent the argument indexes for format and args for printf
     __attribute__((format(printf, 2, 3)))
     static void print(LogType log_type, const char* format, ...);
-
+    static void print_dash_line();
     static void _print_log_type(LogType log_type);
+    
 };
