@@ -1,33 +1,24 @@
 #include "../include/logger.hpp"
-#include <cstdio>
-#include <cstdarg>
-
-void Logger::print(LogType log_type, const char* format, ...) {    
-    _print_log_type(log_type);
-
-    va_list args;
-    va_start(args, format);
-    vprintf(format, args);
-    va_end(args);
-    
-    printf("\n");
-}
 
 void Logger::_print_log_type(LogType log_type){
     switch (log_type){
         case LogType::INFO:
-            printf("[INFO]:");
+            std::print("[INFO]:");
             break;
         case LogType::WARN:
-            printf("[WARN]:");
+            std::print("[WARN]:");
             break;
         case LogType::ERR:
-            printf("[ERR]:");
+            std::print("[ERR]:");
             break;
         case LogType::DBG:
-            printf("[DBG]:");
+            std::print("[DBG]:");
             break;
         default:
             break;
     }
+}
+
+void Logger::print_dash_line(){
+    Logger::print(LogType::INFO, "------------------------------------");
 }

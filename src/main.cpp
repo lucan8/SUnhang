@@ -2,6 +2,13 @@
 //TODO: Either use format everywhere or show, not both(USE PRINT!)
 //TODO: Functions for stats and tests for graph construction (dependencies, locks, variables, events)
 //TODO: Create namespace for util
+// SIMPLE OPTIMIZATION: IGNORE FIRST LEVEL LOCK ACQUISITIONS!
+//OPTIMIZATION:
+// Instead of recomputing the SCCs everytime on the subgraph, take only the SCC from which the node was removed
+// And run the algorithm only on that subgraph
+
+// TODO: Bensalem asserts!
+// Graph info for bensalem: 12 nodes, only 3 with outgoing neighbours, graph on the second to last page of your notebook
 #include <string>
 #include <fstream>
 #include <sstream>
@@ -20,6 +27,7 @@ using namespace std::chrono_literals;
 #include "../include/util.hpp"
 #include "../include/test_vectorclock.hpp"
 #include "../include/test_predictor.hpp"
+#include "../include/scc_enumerator.hpp"
 
 // Maps for converting from std format
 size_t std_lock_id_counter = 0;
@@ -100,7 +108,7 @@ EventInfo from_std(const std::vector<std::string>& current_result) {
     return result;
 }
 
-void parse_trace(Predictor& predictor, std::ifstream& file, std::string pred_name) {
+void parse_trace(Predictor& predictor, std::ifstream& file, const std::string& pred_name) {
     auto start_time_1 = std::chrono::steady_clock::now();
 
     std::string evt_str;
@@ -111,7 +119,7 @@ void parse_trace(Predictor& predictor, std::ifstream& file, std::string pred_nam
         std::vector<std::string> evt_str_split = split(evt_str, trace_sep);
 
         if(evt_str_split.size() != exp_split_trace_size) {
-            Logger::print(LogType::WARN, "Bad file format on line %d: %s", line_index, evt_str.c_str());
+            Logger::print(LogType::WARN, "Bad file format on line {}: {}", line_index, evt_str);
             continue;
         }
         
@@ -121,15 +129,15 @@ void parse_trace(Predictor& predictor, std::ifstream& file, std::string pred_nam
         
         bool is_val_evt = predictor.handle_event(event);
         if (!is_val_evt)
-            Logger::print(LogType::WARN, "Invalid event on line %d: %s", line_index, evt_str.c_str());
+            Logger::print(LogType::WARN, "Invalid event on line {}: {}", line_index, evt_str);
 
-        Logger::print(LogType::DBG, event.show().c_str());
+        Logger::print(LogType::DBG, "{}", event);
     }
 
     auto end_time_1 = std::chrono::steady_clock::now();
     size_t run_time_1 = std::chrono::duration_cast<std::chrono::milliseconds>(end_time_1 - start_time_1).count();
 
-    Logger::print(LogType::INFO, "Parsed and processed %d lines in %zums.", line_index, run_time_1);
+    Logger::print(LogType::INFO, "Parsed and processed {} lines in {}ums.", line_index, run_time_1);
 }
 
 // Arg1 : trace file
@@ -147,9 +155,10 @@ int main(int argc, char *argv[]) {
     std::string test_name = argv[2];
     std::string pred_name = input_file + test_name;
 
+    // Logger::print(LogType::DBG, "Constructed pred_name: {}", pred_name);
     std::ifstream file(input_file);
     if(!file.good()) {
-        Logger::print(LogType::ERR, "File not found: %s", input_file.c_str());
+        Logger::print(LogType::ERR, "File not found: {}", input_file);
         return 1;
     }
 
@@ -166,6 +175,10 @@ int main(int argc, char *argv[]) {
     predictor.print_neigh_list();
     predictor.print_lock_deps_map();
     predictor.print_abs_deps();
+
+    SCCEnumerator scc_enumerator(predictor.abs_deps_map, predictor.neigh_list);
+    scc_enumerator.get_min_strong_conn_comp();
+    scc_enumerator.print_info();
 
     return 0;
 }

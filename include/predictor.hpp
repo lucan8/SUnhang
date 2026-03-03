@@ -14,7 +14,7 @@ struct Predictor{
 
   // Intermediary step that helps to build the neighbour list
   std::unordered_map<ResourceIdT, std::vector<const AbsDependency*>> lock_dep_map;
-  std::unordered_map<const AbsDependency*, std::vector<const AbsDependency*>> neigh_list; 
+  std::unordered_map<const AbsDependency*, std::vector<const AbsDependency*>> neigh_list;
 
   std::unordered_map<ResourceIdT, VectorClock> last_write;
 
