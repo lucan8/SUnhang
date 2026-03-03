@@ -1,5 +1,9 @@
 #pragma once
 
+#include <format>
+#include <string_view>
+#include <print>
+
 enum class LogType{        
     INFO,
     WARN,
@@ -8,11 +12,17 @@ enum class LogType{
 };
 
 struct Logger {
-    // Wrapper over printf that prepends the output with stuff like [ERR]:, [WARN]: etc...
-    // __attribute__ format makes sure we still see the compiler format warnings printf would've had
-    // 2 and 3 represent the argument indexes for format and args for printf
-    __attribute__((format(printf, 2, 3)))
-    static void print(LogType log_type, const char* format, ...);
+    // Wrapper over print that prepends the output with stuff like [ERR]:, [WARN]: etc...
+    template<typename... Args>
+    static void print(LogType log_type, std::format_string<Args...> fmt, Args&&... args){
+        _print_log_type(log_type);
 
+        std::print(fmt, std::forward<Args>(args)...);
+        
+        std::print("\n");
+    }
+
+    static void print_dash_line();
     static void _print_log_type(LogType log_type);
+    
 };
