@@ -1,6 +1,5 @@
 #include "../include/predictor.hpp"
 #include "../include/logger.hpp"
-#include <format>
 
 bool Predictor::handle_event(const EventInfo& evt){
     switch (evt.event_type){
@@ -79,10 +78,10 @@ void Predictor::print_abs_deps() const{
     Logger::print(LogType::INFO, "------------------------------------");
 
     for (const auto& [dep, timestamps] : abs_deps_map){
-        Logger::print(LogType::DBG, "%s: %d", dep.show().c_str() ,timestamps.size());
+        Logger::print(LogType::DBG, "{}: {}", dep ,timestamps.size());
     }
 
-    Logger::print(LogType::INFO, "Num deps: %d", abs_deps_map.size());
+    Logger::print(LogType::INFO, "Num deps: {}", abs_deps_map.size());
     Logger::print(LogType::INFO, "------------------------------------");
 }
 
@@ -104,12 +103,12 @@ void Predictor::print_lock_deps_map() const{
     Logger::print(LogType::INFO, "------------------------------------");
 
     for (const auto& [lock, dep_vec] : lock_dep_map){
-        Logger::print(LogType::DBG, "(Lock)%d: %d(Dep count)", lock, dep_vec.size());
+        Logger::print(LogType::DBG, "(Lock){}: {}(Dep count)", lock, dep_vec.size());
         for (const auto dep : dep_vec)
-            Logger::print(LogType::DBG, "%s", dep->show().c_str());
+            Logger::print(LogType::DBG, "{}", *dep);
     }
 
-    Logger::print(LogType::INFO, "Num locks: %d", lock_dep_map.size());
+    Logger::print(LogType::INFO, "Num locks: {}", lock_dep_map.size());
     Logger::print(LogType::INFO, "------------------------------------");
 }
 
@@ -118,11 +117,11 @@ void Predictor::print_neigh_list() const{
     Logger::print(LogType::INFO, "------------------------------------");
 
     for (const auto& [dep, dep_vec] : neigh_list){
-        Logger::print(LogType::DBG, "%s(dep): %d(neigh count)", dep->show().c_str(), dep_vec.size());
+        Logger::print(LogType::DBG, "{}(dep): {}(neigh count)", *dep, dep_vec.size());
         for (const auto dep : dep_vec)
-            Logger::print(LogType::DBG, "%s", dep->show().c_str());
+            Logger::print(LogType::DBG, "{}", *dep);
     }
 
-    Logger::print(LogType::INFO, "Num deps that have neigh: %d", neigh_list.size());
+    Logger::print(LogType::INFO, "Num deps that have neigh: {}", neigh_list.size());
     Logger::print(LogType::INFO, "------------------------------------");
 }

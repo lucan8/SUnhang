@@ -21,23 +21,17 @@ struct MinSCC{
     const AbsDependency* min_node;
 
     MinSCC(): nodes(), min_node(nullptr){}
-    std::string show() const;
 };
 
 template <>
 struct std::formatter<MinSCC> : std::formatter<std::string> {
     auto format(const MinSCC& scc, format_context& ctx) const {
-        std::string result;
+        auto out = ctx.out();
 
-        for (const auto& node : scc.nodes)
-          result += node->show() + "\n";
-          
-        result += "Min node: " + scc.min_node->show();
+        for (const auto& node : scc.nodes) {
+            out = std::format_to(out, "{}\n", *node);
+        }
         
-        return formatter<std::string>::format(result, ctx);
+        return std::format_to(out, "Min node: {}", *scc.min_node);
     }
 };
-
-inline std::string MinSCC::show() const{
-    return std::format("{}", *this);
-}
