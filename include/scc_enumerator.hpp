@@ -2,12 +2,12 @@
 
 #include <map>
 #include "scc_enumerator_types.hpp"
+#include "ord_dep_graph.hpp"
 
 // Helper class that takes a dependency graph and gives the strongly connected component that has the smallest node
 struct SCCEnumerator{
-    // Read-only graph
-    const std::map<AbsDependency, std::vector<VectorClock>>& abs_deps_map; // Nodes, they need to be sorted
-    const std::unordered_map<const AbsDependency*, std::vector<const AbsDependency*>>& neigh_list; // Edges
+    // Read only graph view
+    const OrdDepGraphView& graph_view;
 
     // Structure holding metadata about each node that is needed by the get_min_strong_conn_comp functions
     std::unordered_map<const AbsDependency*, AbsDepInfo> dep_info_map;
@@ -17,13 +17,13 @@ struct SCCEnumerator{
     std::vector<const AbsDependency*> stack;
 
     // The strongest connected component that contains the minimum node
-    MinSCC min_scc;
+    MinSCC res_min_scc;
 
     // for debugging
-    std::vector<MinSCC> scc_vec;
+    std::vector<MinSCC> res_scc_vec;
 
-    SCCEnumerator(const std::map<AbsDependency, std::vector<VectorClock>>& abs_deps_map, const std::unordered_map<const AbsDependency*, std::vector<const AbsDependency*>>& neigh_list)
-        : abs_deps_map(abs_deps_map), neigh_list(neigh_list){}
+    SCCEnumerator(const OrdDepGraphView& graph_view)
+        : graph_view(graph_view), max_index(0){}
 
     // Returns the SCC with the smallest node overall
     MinSCC get_min_strong_conn_comp();

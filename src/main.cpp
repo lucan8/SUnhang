@@ -176,7 +176,7 @@ int main(int argc, char *argv[]) {
     predictor.print_lock_deps_map();
     predictor.print_abs_deps();
 
-    SCCEnumerator scc_enumerator(predictor.abs_deps_map, predictor.neigh_list);
+    SCCEnumerator scc_enumerator(predictor.graph_view);
     scc_enumerator.get_min_strong_conn_comp();
     scc_enumerator.print_info();
 

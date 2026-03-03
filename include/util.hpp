@@ -31,3 +31,19 @@ inline bool lockset_intersection(const LocksetT& ls1, const LocksetT& ls2){
             return true;
     return false;
 }
+
+// Generic struct used for pointer to object comparison
+// Note: Nullptr is treated as infinity
+struct PtrLess {
+    template <typename T>
+    bool operator()(const T* a, const T* b) const {
+        if (a == b) 
+            return false;
+        
+        // a=nullptr, b=val -> false, a=val, b=nullptr->true, made like this to help min!
+        if (!a || !b) 
+            return a > b;
+        
+        return *a < *b;
+    }
+};

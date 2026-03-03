@@ -21,6 +21,10 @@ struct MinSCC{
     const AbsDependency* min_node;
 
     MinSCC(): nodes(), min_node(nullptr){}
+
+    bool operator<(const MinSCC& other) const{
+        return PtrLess()(min_node, other.min_node);
+    }
 };
 
 template <>
