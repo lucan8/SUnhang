@@ -78,11 +78,11 @@ void SCCEnumerator::print_info() const{
     Logger::print(LogType::INFO, "SCC INFORMATION");
     Logger::print_dash_line();
 
-    Logger::print(LogType::DBG, "NUMBER OF SCCs: %d", scc_vec.size());
-    for (const auto& scc : scc_vec){
-        Logger::print(LogType::DBG, "NODES(%d):\n%s", scc.show().c_str(), scc.nodes.size());
+    Logger::print(LogType::DBG, "NUMBER OF SCCs: {}", scc_vec.size());
+    for (int i = 0; i < scc_vec.size(); ++i){
+        Logger::print(LogType::DBG, "SCC {}: NODES({}):\n{}\n", i, scc_vec[i].nodes.size(), scc_vec[i]);
     }
 
-    Logger::print(LogType::INFO, "MIN SCC: %s", min_scc.show().c_str());
+    Logger::print(LogType::INFO, "MIN SCC: NODES({}):\n{}\n", min_scc.nodes.size(), min_scc);
     Logger::print_dash_line();
 }

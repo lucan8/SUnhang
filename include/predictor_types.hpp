@@ -14,10 +14,10 @@
 template <>
 struct std::formatter<LocksetT> : std::formatter<std::string> {
     auto format(const LocksetT& lockset, format_context& ctx) const {
-        std::string result;
+        auto out = ctx.out();
         for (const auto& res_id : lockset)
-          result += ", " + std::to_string(res_id);
-        return formatter<std::string>::format(result, ctx);
+          std::format_to(out, "{}, ", res_id);
+        return out;
     }
 };
 
@@ -34,10 +34,6 @@ struct AbsDependency{
 
   AbsDependency(ThreadIdT thread_id, ResourceIdT resource_id, const LocksetT& lockset)
     : thread_id(thread_id), resource_id(resource_id), lockset(lockset){}
-  
-  std::string show() const{
-    return std::format("{}, {}, ({})", thread_id, resource_id, lockset);
-  }
 
   // Implements all comparison operators in the default way(first compare by thread, then resource, then lockset)
   auto operator<=>(const AbsDependency&) const = default;
@@ -51,6 +47,14 @@ struct AbsDependency{
   bool is_valid_neigh_cand_opt(const AbsDependency& other) const{
     return thread_id != other.thread_id && !lockset_intersection(lockset, other.lockset);
   }
+};
+
+// Format for AbsDependency
+template <>
+struct std::formatter<AbsDependency> : std::formatter<std::string> {
+    auto format(const AbsDependency& dep, format_context& ctx) const {
+        return std::format_to(ctx.out(), "{}, {}, ({})", dep.thread_id, dep.resource_id, dep.lockset);
+    }
 };
 
 // Event stuff
@@ -97,8 +101,11 @@ struct EventInfo{
   EventInfo(){}
   EventInfo(ThreadIdT thread_id, EventsT event_type, ResourceIdT target, SrcLocT src_loc, TracePosT line)
     : thread_id(thread_id), event_type(event_type), target(target), src_loc(src_loc), line(line){}
+};
 
-  std::string show() const{
-    return std::format("Line {}: {}|{}({})|{}", line, thread_id, event_type, target, src_loc);
+template <>
+struct std::formatter<EventInfo> : std::formatter<std::string> {
+  auto format(const EventInfo& e, format_context& ctx) const {
+      return std::format_to(ctx.out(), "Line {}: {}|{}({})|{}", e.line, e.thread_id, e.event_type, e.target, e.src_loc);
   }
 };
