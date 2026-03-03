@@ -1,20 +1,21 @@
 #pragma once
-#include "predictor_types.hpp"
-#include "vectorclock.hpp"
+
 #include <unordered_map>
 #include <map>
 #include <vector>
+
+#include "predictor_types.hpp"
+#include "ord_dep_graph.hpp"
+#include "vectorclock.hpp"
 
 // TODO: Split this into GraphConstructor and Predictor
 struct Predictor{
   std::unordered_map<ThreadIdT, ThreadInfo> thread_map;
 
-  // AbsDependency represents a node the graph
-  std::map<AbsDependency, std::vector<VectorClock>> abs_deps_map;
+  OrdDepGraphView graph_view;
 
-  // Intermediary step that helps to build the neighbour list
+  // Intermediary step that helps to build the neighbour list of the graph
   std::unordered_map<ResourceIdT, std::vector<const AbsDependency*>> lock_dep_map;
-  std::unordered_map<const AbsDependency*, std::vector<const AbsDependency*>> neigh_list;
 
   std::unordered_map<ResourceIdT, VectorClock> last_write;
 

@@ -47,7 +47,7 @@ void Predictor::acquire_event(const EventInfo& evt) {
 
     // Create abstract dependency and add it's instance's timestamp to the vector
     AbsDependency dep(evt.thread_id, evt.target, th_info.lockset);
-    auto [it, inserted] = abs_deps_map.try_emplace(std::move(dep), std::vector<VectorClock>{});
+    auto [it, inserted] = graph_view.graph.abs_deps_map.try_emplace(std::move(dep), std::vector<VectorClock>{});
     it->second.push_back(th_info.vec_clock);
 
     // Locks from lockset should point to this dependency
@@ -77,25 +77,33 @@ void Predictor::print_abs_deps() const{
     Logger::print(LogType::INFO, "ABSTRACT DEPENDENCIES");
     Logger::print(LogType::INFO, "------------------------------------");
 
-    for (const auto& [dep, timestamps] : abs_deps_map){
+    for (const auto& [dep, timestamps] : graph_view.graph.abs_deps_map){
         Logger::print(LogType::DBG, "{}: {}", dep ,timestamps.size());
     }
 
-    Logger::print(LogType::INFO, "Num deps: {}", abs_deps_map.size());
+    Logger::print(LogType::INFO, "Num deps: {}", graph_view.graph.abs_deps_map.size());
     Logger::print(LogType::INFO, "------------------------------------");
 }
 
 void Predictor::build_neigh_list() {
-    for (const auto&[dep, evt] : abs_deps_map){
+    for (const auto&[dep, evt] : graph_view.graph.abs_deps_map){
         // Get candidate neighbours
         auto lock_dep_it = lock_dep_map.find(dep.resource_id);
         if (lock_dep_it == lock_dep_map.end())
             continue;
+        
+        // Add valid candidates to the neigbour list of dep
         for (const auto& cand : lock_dep_it->second)
             if (dep.is_valid_neigh_cand_opt(*cand))
-                neigh_list[&dep].push_back(cand);
+                graph_view.graph.neigh_list[&dep].push_back(cand);
     }
-    
+
+    // Sort the neighbour list of each node, this will be needed later
+    for (auto&[dep, neigh_list] : graph_view.graph.neigh_list){
+        std::sort(neigh_list.begin(), neigh_list.end(), PtrLess());
+    }
+
+    graph_view.init_start_structs();
 }
 
 void Predictor::print_lock_deps_map() const{
@@ -116,12 +124,12 @@ void Predictor::print_neigh_list() const{
     Logger::print(LogType::INFO, "NEIGHBOUR LIST");
     Logger::print(LogType::INFO, "------------------------------------");
 
-    for (const auto& [dep, dep_vec] : neigh_list){
+    for (const auto& [dep, dep_vec] : graph_view.graph.neigh_list){
         Logger::print(LogType::DBG, "{}(dep): {}(neigh count)", *dep, dep_vec.size());
         for (const auto dep : dep_vec)
             Logger::print(LogType::DBG, "{}", *dep);
     }
 
-    Logger::print(LogType::INFO, "Num deps that have neigh: {}", neigh_list.size());
+    Logger::print(LogType::INFO, "Num deps that have neigh: {}", graph_view.graph.neigh_list.size());
     Logger::print(LogType::INFO, "------------------------------------");
 }
