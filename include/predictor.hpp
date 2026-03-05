@@ -15,7 +15,7 @@ struct Predictor{
   OrdDepGraphView graph_view;
 
   // Intermediary step that helps to build the neighbour list of the graph
-  std::unordered_map<ResourceIdT, std::vector<const AbsDependency*>> lock_dep_map;
+  std::unordered_map<ResourceIdT, NodeChainT> lock_dep_map;
 
   std::unordered_map<ResourceIdT, VectorClock> last_write;
 

@@ -47,3 +47,16 @@ struct PtrLess {
         return *a < *b;
     }
 };
+
+template <typename Iter>
+bool is_valid_iter(Iter iter, Iter sentinel){
+    return iter != sentinel;
+}
+
+struct IteratorHasher {
+    template <typename Iter>
+    std::size_t operator()(const Iter& it) const {
+        // Hash the address of the pair the iterator points to
+        return std::hash<const void*>{}(&(*it));
+    }
+};

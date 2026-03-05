@@ -88,7 +88,7 @@ void TestPredictor::_test_acquire_event(){
     assert (lock_it != pred.lock_dep_map.end());
 
     // Make sure the corr dep has old lock in it's lockset
-    auto& ls = lock_it->second.at(0)->lockset;
+    auto& ls = lock_it->second.at(0)->first.lockset;
     assert (ls.find(lock_it->first) != ls.end());
     Logger::print(LogType::INFO, "test_acquire_event passed");
 }
