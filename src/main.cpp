@@ -2,13 +2,22 @@
 //TODO: Either use format everywhere or show, not both(USE PRINT!)
 //TODO: Functions for stats and tests for graph construction (dependencies, locks, variables, events)
 //TODO: Create namespace for util
+//TODO: Think where to put your typedefs
+//TODO: Rethink the graph situation
+//TODO: Renames dependencies to nodes
+//TODO: Think about the sentinel pattern
+//TODO: Remove all asserts in release
+//TODO: Look into using ranges instead of start and end iterators
+//TODO: Template formater for vectors
 // SIMPLE OPTIMIZATION: IGNORE FIRST LEVEL LOCK ACQUISITIONS!
+
 //OPTIMIZATION:
 // Instead of recomputing the SCCs everytime on the subgraph, take only the SCC from which the node was removed
 // And run the algorithm only on that subgraph
 
 // TODO: Bensalem asserts!
 // Graph info for bensalem: 12 nodes, only 3 with outgoing neighbours, graph on the second to last page of your notebook
+
 #include <string>
 #include <fstream>
 #include <sstream>
@@ -28,6 +37,7 @@ using namespace std::chrono_literals;
 #include "../include/test_vectorclock.hpp"
 #include "../include/test_predictor.hpp"
 #include "../include/scc_enumerator.hpp"
+#include "../include/cycle_enumerator.hpp"
 
 // Maps for converting from std format
 size_t std_lock_id_counter = 0;
@@ -176,9 +186,13 @@ int main(int argc, char *argv[]) {
     predictor.print_lock_deps_map();
     predictor.print_abs_deps();
 
-    SCCEnumerator scc_enumerator(predictor.abs_deps_map, predictor.neigh_list);
+    SCCEnumerator scc_enumerator(predictor.graph_view);
     scc_enumerator.get_min_strong_conn_comp();
     scc_enumerator.print_info();
+
+    CycleEnumerator cycle_enumerator(predictor.graph_view);
+    cycle_enumerator.enum_cycles();
+    cycle_enumerator.print_info();
 
     return 0;
 }

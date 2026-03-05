@@ -31,3 +31,38 @@ inline bool lockset_intersection(const LocksetT& ls1, const LocksetT& ls2){
             return true;
     return false;
 }
+
+// Generic struct used for pointer to object comparison
+// Note: Nullptr is treated as infinity
+struct PtrLess {
+    template <typename T>
+    bool operator()(const T* a, const T* b) const {
+        if (a == b) 
+            return false;
+        
+        // a=nullptr, b=val -> false, a=val, b=nullptr->true, made like this to help min!
+        if (!a || !b) 
+            return a > b;
+        
+        return *a < *b;
+    }
+};
+
+template <typename Iter>
+bool is_valid_iter(Iter iter, Iter sentinel){
+    return iter != sentinel;
+}
+
+struct IteratorHasher {
+    template <typename Iter>
+    std::size_t operator()(const Iter& it) const {
+        // Hash the address of the pair the iterator points to
+        return std::hash<const void*>{}(&(*it));
+    }
+
+    // Add this to handle the equality check
+    template <typename Iter>
+    bool operator()(const Iter& lhs, const Iter& rhs) const {
+        return lhs == rhs;
+    }
+};

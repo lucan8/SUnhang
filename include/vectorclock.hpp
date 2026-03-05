@@ -2,8 +2,9 @@
 
 #include <unordered_map>
 #include <string>
-#include "vectorclock_types.hpp"
 #include "comm_types.hpp"
+
+typedef int VCValueT;
 
 struct VectorClock {
     std::unordered_map<ThreadIdT, VCValueT> _vector_clock = {};

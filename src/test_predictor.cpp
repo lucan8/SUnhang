@@ -56,8 +56,8 @@ void TestPredictor::_test_acquire_event(){
     assert (pred.thread_map[1].lockset.find(1) != pred.thread_map[1].lockset.end());
     
     // Dependency gets created
-    auto dep = pred.abs_deps_map.begin();
-    assert (dep != pred.abs_deps_map.end());
+    auto dep = pred.graph_view.graph.abs_deps_map.begin();
+    assert (dep != pred.graph_view.graph.abs_deps_map.end());
 
     // Dependency is the one we expect
     assert (dep->first.thread_id == 1 && dep->first.resource_id == 1 && dep->first.lockset.empty());
@@ -73,7 +73,7 @@ void TestPredictor::_test_acquire_event(){
     pred.handle_event(ev);
 
     // Check that no new dep was added by it's corresponding list of vcs grew
-    assert (pred.abs_deps_map.size() == 1);
+    assert (pred.graph_view.graph.abs_deps_map.size() == 1);
     assert (dep->second.size() == 2);
 
     // Check that lock_dep_map remained unchanged
@@ -88,7 +88,7 @@ void TestPredictor::_test_acquire_event(){
     assert (lock_it != pred.lock_dep_map.end());
 
     // Make sure the corr dep has old lock in it's lockset
-    auto& ls = lock_it->second.at(0)->lockset;
+    auto& ls = lock_it->second.at(0)->first.lockset;
     assert (ls.find(lock_it->first) != ls.end());
     Logger::print(LogType::INFO, "test_acquire_event passed");
 }
