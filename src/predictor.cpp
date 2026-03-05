@@ -53,7 +53,7 @@ void Predictor::acquire_event(const EventInfo& evt) {
     // Locks from lockset should point to this dependency
     if (inserted)
         for (const auto lock : th_info.lockset)
-            lock_dep_map[lock].push_back(&(it->first));
+            lock_dep_map[lock].push_back(it);
 
     // Add lock to lockset
     th_info.lockset.insert(evt.target);
@@ -86,21 +86,21 @@ void Predictor::print_abs_deps() const{
 }
 
 void Predictor::build_neigh_list() {
-    for (const auto&[dep, evt] : graph_view.graph.abs_deps_map){
+    for (auto node_it = graph_view.get_real_nodes_start(); node_it != graph_view.get_nodes_end(); ++node_it){
         // Get candidate neighbours
-        auto lock_dep_it = lock_dep_map.find(dep.resource_id);
+        auto lock_dep_it = lock_dep_map.find(node_it->first.resource_id);
         if (lock_dep_it == lock_dep_map.end())
             continue;
         
         // Add valid candidates to the neigbour list of dep
-        for (const auto& cand : lock_dep_it->second)
-            if (dep.is_valid_neigh_cand_opt(*cand))
-                graph_view.graph.neigh_list[&dep].push_back(cand);
+        for (auto cand : lock_dep_it->second)
+            if (node_it->first.is_valid_neigh_cand_opt(cand->first))
+                graph_view.graph.neigh_list[node_it].push_back(cand);
     }
 
     // Sort the neighbour list of each node, this will be needed later
     for (auto&[dep, neigh_list] : graph_view.graph.neigh_list){
-        std::sort(neigh_list.begin(), neigh_list.end(), PtrLess());
+        std::sort(neigh_list.begin(), neigh_list.end(), NodeItLess(graph_view.get_nodes_end()));
     }
 
     graph_view.init_start_structs();
@@ -113,7 +113,7 @@ void Predictor::print_lock_deps_map() const{
     for (const auto& [lock, dep_vec] : lock_dep_map){
         Logger::print(LogType::DBG, "(Lock){}: {}(Dep count)", lock, dep_vec.size());
         for (const auto dep : dep_vec)
-            Logger::print(LogType::DBG, "{}", *dep);
+            Logger::print(LogType::DBG, "{}", dep->first);
     }
 
     Logger::print(LogType::INFO, "Num locks: {}", lock_dep_map.size());
@@ -124,10 +124,10 @@ void Predictor::print_neigh_list() const{
     Logger::print(LogType::INFO, "NEIGHBOUR LIST");
     Logger::print(LogType::INFO, "------------------------------------");
 
-    for (const auto& [dep, dep_vec] : graph_view.graph.neigh_list){
-        Logger::print(LogType::DBG, "{}(dep): {}(neigh count)", *dep, dep_vec.size());
-        for (const auto dep : dep_vec)
-            Logger::print(LogType::DBG, "{}", *dep);
+    for (const auto& [dep, neigh_list] : graph_view.graph.neigh_list){
+        Logger::print(LogType::DBG, "{}(dep): {}(neigh count)", dep->first, neigh_list.size());
+        for (const auto neigh : neigh_list)
+            Logger::print(LogType::DBG, "{}", neigh->first);
     }
 
     Logger::print(LogType::INFO, "Num deps that have neigh: {}", graph_view.graph.neigh_list.size());

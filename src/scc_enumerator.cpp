@@ -3,17 +3,16 @@
 #include <cassert>
 
 MinSCC SCCEnumerator::get_min_strong_conn_comp(){
-    for (auto it = graph_view.start_node_it; it != graph_view.get_nodes_end(); ++it){
-        const AbsDependency* dep = &it->first;
-        if (dep_info_map.find(dep) == dep_info_map.end()) // Only look at unvisited nodes
-            _get_min_strong_conn_comp(dep);
+    for (auto node_it = graph_view.start_node_it; node_it != graph_view.get_nodes_end(); ++node_it){
+        if (dep_info_map.find(node_it) == dep_info_map.end()) // Only look at unvisited nodes
+            _get_min_strong_conn_comp(node_it);
     }
 
     return res_min_scc;
 }
 
-void SCCEnumerator::_get_min_strong_conn_comp(const AbsDependency* dep){
-    // Visit node and check that it was not visited before
+void SCCEnumerator::_get_min_strong_conn_comp(NodeConstItT dep){
+    // Visit dep and check that it was not visited before
     auto dep_info_entry = dep_info_map.insert({dep, AbsDepInfo(max_index, max_index, true)});
     assert(dep_info_entry.second == true);
     
@@ -32,13 +31,17 @@ void SCCEnumerator::_get_min_strong_conn_comp(const AbsDependency* dep){
 
         // DFS on the valid neighbours
         for (auto neigh_it = start_neigh; neigh_it != graph_view.get_neigh_list_end(dep); ++neigh_it){
-            const AbsDependency* neigh = *neigh_it;
+            NodeConstItT neigh = *neigh_it;
             auto neigh_info_entry = dep_info_map.find(neigh);
 
-            // Recurse on unvisited node
+            // Recurse on unvisited dep
             if (neigh_info_entry == dep_info_map.end()){
                 _get_min_strong_conn_comp(neigh);
-                dep_info.low_index = std::min(dep_info.low_index, dep_info_map.at(neigh).low_index);
+
+                auto neigh_info_it =  dep_info_map.find(neigh);
+                assert(neigh_info_it != dep_info_map.end()); // Remove in release mode
+                
+                dep_info.low_index = std::min(dep_info.low_index, neigh_info_it->second.low_index);
             }
             else{ // Update the low index if the neighbour is already visited and on the stack
                 AbsDepInfo& neigh_info = neigh_info_entry->second;
@@ -49,11 +52,11 @@ void SCCEnumerator::_get_min_strong_conn_comp(const AbsDependency* dep){
         }
     }
 
-    MinSCC scc;
+    MinSCC scc(graph_view.get_nodes_end());
 
     // Every node after this one(inclusive) will be part of the same new scc
     if (dep_info.low_index == dep_info.index){
-        const AbsDependency* curr_dep;
+        NodeConstItT curr_dep;
         AbsDepInfo* curr_dep_info;
 
         do{
@@ -67,7 +70,7 @@ void SCCEnumerator::_get_min_strong_conn_comp(const AbsDependency* dep){
             scc.nodes.insert(curr_dep);
             
             // Update the min node if needed
-            scc.min_node = std::min(scc.min_node, curr_dep, PtrLess());
+            scc.min_node = std::min(scc.min_node, curr_dep, NodeItLess(scc.sentinel_node));
         }while (curr_dep_info->index != dep_info.index);
 
         // Update res_min_scc if the current scc has more than one node

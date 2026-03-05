@@ -2,7 +2,12 @@
 //TODO: Either use format everywhere or show, not both(USE PRINT!)
 //TODO: Functions for stats and tests for graph construction (dependencies, locks, variables, events)
 //TODO: Create namespace for util
+//TODO: Think where to put your typedefs
+//TODO: Rethink the graph situation
+//TODO: Renames dependencies to nodes
+//TODO: Think about the sentinel pattern
 // SIMPLE OPTIMIZATION: IGNORE FIRST LEVEL LOCK ACQUISITIONS!
+
 //OPTIMIZATION:
 // Instead of recomputing the SCCs everytime on the subgraph, take only the SCC from which the node was removed
 // And run the algorithm only on that subgraph

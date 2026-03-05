@@ -1,8 +1,9 @@
 #pragma once
 
 #include <unordered_set>
-#include "predictor_types.hpp"
 #include <format>
+#include "predictor_types.hpp"
+#include "ord_dep_graph.hpp"
 
 // Information about the dependency that is needed whilst computing the strongly connected component
 struct AbsDepInfo{
@@ -17,13 +18,21 @@ struct AbsDepInfo{
 
 // Contains the strongly connected component as an unordered_set of nodes(subgraph) and a pointer to the minimum node 
 struct MinSCC{
-    std::unordered_set<const AbsDependency*> nodes;
-    const AbsDependency* min_node;
+    std::unordered_set<NodeConstItT, IteratorHasher> nodes;
+    NodeConstItT min_node;
+    NodeConstItT sentinel_node;
 
-    MinSCC(): nodes(), min_node(nullptr){}
+    MinSCC(NodeConstItT sentinel_node): nodes(), min_node(sentinel_node), sentinel_node(sentinel_node){}
 
     bool operator<(const MinSCC& other) const{
-        return PtrLess()(min_node, other.min_node);
+        if (sentinel_node != other.sentinel_node)
+            throw std::runtime_error("Can't compare iterators with different sentinel nodes!");
+            
+        return NodeItLess(sentinel_node)(min_node, other.min_node);
+    }
+
+    bool is_empty() const{
+        return nodes.empty();
     }
 };
 
@@ -33,9 +42,9 @@ struct std::formatter<MinSCC> : std::formatter<std::string> {
         auto out = ctx.out();
 
         for (const auto& node : scc.nodes) {
-            out = std::format_to(out, "{}\n", *node);
+            out = std::format_to(out, "{}\n", node->first);
         }
         
-        return std::format_to(out, "Min node: {}", *scc.min_node);
+        return std::format_to(out, "Min node: {}", scc.min_node->first);
     }
 };
