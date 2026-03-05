@@ -1,9 +1,7 @@
 #pragma once
 
 #include <map>
-#include <cassert>
 #include <ranges>
-#include <format>
 #include <optional>
 
 #include "predictor_types.hpp"
@@ -19,7 +17,7 @@ typedef std::unordered_set<NodeConstItT, IteratorHasher, IteratorHasher> NodeSet
 
 typedef std::unordered_map<NodeConstItT, NodeChainT, IteratorHasher, IteratorHasher> NeighListT;
 
-// Format for LocksetT
+// Format for NodeChainT
 template <>
 struct std::formatter<NodeChainT> : std::formatter<std::string> {
     auto format(const NodeChainT& node_chain, format_context& ctx) const {
@@ -31,7 +29,7 @@ struct std::formatter<NodeChainT> : std::formatter<std::string> {
 };
 
 // less on NodeConstItT
-// sentinel_node should be a valid sentilen for both nodes otherwise you will undefined behaviour
+// sentinel_node should be a valid sentinel for both nodes otherwise you will undefined behaviour
 struct NodeItLess{
     NodeConstItT sentinel_node;
     NodeItLess(NodeConstItT sentinel_node): sentinel_node(sentinel_node){}
@@ -67,75 +65,40 @@ struct OrdDepGraphView{
     // Reference to the current valid node in the graph
     NodeConstItT start_node_it;
 
-    // Map that gives the start neighbour of each node
+    // Map that gives the valid start neighbour of each node
     std::unordered_map<NodeConstItT, NodeChainConstItT, IteratorHasher> start_neigh_map;
 
     // Initializes start_node_it and start_neigh_map
-    void init_start_structs(){
-        set_start_node();
-        set_start_neigh_map();
-    }
+    void init_start_structs();
 
     // Initializes start_node_it to point to the first node in graph.abs_dep_map
-    void set_start_node(){
-        start_node_it = graph.abs_deps_map.begin();
-    }
+    void set_start_node();
 
     // Initializes start_node_it to point to node
-    void set_start_node(NodeConstItT node){
-        start_node_it = node;
-    }
+    void set_start_node(NodeConstItT node);
 
-    void advance_start_node(){
-        start_node_it = std::next(start_node_it);
-    }
+    // std::next(start_node_it)
+    void advance_start_node();
 
     // Initializes start_neigh_map for each dep to point to the first elem in graph.neigh_list[dep]
-    void set_start_neigh_map(){
-        for (const auto& [dep, neigh_list] : graph.neigh_list)
-            start_neigh_map.emplace(dep, neigh_list.begin());
-    }
+    void set_start_neigh_map();
 
     // Updates start_neigh_map[node] such that it points to the first node that is greater than start_node_it
     // node should already be in start_neigh_map
-    std::optional<NodeChainRangeT> get_and_update_neigh_list_range(NodeConstItT node) {
-        // Define the current valid range
-        std::optional<NodeChainConstItT> end_opt = get_neigh_list_end(node);
-        if (!end_opt.has_value())
-            return {};
-        
-        auto curr_start_entry = start_neigh_map.find(node);
+    std::optional<NodeChainRangeT> get_and_update_neigh_list_range(NodeConstItT node);
 
-        // Binary search for the new start and update
-        NodeChainConstItT new_start = std::lower_bound(curr_start_entry->second, end_opt.value(), start_node_it, NodeItLess(get_nodes_end()));
-        curr_start_entry->second = new_start;
+    // Returns the start of the node container, ignoring start_node_it
+    NodeConstItT get_real_nodes_start() const;
 
-        return {NodeChainRangeT(new_start, end_opt.value())};
-    }
-
-    NodeConstItT get_real_nodes_start() const{
-        return graph.abs_deps_map.begin();
-    }
-
-    NodeConstItT get_sentinel_node() const{
-        return graph.abs_deps_map.end();
-    }
+    // Returns the end of the node container of the graph
+    NodeConstItT get_sentinel_node() const;
 
     // Returns the end of the nodes container
-    NodeConstItT get_nodes_end() const{
-        return graph.abs_deps_map.end();
-    }
+    NodeConstItT get_nodes_end() const;
 
     // Returns the end of the neighbour list of dep
-    std::optional<NodeChainConstItT> get_neigh_list_end(NodeConstItT dep) const{
-        auto neigh_list_it = graph.neigh_list.find(dep);
-        if (neigh_list_it == graph.neigh_list.end())
-            return {};
+    std::optional<NodeChainConstItT> get_neigh_list_end(NodeConstItT dep) const;
 
-        return neigh_list_it->second.end();
-    }
-
-    bool empty() const{
-        return start_node_it == get_nodes_end();
-    }
+    // Returns true if start_node_it == node container end
+    bool empty() const;
 };

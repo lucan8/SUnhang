@@ -1,5 +1,7 @@
+#include <cassert>
 #include "../include/cycle_enumerator.hpp"
 #include "../include/logger.hpp"
+
 
 std::vector<NodeChainT> CycleEnumerator::enum_cycles(){
     int i = 0;

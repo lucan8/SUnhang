@@ -1,8 +1,8 @@
 #pragma once
 
 #include "ord_dep_graph.hpp"
-#include "../include/scc_enumerator.hpp"
-#include "../include/ord_dep_graph.hpp"
+#include "scc_enumerator.hpp"
+#include "ord_dep_graph.hpp"
 
 struct CycleEnumerator{
     OrdDepGraphView& graph_view;

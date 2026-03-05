@@ -8,7 +8,6 @@
 #include "ord_dep_graph.hpp"
 #include "vectorclock.hpp"
 
-// TODO: Split this into GraphConstructor and Predictor
 struct Predictor{
   std::unordered_map<ThreadIdT, ThreadInfo> thread_map;
 
