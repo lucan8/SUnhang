@@ -15,7 +15,6 @@ void SCCEnumerator::_get_min_strong_conn_comp(NodeConstItT dep){
     // Visit dep and check that it was not visited before
     auto dep_info_entry = dep_info_map.insert({dep, AbsDepInfo(max_index, max_index, true)});
     assert(dep_info_entry.second == true);
-    
 
     // Alias only for the relevant part
     AbsDepInfo& dep_info = (dep_info_entry.first)->second;
@@ -24,30 +23,29 @@ void SCCEnumerator::_get_min_strong_conn_comp(NodeConstItT dep){
     max_index++;
     stack.push_back(dep);
 
-    // Get the start neighbour of dep
-    auto start_neigh_list_entry = graph_view.start_neigh_map.find(dep);
-    if (start_neigh_list_entry != graph_view.start_neigh_map.end()){
-        auto start_neigh = start_neigh_list_entry->second;
+    // Get the valid neighbour list of dep
+    auto neigh_list = graph_view.get_and_update_neigh_list_range(dep);
 
-        // DFS on the valid neighbours
-        for (auto neigh_it = start_neigh; neigh_it != graph_view.get_neigh_list_end(dep); ++neigh_it){
-            NodeConstItT neigh = *neigh_it;
-            auto neigh_info_entry = dep_info_map.find(neigh);
+    if (!neigh_list.has_value())
+        return;
 
-            // Recurse on unvisited dep
-            if (neigh_info_entry == dep_info_map.end()){
-                _get_min_strong_conn_comp(neigh);
+    // DFS on the valid neighbours
+    for (auto neigh : neigh_list.value()){
+        auto neigh_info_entry = dep_info_map.find(neigh);
 
-                auto neigh_info_it =  dep_info_map.find(neigh);
-                assert(neigh_info_it != dep_info_map.end()); // Remove in release mode
-                
-                dep_info.low_index = std::min(dep_info.low_index, neigh_info_it->second.low_index);
-            }
-            else{ // Update the low index if the neighbour is already visited and on the stack
-                AbsDepInfo& neigh_info = neigh_info_entry->second;
-                if (neigh_info.on_stack){
-                    dep_info.low_index = std::min(dep_info.low_index, neigh_info.index);
-                }
+        // Recurse on unvisited dep
+        if (neigh_info_entry == dep_info_map.end()){
+            _get_min_strong_conn_comp(neigh);
+
+            auto neigh_info_it =  dep_info_map.find(neigh);
+            assert(neigh_info_it != dep_info_map.end()); // Remove in release mode
+            
+            dep_info.low_index = std::min(dep_info.low_index, neigh_info_it->second.low_index);
+        }
+        else{ // Update the low index if the neighbour is already visited and on the stack
+            AbsDepInfo& neigh_info = neigh_info_entry->second;
+            if (neigh_info.on_stack){
+                dep_info.low_index = std::min(dep_info.low_index, neigh_info.index);
             }
         }
     }

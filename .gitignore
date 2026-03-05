@@ -4,3 +4,4 @@
 build/
 resources/
 test.cpp
+.vscode/

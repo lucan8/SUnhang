@@ -59,4 +59,10 @@ struct IteratorHasher {
         // Hash the address of the pair the iterator points to
         return std::hash<const void*>{}(&(*it));
     }
+
+    // Add this to handle the equality check
+    template <typename Iter>
+    bool operator()(const Iter& lhs, const Iter& rhs) const {
+        return lhs == rhs;
+    }
 };
