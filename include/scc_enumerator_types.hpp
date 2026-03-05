@@ -18,7 +18,7 @@ struct AbsDepInfo{
 
 // Contains the strongly connected component as an unordered_set of nodes(subgraph) and a pointer to the minimum node 
 struct MinSCC{
-    std::unordered_set<NodeConstItT, IteratorHasher> nodes;
+    NodeSetT nodes;
     NodeConstItT min_node;
     NodeConstItT sentinel_node;
 
@@ -33,6 +33,10 @@ struct MinSCC{
 
     bool is_empty() const{
         return nodes.empty();
+    }
+
+    bool has(NodeConstItT node) const{
+        return nodes.find(node) != nodes.end();
     }
 };
 
