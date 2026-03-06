@@ -15,6 +15,11 @@
 // Instead of recomputing the SCCs everytime on the subgraph, take only the SCC from which the node was removed
 // And run the algorithm only on that subgraph
 
+// OPTIMIZATION:
+// We could prune paths that can't be abstract deadlock patterns when we do cycle enumeration
+// For example if we have the chain (t1, l2, {l1}) -> (t2, l3, {l2}) -> (t1, l1, {l3})
+// We could stop looking at the path instantly as we are sure nothing will come out of it
+
 // TODO: Bensalem asserts!
 // Graph info for bensalem: 12 nodes, only 3 with outgoing neighbours, graph on the second to last page of your notebook
 
@@ -38,6 +43,7 @@ using namespace std::chrono_literals;
 #include "../include/test_predictor.hpp"
 #include "../include/scc_enumerator.hpp"
 #include "../include/cycle_enumerator.hpp"
+#include "../include/deadlock_checker.hpp"
 
 // Maps for converting from std format
 size_t std_lock_id_counter = 0;
@@ -193,6 +199,16 @@ int main(int argc, char *argv[]) {
     CycleEnumerator cycle_enumerator(predictor.graph_view);
     cycle_enumerator.enum_cycles();
     cycle_enumerator.print_info();
+
+    DeadlockChecker dlk_checker;
+    Logger::print(LogType::INFO, "DEADLOCK CHECKER INFORMATION");
+    Logger::print_dash_line();
+
+    for (int i = 0; i < cycle_enumerator.res_cycles.size(); ++i){
+        Logger::print(LogType::DBG, "CYCLE {}: {}\n", i, dlk_checker.is_abs_dlk_pattern(cycle_enumerator.res_cycles[i]));
+    }
+
+    Logger::print_dash_line();
 
     return 0;
 }
