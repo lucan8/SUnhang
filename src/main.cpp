@@ -9,7 +9,17 @@
 //TODO: Remove all asserts in release
 //TODO: Look into using ranges instead of start and end iterators
 //TODO: Template formater for vectors
-// SIMPLE OPTIMIZATION: IGNORE FIRST LEVEL LOCK ACQUISITIONS!
+//TODO: Make AbsDep point to an iterator of a VC instead of the actual VC
+//TODO: Pack the comparison operators of VectorClock together in one
+
+// BIG QUESTION: Shouldn't the nodes(deps) be sorted based on when they appear in the trace?
+// As keeping them in a mere map does not guarantee that ordering.
+// ANSWER: NOP, dependencies can't really use the trace order, that's for events
+
+// TEST IDEEA: Run this on all the benchmarks, save information to a csv file and then check the csvs
+// against the author's
+ 
+//SIMPLE OPTIMIZATION: IGNORE FIRST LEVEL LOCK ACQUISITIONS!
 
 //OPTIMIZATION:
 // Instead of recomputing the SCCs everytime on the subgraph, take only the SCC from which the node was removed
