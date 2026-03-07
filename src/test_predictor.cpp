@@ -55,6 +55,12 @@ void TestPredictor::_test_acquire_event(){
     // Lockset grows
     assert (pred.thread_map[1].lockset.find(1) != pred.thread_map[1].lockset.end());
     
+    // CSHist chnages
+    auto cs_opt = pred.cs_hist.get_back(1, 1);
+    assert (cs_opt.has_value()); // Added critical section
+    const CSInfo& cs_1 = *cs_opt.value();
+    assert (cs_1.unlock_vc.empty()); // Without the unlock
+    
     // Dependency gets created
     auto dep = pred.graph_view.graph.abs_deps_map.begin();
     assert (dep != pred.graph_view.graph.abs_deps_map.end());
@@ -69,8 +75,16 @@ void TestPredictor::_test_acquire_event(){
     ev.event_type = EventsT::UK;
     pred.handle_event(ev);
 
+    // Check that the critical section was completed
+    assert (!cs_1.unlock_vc.empty());
+    assert (cs_1.lock_vc <= cs_1.unlock_vc);
+
     ev.event_type = EventsT::LK;
     pred.handle_event(ev);
+
+    // CSHist last element different from prior and prior's lock vc is smaller
+    auto cs_2 = *pred.cs_hist.get_back(1, 1).value();
+    assert (cs_1 <= cs_2);
 
     // Check that no new dep was added by it's corresponding list of vcs grew
     assert (pred.graph_view.graph.abs_deps_map.size() == 1);

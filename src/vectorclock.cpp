@@ -40,7 +40,6 @@ VectorClock VectorClock::merge(const VectorClock& other) const{
     return result;
 }
 
-
 void VectorClock::merge_into(const VectorClock& other) {
     for(const auto &[thread_id, value]: other._vector_clock) {
         auto vc = this->_vector_clock.find(thread_id);
@@ -74,16 +73,22 @@ bool operator<=(const VectorClock& vc1, const VectorClock& vc2) {
     return true;
 }
 
+bool operator<(const VectorClock& vc1, const VectorClock& vc2) {
+  for(const auto &[thread_id, value]: vc1._vector_clock) {
+        VCValueT other_vc_val = vc2.find(thread_id);
+
+        if(value >= other_vc_val) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 bool operator==(const VectorClock& vc1, const VectorClock& vc2){
     return vc1 <= vc2 && vc2 <= vc1;
 }
 
-// ';' delimiter
-std::string VectorClock::show() {
-  std::string s;
-   for(const auto &[thread_id, value] : this->_vector_clock) {
-     s = s + std::to_string(thread_id) + ":" + std::to_string(value) + ";";
-    }
-
-   return s;
+bool VectorClock::empty() const{
+    return _vector_clock.empty();
 }

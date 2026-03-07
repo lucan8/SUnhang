@@ -5,6 +5,7 @@
 #include <format>
 #include <unordered_map>
 #include <unordered_set>
+#include <optional>
 #include "vectorclock.hpp"
 #include "comm_types.hpp"
 #include "util.hpp"
@@ -20,7 +21,6 @@ struct std::formatter<LocksetT> : std::formatter<std::string> {
         return out;
     }
 };
-
 
 struct ThreadInfo{
   LocksetT lockset;
@@ -56,7 +56,6 @@ struct std::formatter<AbsDependency> : std::formatter<std::string> {
         return std::format_to(ctx.out(), "{}, {}, ({})", dep.thread_id, dep.resource_id, dep.lockset);
     }
 };
-
 
 // Event stuff
 enum class EventsT {
@@ -108,5 +107,63 @@ template <>
 struct std::formatter<EventInfo> : std::formatter<std::string> {
   auto format(const EventInfo& e, format_context& ctx) const {
       return std::format_to(ctx.out(), "Line {}: {}|{}({})|{}", e.line, e.thread_id, e.event_type, e.target, e.src_loc);
+  }
+};
+
+// Critical section stuff
+
+// Helper struct that hold the vector clocks for a critical section(one for lock, one for unlock)
+struct CSInfo{
+  VectorClock lock_vc;
+  VectorClock unlock_vc;
+
+  CSInfo(const VectorClock& lock_vc, const VectorClock& unlock_vc = {})
+    : lock_vc(lock_vc), unlock_vc(unlock_vc){}
+  
+  void set_unlock_vc(const VectorClock& unlock_vc){
+    this->unlock_vc = unlock_vc;
+  }
+
+  // TODO: Can't this just be unlock_vc <= other.lock_vc?
+  bool operator<=(const CSInfo& other) const{
+    return lock_vc <= other.lock_vc && unlock_vc <= other.lock_vc;
+  }
+  
+  // TODO: Can't this just be unlock_vc < other.lock_vc?
+  bool operator<(const CSInfo& other) const{
+    return lock_vc < other.lock_vc && unlock_vc < other.lock_vc;
+  }
+};
+
+template <>
+struct std::formatter<CSInfo> : std::formatter<std::string> {
+  auto format(const CSInfo& cs_info, format_context& ctx) const {
+      return std::format_to(ctx.out(), "Lock vc: {}\n Unlock vc:{}", cs_info.lock_vc, cs_info.unlock_vc);
+  }
+};
+
+// Critical section history
+struct CSHist{
+  std::unordered_map<ThreadIdT, std::unordered_map<ResourceIdT, LazyQueue<CSInfo>>> _cs_hist;
+
+  CSInfo& add_lock_vc(ThreadIdT tid, ResourceIdT res_id, const VectorClock& lock_vc){
+    return _cs_hist[tid][res_id].emplace(lock_vc);
+  }
+
+  void add_unlock_vc(ThreadIdT tid, ResourceIdT res_id, const VectorClock& unlock_vc){
+    _cs_hist[tid][res_id].back().unlock_vc = unlock_vc;
+  }
+  
+  // Returns the last critical section of tid for lock res_id if one exists
+  std::optional<const CSInfo*> get_back(ThreadIdT tid, ResourceIdT res_id){
+    auto umap_it = _cs_hist.find(tid);
+    if (umap_it == _cs_hist.end())
+      return {};
+
+    auto vec_it = umap_it->second.find(res_id);
+    if (vec_it == umap_it->second.end())
+      return {};
+    
+    return &vec_it->second.back();
   }
 };

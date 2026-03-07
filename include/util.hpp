@@ -4,6 +4,7 @@
 #include <string>
 #include <sstream>
 #include <cstdint>
+#include <deque>
 #include "comm_types.hpp"
 
 const char trace_sep = '|';
@@ -31,6 +32,48 @@ inline bool lockset_intersection(const LocksetT& ls1, const LocksetT& ls2){
             return true;
     return false;
 }
+
+// Queue that instead of removing front elements only moves start_elem to the right
+// For this to make sense, the internal container should be sorted(and of course T should be comparable)
+// The deque was chosen for fast pushes/accces to the front and back, binary search 
+// and most importantly pointer stability!
+template <typename T>
+struct LazyQueue {
+    std::deque<T> queue;
+    std::deque<T>::const_iterator start_elem;
+
+    void push(const T& x) {
+        queue.push_back(x);
+    }
+
+    template< class... Args >
+    T& emplace(Args&&... args) {
+        return queue.emplace_back(std::forward<Args>(args)...);
+    }
+
+    void pop() {
+        if (start_elem != queue.end()) {
+            ++start_elem;
+        }
+    }
+
+    T& back() {
+        return queue.back();
+    }
+
+    const T& back() const{
+        return queue.back();
+    }
+
+
+    void pop_until(const T& x) {
+        start_elem = std::lower_bound(start_elem, queue.end(), x);
+    }
+
+    bool empty() const{
+        return queue.empty();
+    }
+};
 
 // Generic struct used for pointer to object comparison
 // Note: Nullptr is treated as infinity
