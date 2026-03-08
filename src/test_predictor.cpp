@@ -59,7 +59,7 @@ void TestPredictor::_test_acquire_event(){
     auto cs_opt = pred.cs_hist.get_back(1, 1);
     assert (cs_opt.has_value()); // Added critical section
     const CSInfo& cs_1 = *cs_opt.value();
-    assert (cs_1.unlock_vc.empty()); // Without the unlock
+    assert (cs_1.unlock_ev.vc.empty()); // Without the unlock
     
     // Dependency gets created
     auto dep = pred.graph_view.graph.abs_deps_map.begin();
@@ -73,18 +73,20 @@ void TestPredictor::_test_acquire_event(){
 
     // Remove lock from lockset and add it back to recreate the dependency
     ev.event_type = EventsT::UK;
+    ev.line = 2;
     pred.handle_event(ev);
 
     // Check that the critical section was completed
-    assert (!cs_1.unlock_vc.empty());
-    assert (cs_1.lock_vc <= cs_1.unlock_vc);
+    assert (!cs_1.unlock_ev.vc.empty());
+    assert (cs_1.lock_ev <= cs_1.unlock_ev);
 
     ev.event_type = EventsT::LK;
+    ev.line = 3;
     pred.handle_event(ev);
 
     // CSHist last element different from prior and prior's lock vc is smaller
     auto cs_2 = *pred.cs_hist.get_back(1, 1).value();
-    assert (cs_1 <= cs_2);
+    assert (cs_1.less_than_tr(cs_2));
 
     // Check that no new dep was added by it's corresponding list of vcs grew
     assert (pred.graph_view.graph.abs_deps_map.size() == 1);
@@ -95,6 +97,7 @@ void TestPredictor::_test_acquire_event(){
 
     // Create new dependency
     ev.target = 2;
+    ev.line = 4;
     pred.handle_event(ev);
     
     // Make sure the entry for the old lock(1) was created

@@ -46,12 +46,12 @@ void Predictor::acquire_event(const EventInfo& evt) {
     ThreadInfo& th_info = thread_map[evt.thread_id];
 
     // Add lock vc to critical section hisotry and add lock to lockset
-    CSInfo& cs_info = cs_hist.add_lock_vc(evt.thread_id, evt.target, th_info.vec_clock);
+    CSInfo& cs_info = cs_hist.add_lock_ev(evt.thread_id, evt.target, Event(th_info.vec_clock, evt.line));
 
     // Create abstract dependency and add it's instance's vc to the vector(as a ref to cs_hist's entry)
     AbsDependency dep(evt.thread_id, evt.target, th_info.lockset);
-    auto [it, inserted] = graph_view.graph.abs_deps_map.try_emplace(std::move(dep), std::vector<const VectorClock*>{});
-    it->second.push_back(&cs_info.lock_vc);
+    auto [it, inserted] = graph_view.graph.abs_deps_map.try_emplace(std::move(dep), std::vector<const Event*>{});
+    it->second.push_back(&cs_info.lock_ev);
 
     // Locks from lockset should point to this dependency
     if (inserted)
@@ -67,7 +67,7 @@ void Predictor::release_event(const EventInfo& evt) {
     ThreadInfo& th_info = thread_map[evt.thread_id];
     th_info.lockset.erase(evt.target);
     
-    cs_hist.add_unlock_vc(evt.thread_id, evt.target, th_info.vec_clock);
+    cs_hist.add_unlock_ev(evt.thread_id, evt.target, std::move(Event(th_info.vec_clock, evt.line)));
 }
 
 void Predictor::fork_event(const EventInfo& evt) {
