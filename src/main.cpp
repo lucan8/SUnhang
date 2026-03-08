@@ -7,9 +7,8 @@
 //TODO: Renames dependencies to nodes
 //TODO: Think about the sentinel pattern
 //TODO: Remove all asserts in release
-//TODO: Look into using ranges instead of start and end iterators
+//TODO: Use ranges instead of start and end iterators
 //TODO: Template formater for vectors
-//TODO: Make AbsDep point to an iterator of a VC instead of the actual VC
 //TODO: Pack the comparison operators of VectorClock together in one
 
 // BIG QUESTION: Shouldn't the nodes(deps) be sorted based on when they appear in the trace?

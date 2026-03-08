@@ -110,35 +110,47 @@ struct std::formatter<EventInfo> : std::formatter<std::string> {
   }
 };
 
-// Critical section stuff
+// An Event is defined by it's vector clock and position in the trace (so by two moments in time)
+struct Event{
+  VectorClock vc;
+  TracePosT tr_loc;
 
-// Helper struct that hold the vector clocks for a critical section(one for lock, one for unlock)
-struct CSInfo{
-  VectorClock lock_vc;
-  VectorClock unlock_vc;
-
-  CSInfo(const VectorClock& lock_vc, const VectorClock& unlock_vc = {})
-    : lock_vc(lock_vc), unlock_vc(unlock_vc){}
+ 
+  Event(VectorClock vc, TracePosT tr_loc) 
+    : vc(std::move(vc)), tr_loc(tr_loc) {}
   
-  void set_unlock_vc(const VectorClock& unlock_vc){
-    this->unlock_vc = unlock_vc;
-  }
+  Event(){}
 
-  // TODO: Can't this just be unlock_vc <= other.lock_vc?
-  bool operator<=(const CSInfo& other) const{
-    return lock_vc <= other.lock_vc && unlock_vc <= other.lock_vc;
-  }
-  
-  // TODO: Can't this just be unlock_vc < other.lock_vc?
-  bool operator<(const CSInfo& other) const{
-    return lock_vc < other.lock_vc && unlock_vc < other.lock_vc;
+  // Compares vc and tr_loc
+  bool operator<=(const Event& other) const{
+    return vc <= other.vc && tr_loc <= other.tr_loc;
   }
 };
 
-template <>
-struct std::formatter<CSInfo> : std::formatter<std::string> {
-  auto format(const CSInfo& cs_info, format_context& ctx) const {
-      return std::format_to(ctx.out(), "Lock vc: {}\n Unlock vc:{}", cs_info.lock_vc, cs_info.unlock_vc);
+// Critical section stuff
+
+// Helper struct that hold the events for a critical section(one for lock, one for unlock)
+struct CSInfo{
+  Event lock_ev;
+  Event unlock_ev;
+
+  CSInfo(Event lock_ev, Event unlock_ev = {})
+    : lock_ev(std::move(lock_ev)), unlock_ev(std::move(unlock_ev)){}
+  
+  CSInfo(){}
+  
+  void set_unlock_ev(const Event& unlock_ev){
+    this->unlock_ev = unlock_ev;
+  }
+
+  // Compares two critical sections using trace location
+  bool less_than_eq_tr(const CSInfo& other) const{
+    return lock_ev.tr_loc <= other.lock_ev.tr_loc && unlock_ev.tr_loc <= other.lock_ev.tr_loc;
+  }
+  
+  // Compares two critical sections using trace location
+  bool less_than_tr(const CSInfo& other) const{
+    return lock_ev.tr_loc < other.lock_ev.tr_loc && unlock_ev.tr_loc < other.lock_ev.tr_loc;
   }
 };
 
@@ -146,12 +158,17 @@ struct std::formatter<CSInfo> : std::formatter<std::string> {
 struct CSHist{
   std::unordered_map<ThreadIdT, std::unordered_map<ResourceIdT, LazyQueue<CSInfo>>> _cs_hist;
 
-  CSInfo& add_lock_vc(ThreadIdT tid, ResourceIdT res_id, const VectorClock& lock_vc){
-    return _cs_hist[tid][res_id].emplace(lock_vc);
+  // Adds the lock event to the history
+  CSInfo& add_lock_ev(ThreadIdT tid, ResourceIdT res_id, Event lock_ev){
+    return _cs_hist[tid][res_id].emplace(std::move(lock_ev));
   }
 
-  void add_unlock_vc(ThreadIdT tid, ResourceIdT res_id, const VectorClock& unlock_vc){
-    _cs_hist[tid][res_id].back().unlock_vc = unlock_vc;
+  // Sets the unlock event in the history
+  // Does not check if this unlock operation is preceded by a lock which might be desirable later
+  CSInfo& add_unlock_ev(ThreadIdT tid, ResourceIdT res_id, Event unlock_ev){
+    CSInfo& cs = _cs_hist[tid][res_id].back();
+    cs.unlock_ev = std::move(unlock_ev);
+    return cs;
   }
   
   // Returns the last critical section of tid for lock res_id if one exists
