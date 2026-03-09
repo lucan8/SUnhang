@@ -5,6 +5,8 @@
 #include <sstream>
 #include <cstdint>
 #include <deque>
+#include <type_traits>
+#include <concepts>
 #include "comm_types.hpp"
 
 const char trace_sep = '|';
@@ -33,28 +35,61 @@ inline bool lockset_intersection(const LocksetT& ls1, const LocksetT& ls2){
     return false;
 }
 
+// Define constraint for LazyQueue that enforces the container to be either a vector or deque
+template <typename> struct is_vec_or_deq : std::false_type{};
+template <typename T, typename A> struct is_vec_or_deq<std::vector<T, A>> : std::true_type{};
+template <typename T, typename A> struct is_vec_or_deq<std::deque<T, A>> : std::true_type{};
+
+template <typename C>
+concept is_vec_or_deq_c = is_vec_or_deq<C>::value;
+
 // Queue that instead of removing front elements only moves start_elem to the right
 // For this to make sense, the internal container should be sorted(and of course T should be comparable)
-// The deque was chosen for fast pushes/accces to the front and back, binary search 
-// and most importantly pointer stability!
-template <typename T>
+// The internal container can be either the const view of an existing container or individual one 
+template <typename ContainerT, bool is_view>
+requires is_vec_or_deq_c<ContainerT>
 struct LazyQueue {
-    std::deque<T> queue;
-    std::deque<T>::const_iterator start_elem;
+    // Extract the element type directly from the container
+    using T = typename ContainerT::value_type;
 
-    void reset(){
-        start_elem = queue.cbegin();
-    }
+    // StorageT is either a read only view or a self-standing container
+    using StorageT = std::conditional_t<is_view, const ContainerT*, ContainerT>;
     
-    void push(const T& x) {
+    StorageT queue; 
+    ContainerT::const_iterator start_elem;
+
+    // Individual container
+    LazyQueue() requires (!is_view) : queue(ContainerT{}) {}
+
+    // Read only view
+    LazyQueue(const ContainerT& external) requires is_view : queue(&external) {}
+
+    // FUNCTIONS FOR NON-VIEW CONTAINER
+    
+    void push(const T& x) requires (!is_view) {
         queue.push_back(x);
     }
 
     template< class... Args >
-    T& emplace(Args&&... args) {
+    T& emplace(Args&&... args) requires (!is_view){
         return queue.emplace_back(std::forward<Args>(args)...);
     }
 
+    T& back() requires (!is_view){
+        return queue.back();
+    }
+
+
+    // COMMON FUNCTIONS
+
+    const ContainerT& get() const {
+        if constexpr (is_view) {
+            return *queue;  // Dereference the pointer
+        } else {
+            return queue;   // Return the object directly
+        }
+    }
+    
     // Returns the first element and pops
     // If "there are no more elements" the last will be returned
     const T* pop() {
@@ -66,33 +101,52 @@ struct LazyQueue {
         return &back();
     }
 
-    T& back() {
-        return queue.back();
-    }
-
     const T& back() const{
-        return queue.back();
+        return get().back();
     }
 
     // Pops all elements that are smaller than x and returns the last element poped
+    // If inclusive is true, popping stops at the first element greater than x
     // If all elements are greater than x optional won't have a value
     template <typename ValT, typename CompT>
     requires std::predicate<CompT, const T&, const ValT&>
-    std::optional<const T*> pop_until(const ValT& x, CompT comp) {
-        start_elem = std::lower_bound(start_elem, queue.cend(), x, comp);
+    std::optional<const T*> pop_until(const ValT& x, CompT comp, bool inclusive=false) {
+        ContainerT q = get();
+
+        if (inclusive)
+            start_elem = std::upper_bound(start_elem, q.cend(), x, comp);
+        else
+            start_elem = std::lower_bound(start_elem, q.cend(), x, comp);
         
-        if (start_elem == queue.begin())
+        if (start_elem == q.begin())
             return {};
         
         return &(*std::prev(start_elem));
     }
 
     bool empty() const{
-        return queue.empty();
+        return get().empty();
     }
+
+    size_t size() const{
+        return get().size();
+    }
+
+    // Sets start_elem to the beginning of the internal container
+    void reset() {
+        start_elem = get().cbegin();
+    }
+    
 };
 
-// Generic struct used for pointer to object comparison
+// Aliases for LazyQueue
+template <typename ContainerT>
+using OwnedLazyQueue = LazyQueue<ContainerT, false>;
+
+template <typename ContainerT>
+using ViewLazyQueue = LazyQueue<ContainerT, true>;
+
+// Generic struct used for pointer comparison
 // Note: Nullptr is treated as infinity
 struct PtrLess {
     template <typename T>
