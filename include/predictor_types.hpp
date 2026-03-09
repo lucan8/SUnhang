@@ -1,11 +1,13 @@
 #pragma once
 
+// TODO: For CSHist, look into adding making the functions return const references as well
 #include <string>
 #include <vector>
 #include <format>
 #include <unordered_map>
 #include <unordered_set>
 #include <optional>
+#include <cassert>
 #include "vectorclock.hpp"
 #include "comm_types.hpp"
 #include "util.hpp"
@@ -113,17 +115,16 @@ struct std::formatter<EventInfo> : std::formatter<std::string> {
 // An Event is defined by it's vector clock and position in the trace (so by two moments in time)
 struct Event{
   VectorClock vc;
-  TracePosT tr_loc;
+  TracePosT tr_pos;
 
- 
-  Event(VectorClock vc, TracePosT tr_loc) 
-    : vc(std::move(vc)), tr_loc(tr_loc) {}
+  Event(VectorClock vc, TracePosT tr_pos) 
+    : vc(std::move(vc)), tr_pos(tr_pos) {}
   
   Event(){}
 
-  // Compares vc and tr_loc
+  // Compares vc and tr_pos
   bool operator<=(const Event& other) const{
-    return vc <= other.vc && tr_loc <= other.tr_loc;
+    return vc <= other.vc && tr_pos <= other.tr_pos;
   }
 };
 
@@ -145,40 +146,56 @@ struct CSInfo{
 
   // Compares two critical sections using trace location
   bool less_than_eq_tr(const CSInfo& other) const{
-    return lock_ev.tr_loc <= other.lock_ev.tr_loc && unlock_ev.tr_loc <= other.lock_ev.tr_loc;
+    return lock_ev.tr_pos <= other.lock_ev.tr_pos && unlock_ev.tr_pos <= other.lock_ev.tr_pos;
   }
   
   // Compares two critical sections using trace location
   bool less_than_tr(const CSInfo& other) const{
-    return lock_ev.tr_loc < other.lock_ev.tr_loc && unlock_ev.tr_loc < other.lock_ev.tr_loc;
+    return lock_ev.tr_pos < other.lock_ev.tr_pos && unlock_ev.tr_pos < other.lock_ev.tr_pos;
+  }
+
+  // Comapres the lock event vc to vc
+  // Made static to be used as comparator outside class
+  static bool less_than_vc(const CSInfo& cs, const VectorClock& vc) {
+    return cs.lock_ev.vc < vc;
   }
 };
 
 // Critical section history
 struct CSHist{
-  std::unordered_map<ThreadIdT, std::unordered_map<ResourceIdT, LazyQueue<CSInfo>>> _cs_hist;
+  std::unordered_map<ResourceIdT, std::unordered_map<ThreadIdT, LazyQueue<CSInfo>>> _cs_hist;
+
+  // All that which was "removed" from the history is now back
+  void reset(){
+    for (auto& [res_id, th_cs_umap] : _cs_hist){
+      for (auto& [th_id, cs_queue] : th_cs_umap){
+        cs_queue.reset();
+      }
+    }
+  }
 
   // Adds the lock event to the history
-  CSInfo& add_lock_ev(ThreadIdT tid, ResourceIdT res_id, Event lock_ev){
-    return _cs_hist[tid][res_id].emplace(std::move(lock_ev));
+  CSInfo& add_lock_ev(ResourceIdT res_id, ThreadIdT tid, Event lock_ev){
+    return _cs_hist[res_id][tid].emplace(std::move(lock_ev));
   }
 
   // Sets the unlock event in the history
-  // Does not check if this unlock operation is preceded by a lock which might be desirable later
-  CSInfo& add_unlock_ev(ThreadIdT tid, ResourceIdT res_id, Event unlock_ev){
-    CSInfo& cs = _cs_hist[tid][res_id].back();
-    cs.unlock_ev = std::move(unlock_ev);
-    return cs;
+  CSInfo& add_unlock_ev(ResourceIdT res_id, ThreadIdT tid, Event unlock_ev){
+    std::optional<CSInfo*> cs = get_back(res_id, tid);
+    assert(cs.has_value()); // There should be a lock before an unlock!
+
+    cs.value()->unlock_ev = std::move(unlock_ev);
+    return *cs.value();
   }
-  
-  // Returns the last critical section of tid for lock res_id if one exists
-  std::optional<const CSInfo*> get_back(ThreadIdT tid, ResourceIdT res_id){
-    auto umap_it = _cs_hist.find(tid);
+ 
+  // Returns the last cs of tid involving res_id if it exists
+  std::optional<CSInfo*> get_back(ResourceIdT res_id, ThreadIdT tid){
+    auto umap_it = _cs_hist.find(res_id);
     if (umap_it == _cs_hist.end())
       return {};
 
-    auto vec_it = umap_it->second.find(res_id);
-    if (vec_it == umap_it->second.end())
+    auto vec_it = umap_it->second.find(tid);
+    if (vec_it == umap_it->second.end() || vec_it->second.empty())
       return {};
     
     return &vec_it->second.back();

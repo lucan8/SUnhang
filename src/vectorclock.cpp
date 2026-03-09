@@ -40,15 +40,22 @@ VectorClock VectorClock::merge(const VectorClock& other) const{
     return result;
 }
 
-void VectorClock::merge_into(const VectorClock& other) {
+bool VectorClock::merge_into(const VectorClock& other) {
+    bool changed = false;
+    
     for(const auto &[thread_id, value]: other._vector_clock) {
         auto vc = this->_vector_clock.find(thread_id);
+        
         if(vc == this->_vector_clock.end()) {
             this->_vector_clock[thread_id] = value;
+            changed = true;
         } else if(vc->second < value) {
             vc->second = value;
+            changed = true;
         }
     }
+
+    return changed;
 }
 
 void VectorClock::increment(ThreadIdT thread_id) {
