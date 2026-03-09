@@ -8,14 +8,16 @@
 typedef int VCValueT;
 
 struct VectorClock {
-    std::unordered_map<ThreadIdT, VCValueT> _vector_clock = {};
+    std::unordered_map<ThreadIdT, VCValueT> _vector_clock;
     VectorClock();
     VectorClock(ThreadIdT increment_thread_id);
 
     VCValueT find(ThreadIdT thread_id) const;
     
     VectorClock merge(const VectorClock& other) const;
-    void merge_into(const VectorClock& other); // Merges other into this
+    
+    // Merges other into this, returns true if any change occured
+    bool merge_into(const VectorClock& other);
     
     void set(ThreadIdT thread_id, VCValueT);
     

@@ -1,3 +1,4 @@
+//IMPORTANT: Add CSInfo comparator that compares the vector clock of the lock operation
 //TODO: Add automatic formatting for your code
 //TODO: Either use format everywhere or show, not both(USE PRINT!)
 //TODO: Functions for stats and tests for graph construction (dependencies, locks, variables, events)
@@ -29,6 +30,8 @@
 // For example if we have the chain (t1, l2, {l1}) -> (t2, l3, {l2}) -> (t1, l1, {l3})
 // We could stop looking at the path instantly as we are sure nothing will come out of it
 
+// OPTIMIZATION:
+// We could use vectors instead of maps for threads and resources as their ids are consecutive integers
 // TODO: Bensalem asserts!
 // Graph info for bensalem: 12 nodes, only 3 with outgoing neighbours, graph on the second to last page of your notebook
 
@@ -209,12 +212,21 @@ int main(int argc, char *argv[]) {
     cycle_enumerator.enum_cycles();
     cycle_enumerator.print_info();
 
-    DeadlockChecker dlk_checker;
+    DeadlockChecker dlk_checker(predictor.cs_hist);
     Logger::print(LogType::INFO, "DEADLOCK CHECKER INFORMATION");
     Logger::print_dash_line();
 
     for (int i = 0; i < cycle_enumerator.res_cycles.size(); ++i){
         Logger::print(LogType::DBG, "CYCLE {}: {}\n", i, dlk_checker.is_abs_dlk_pattern(cycle_enumerator.res_cycles[i]));
+        
+        VectorClock vc;
+        for (const auto& node : cycle_enumerator.res_cycles[i])
+            vc.merge_into(node->second[0]->vc);
+        
+        VectorClock init_vc = vc;
+        dlk_checker._get_sync_pres_closure(vc);
+        assert(init_vc <= vc);
+        
     }
 
     Logger::print_dash_line();

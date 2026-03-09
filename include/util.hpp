@@ -42,6 +42,10 @@ struct LazyQueue {
     std::deque<T> queue;
     std::deque<T>::const_iterator start_elem;
 
+    void reset(){
+        start_elem = queue.cbegin();
+    }
+    
     void push(const T& x) {
         queue.push_back(x);
     }
@@ -51,10 +55,15 @@ struct LazyQueue {
         return queue.emplace_back(std::forward<Args>(args)...);
     }
 
-    void pop() {
+    // Returns the first element and pops
+    // If "there are no more elements" the last will be returned
+    const T* pop() {
         if (start_elem != queue.end()) {
+            T* res = &(*start_elem);
             ++start_elem;
+            return res;
         }
+        return &back();
     }
 
     T& back() {
@@ -65,9 +74,17 @@ struct LazyQueue {
         return queue.back();
     }
 
-
-    void pop_until(const T& x) {
-        start_elem = std::lower_bound(start_elem, queue.end(), x);
+    // Pops all elements that are smaller than x and returns the last element poped
+    // If all elements are greater than x optional won't have a value
+    template <typename ValT, typename CompT>
+    requires std::predicate<CompT, const T&, const ValT&>
+    std::optional<const T*> pop_until(const ValT& x, CompT comp) {
+        start_elem = std::lower_bound(start_elem, queue.cend(), x, comp);
+        
+        if (start_elem == queue.begin())
+            return {};
+        
+        return &(*std::prev(start_elem));
     }
 
     bool empty() const{
