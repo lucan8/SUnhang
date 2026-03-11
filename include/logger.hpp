@@ -8,7 +8,8 @@ enum class LogType{
     INFO,
     WARN,
     ERR,
-    DBG
+    DBG,
+    NONE
 };
 
 struct Logger {
@@ -21,6 +22,12 @@ struct Logger {
         
         std::print("\n");
     }
+
+    // // print with end="\n"
+    // template<typename... Args>
+    // static void print(LogType log_type, std::format_string<Args...> fmt, Args&&... args){
+    //     print(log_type, fmt, std::forward<Args>(args)...);
+    // }
 
     static void print_dash_line();
     static void _print_log_type(LogType log_type);

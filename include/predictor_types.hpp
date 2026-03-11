@@ -128,6 +128,26 @@ struct Event{
   }
 };
 
+struct EventPtrComp{
+    bool operator()(const Event* ev, const VectorClock& vc) const {
+        return ev->vc < vc;
+    }
+
+    bool operator()(const VectorClock& vc, const Event* ev) const {
+        return vc < ev->vc;
+    }
+};
+
+using EventLazyQueue = ViewLazyQueue<std::vector<const Event*>>;
+
+// Formatter for event, only formats trace position
+template <>
+struct std::formatter<Event> : std::formatter<std::string> {
+  auto format(const Event& ev, format_context& ctx) const {
+      return std::format_to(ctx.out(), "{}", ev.tr_pos);
+  }
+};
+
 // Critical section stuff
 
 // Helper struct that hold the events for a critical section(one for lock, one for unlock)
@@ -153,17 +173,21 @@ struct CSInfo{
   bool less_than_tr(const CSInfo& other) const{
     return lock_ev.tr_pos < other.lock_ev.tr_pos && unlock_ev.tr_pos < other.lock_ev.tr_pos;
   }
+};
 
-  // Comapres the lock event vc to vc
-  // Made static to be used as comparator outside class
-  static bool less_than_vc(const CSInfo& cs, const VectorClock& vc) {
-    return cs.lock_ev.vc < vc;
-  }
+struct CSInfoComp{
+    bool operator()(const CSInfo& cs, const VectorClock& vc) const {
+        return cs.lock_ev.vc < vc;
+    }
+
+    bool operator()(const VectorClock& vc, const CSInfo& cs) const {
+        return vc < cs.lock_ev.vc;
+    }
 };
 
 // Critical section history
 struct CSHist{
-  std::unordered_map<ResourceIdT, std::unordered_map<ThreadIdT, LazyQueue<CSInfo>>> _cs_hist;
+  std::unordered_map<ResourceIdT, std::unordered_map<ThreadIdT, OwnedLazyQueue<std::deque<CSInfo>>>> _cs_hist;
 
   // All that which was "removed" from the history is now back
   void reset(){
