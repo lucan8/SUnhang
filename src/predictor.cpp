@@ -1,3 +1,5 @@
+#include <algorithm>
+
 #include "../include/predictor.hpp"
 #include "../include/logger.hpp"
 
@@ -41,28 +43,33 @@ void Predictor::write_event(const EventInfo& evt) {
 }
 
 void Predictor::acquire_event(const EventInfo& evt) {
-    Logger::print(LogType::DBG, "Acquire event");  
+    Logger::print(LogType::DBG, "Acquire event");
     
     ThreadInfo& th_info = thread_map[evt.thread_id];
 
-    // Create abstract dependency and add it's instance's timestamp to the vector
+    // Add lock vc to critical section hisotry and add lock to lockset
+    CSInfo& cs_info = cs_hist.add_lock_ev(evt.target, evt.thread_id, Event(th_info.vec_clock, evt.line));
+
+    // Create abstract dependency and add it's instance's vc to the vector(as a ref to cs_hist's entry)
     AbsDependency dep(evt.thread_id, evt.target, th_info.lockset);
-    auto [it, inserted] = graph_view.graph.abs_deps_map.try_emplace(std::move(dep), std::vector<VectorClock>{});
-    it->second.push_back(th_info.vec_clock);
+    auto [it, inserted] = graph_view.graph.abs_deps_map.try_emplace(std::move(dep), std::vector<const Event*>{});
+    it->second.push_back(&cs_info.lock_ev);
 
     // Locks from lockset should point to this dependency
     if (inserted)
         for (const auto lock : th_info.lockset)
             lock_dep_map[lock].push_back(it);
 
-    // Add lock to lockset
     th_info.lockset.insert(evt.target);
 }
 
 void Predictor::release_event(const EventInfo& evt) {
     Logger::print(LogType::DBG, "Release event");
 
-    thread_map[evt.thread_id].lockset.erase(evt.target);
+    ThreadInfo& th_info = thread_map[evt.thread_id];
+    th_info.lockset.erase(evt.target);
+    
+    cs_hist.add_unlock_ev(evt.target, evt.thread_id, std::move(Event(th_info.vec_clock, evt.line)));
 }
 
 void Predictor::fork_event(const EventInfo& evt) {

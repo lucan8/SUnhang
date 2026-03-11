@@ -6,7 +6,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/SUnhang.exe",
-            "args": ["Bensalem.std", "test"],
+            "args": ["paper_complex_ex.std", "test"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/",
             "environment": [],

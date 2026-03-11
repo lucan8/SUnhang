@@ -1,5 +1,7 @@
+//IMPORTANT: Generic formatter for iterators
+//TODO: Rename the comparison operators as they are actually biased toward the first argument
+//TODO: How does this handle nested cycles?
 //TODO: Add automatic formatting for your code
-//TODO: Either use format everywhere or show, not both(USE PRINT!)
 //TODO: Functions for stats and tests for graph construction (dependencies, locks, variables, events)
 //TODO: Create namespace for util
 //TODO: Think where to put your typedefs
@@ -7,9 +9,18 @@
 //TODO: Renames dependencies to nodes
 //TODO: Think about the sentinel pattern
 //TODO: Remove all asserts in release
-//TODO: Look into using ranges instead of start and end iterators
-//TODO: Template formater for vectors
-// SIMPLE OPTIMIZATION: IGNORE FIRST LEVEL LOCK ACQUISITIONS!
+//TODO: Use ranges instead of start and end iterators
+//TODO: Template formater for vectors(YOU HAVE IT, USE IT)
+//TODO: Pack the comparison operators of VectorClock together in one
+
+// BIG QUESTION: Shouldn't the nodes(deps) be sorted based on when they appear in the trace?
+// As keeping them in a mere map does not guarantee that ordering.
+// ANSWER: NOP, dependencies can't really use the trace order, that's for events
+
+// TEST IDEEA: Run this on all the benchmarks, save information to a csv file and then check the csvs
+// against the author's
+ 
+//SIMPLE OPTIMIZATION: IGNORE FIRST LEVEL LOCK ACQUISITIONS!
 
 //OPTIMIZATION:
 // Instead of recomputing the SCCs everytime on the subgraph, take only the SCC from which the node was removed
@@ -20,8 +31,13 @@
 // For example if we have the chain (t1, l2, {l1}) -> (t2, l3, {l2}) -> (t1, l1, {l3})
 // We could stop looking at the path instantly as we are sure nothing will come out of it
 
+// OPTIMIZATION:
+// We could use vectors instead of maps for threads and resources as their ids are consecutive integers
 // TODO: Bensalem asserts!
 // Graph info for bensalem: 12 nodes, only 3 with outgoing neighbours, graph on the second to last page of your notebook
+
+// ENCHANCEMENT:
+// Don't stop at the first deadlock instance you find
 
 #include <string>
 #include <fstream>
@@ -64,7 +80,6 @@ void reset_cnt_map() {
  std_lock_id_map.clear();
  std_thread_map.clear();
  std_var_map.clear();
-
 }
 
 // Returns the corresponding id for std_id from std_id_map
@@ -200,12 +215,14 @@ int main(int argc, char *argv[]) {
     cycle_enumerator.enum_cycles();
     cycle_enumerator.print_info();
 
-    DeadlockChecker dlk_checker;
+    DeadlockChecker dlk_checker(predictor.cs_hist);
     Logger::print(LogType::INFO, "DEADLOCK CHECKER INFORMATION");
     Logger::print_dash_line();
 
     for (int i = 0; i < cycle_enumerator.res_cycles.size(); ++i){
         Logger::print(LogType::DBG, "CYCLE {}: {}\n", i, dlk_checker.is_abs_dlk_pattern(cycle_enumerator.res_cycles[i]));
+        
+        dlk_checker.is_sync_preserving_dlk(cycle_enumerator.res_cycles[i]);
     }
 
     Logger::print_dash_line();
