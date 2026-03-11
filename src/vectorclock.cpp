@@ -50,6 +50,20 @@ bool VectorClock::merge_into(const VectorClock& other) {
     return changed;
 }
 
+// merge_into but get the predecessor for thread with the given tid
+bool VectorClock::th_pred_merge_into(const VectorClock& other, ThreadIdT tid){
+    bool changed = false;
+    
+    for(const auto &epoch: other._vector_clock) {
+        if (epoch.first == tid)
+            changed = merge_into_epoch(ThEpoch(tid, epoch.second - 1)) || changed;
+        else
+            changed = merge_into_epoch(epoch) || changed;
+    }
+
+    return changed;
+}
+
 bool VectorClock::pred_merge_into_epoch(const VectorClock& other, ThreadIdT tid){
     // Find thread epoch
     auto epoch_it = other._vector_clock.find(tid);
@@ -102,27 +116,22 @@ bool operator<=(const VectorClock& vc1, const VectorClock& vc2) {
 }
 
 bool operator<(const VectorClock& vc1, const VectorClock& vc2) {
-  for(const auto &[thread_id, value]: vc1._vector_clock) {
-        VCValueT other_vc_val = vc2.find(thread_id);
-
-        if(value >= other_vc_val) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-bool operator>(const VectorClock& vc1, const VectorClock& vc2) {
+    bool one_greater = true;
     for(const auto &[thread_id, value]: vc1._vector_clock) {
         VCValueT other_vc_val = vc2.find(thread_id);
 
-        if(value <= other_vc_val) {
+        if(value > other_vc_val) {
             return false;
         }
+        else if (value < other_vc_val)
+            one_greater = true;
     }
 
-    return true;
+    return one_greater;
+}
+
+bool operator>(const VectorClock& vc1, const VectorClock& vc2) {
+    return !(vc1 <= vc2);
 }
 
 bool operator==(const VectorClock& vc1, const VectorClock& vc2){

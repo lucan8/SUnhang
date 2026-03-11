@@ -1,5 +1,7 @@
+#include "../include/formatters.hpp"
 #include "../include/deadlock_checker.hpp"
 #include "../include/logger.hpp"
+
 bool DeadlockChecker::is_dlk(const NodeChainT& cycle) {
     return is_abs_dlk_pattern(cycle) && is_sync_preserving_dlk(cycle);
 }
@@ -30,15 +32,15 @@ bool DeadlockChecker::is_abs_dlk_pattern(const NodeChainT& cycle){
     return true;
 }
 
-// 
 bool DeadlockChecker::is_sync_preserving_dlk(const NodeChainT& cycle){
     VectorClock vc;
-    size_t alive_nodes_count = cycle.size();
+    cs_hist.reset();
 
     // Wrap the event vectors of the dependencies in lazy queues
     std::vector<EventLazyQueue> cycle_evt = _node_chain_to_lazy_q_vec(cycle);
 
-    while(alive_nodes_count){
+    bool all_nodes_alive = true;
+    while(all_nodes_alive){
         _update_vc_with_curr_cycle(Cycle(cycle_evt, cycle), vc);
 
         _get_sync_pres_closure(vc);
@@ -51,9 +53,8 @@ bool DeadlockChecker::is_sync_preserving_dlk(const NodeChainT& cycle){
         
         if (is_sync_pres_dlk)
             return true;
-        
-        
-        alive_nodes_count -= _update_abs_dep_start_ev(cycle_evt, vc);
+           
+        all_nodes_alive = _update_abs_dep_start_ev(cycle_evt, vc);
     }
 
     return false;
@@ -63,7 +64,6 @@ bool DeadlockChecker::is_sync_preserving_dlk(const NodeChainT& cycle){
 // TODO: Verifying theat max_cs_ind == -1 eveytime is a waste
 void DeadlockChecker::_get_sync_pres_closure(VectorClock& vc){
     bool changed = false;
-    cs_hist.reset();
     
     do{
         for (auto& [res_id, th_cs_umap] : cs_hist._cs_hist){
@@ -99,46 +99,38 @@ void DeadlockChecker::_get_sync_pres_closure(VectorClock& vc){
 // Update vc using the first events of each abstract dependency
 bool DeadlockChecker::_check_sync_pres_closure(const std::vector<EventLazyQueue>& cycle_evt, const VectorClock& closure_vc) const {
     for (const auto& ev_lazy_q : cycle_evt){
-        if (ev_lazy_q.empty())
-            continue;
-
         const Event* ev = *ev_lazy_q.start_elem;
-        if (ev->vc > closure_vc)
-            return true;
+        if (ev->vc <= closure_vc)
+            return false;
     }
-    return false;
+    return true;
 }
 
 // TODO: Do we really need the predecessor?
 void DeadlockChecker::_update_vc_with_curr_cycle(const Cycle& cycle_evt, VectorClock& vc) const{
     for (int i = 0; i < cycle_evt.size(); ++i){
         EventLazyQueue ev_lazy_q = cycle_evt.wrapped_events[i];
-        if (ev_lazy_q.empty())
-            continue;
 
         const Event* ev = *ev_lazy_q.start_elem;
         ThreadIdT tid = cycle_evt.nodes[i]->first.thread_id;
         
         // Merge the event predecessor in the vc 
-        vc.pred_merge_into_epoch(ev->vc, tid);
+        vc.th_pred_merge_into(ev->vc, tid);
     }
 }
 
 // For each node, "removes" all events <= vc
-// Returns the number of nodes that are now empty
-size_t DeadlockChecker::_update_abs_dep_start_ev(std::span<EventLazyQueue> cycle_evt, const VectorClock& vc) const{
-    size_t dead_node_count = 0;
-    
+// Returns false if any node became empty during the process(no more events to verify), true otherwise
+// False is early returned, meaning not all nodes were updated!
+bool DeadlockChecker::_update_abs_dep_start_ev(std::span<EventLazyQueue> cycle_evt, const VectorClock& vc) const{
     for (auto& ev_lazy_q : cycle_evt){
-        if (ev_lazy_q.empty())
-            continue;
         ev_lazy_q.pop_until(vc, EventPtrComp(), true);
 
         if (ev_lazy_q.empty())
-            dead_node_count += 1;
+            return false;
     }
 
-    return dead_node_count;
+    return true;
 }
 
  // Wraps the the events (that the nodes in the cycle point to) in a lazy queue
@@ -149,6 +141,7 @@ std::vector<EventLazyQueue> DeadlockChecker::_node_chain_to_lazy_q_vec(const Nod
 
     for (const auto& node : cycle)
         nodes_events.emplace_back(node->second);
+
     
     return nodes_events;
 }

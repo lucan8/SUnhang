@@ -128,25 +128,19 @@ struct Event{
   }
 };
 
+// Comparator between Event pointer and VectorClock
+// The order matters! Always put vc to the right as it usually is the sync preserving closure
 struct EventPtrComp{
     bool operator()(const Event* ev, const VectorClock& vc) const {
         return ev->vc < vc;
     }
 
     bool operator()(const VectorClock& vc, const Event* ev) const {
-        return vc < ev->vc;
+        return ev->vc > vc;
     }
 };
 
 using EventLazyQueue = ViewLazyQueue<std::vector<const Event*>>;
-
-// Formatter for event, only formats trace position
-template <>
-struct std::formatter<Event> : std::formatter<std::string> {
-  auto format(const Event& ev, format_context& ctx) const {
-      return std::format_to(ctx.out(), "{}", ev.tr_pos);
-  }
-};
 
 // Critical section stuff
 
@@ -175,13 +169,15 @@ struct CSInfo{
   }
 };
 
+// Comparator between CSInfo and VectorClock'
+// The order matters! Always put vc to the right as it usually is the sync preserving closure
 struct CSInfoComp{
     bool operator()(const CSInfo& cs, const VectorClock& vc) const {
         return cs.lock_ev.vc < vc;
     }
 
     bool operator()(const VectorClock& vc, const CSInfo& cs) const {
-        return vc < cs.lock_ev.vc;
+        return cs.lock_ev.vc > vc;
     }
 };
 

@@ -38,8 +38,8 @@ struct DeadlockChecker{
     void _update_vc_with_curr_cycle(const Cycle& cycle_evt, VectorClock& vc) const;
 
     // "Removes" all events that are <= vc
-    // Returns the number of nodes that died in the process
-    size_t _update_abs_dep_start_ev(std::span<EventLazyQueue> cycle_evt, const VectorClock& vc) const;
+    // Returns true if any node became empty during the process(no more events to verify)
+    bool _update_abs_dep_start_ev(std::span<EventLazyQueue> cycle_evt, const VectorClock& vc) const;
 
     // Wraps the the events (that the nodes in the cycle point to) in a lazy queue
     // TODO: This should probably not be here as it mereley does conversion

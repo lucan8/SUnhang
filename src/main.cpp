@@ -1,4 +1,6 @@
 //IMPORTANT: Generic formatter for iterators
+//TODO: Rename the comparison operators as they are actually biased toward the first argument
+//TODO: How does this handle nested cycles?
 //TODO: Add automatic formatting for your code
 //TODO: Functions for stats and tests for graph construction (dependencies, locks, variables, events)
 //TODO: Create namespace for util
@@ -33,6 +35,9 @@
 // We could use vectors instead of maps for threads and resources as their ids are consecutive integers
 // TODO: Bensalem asserts!
 // Graph info for bensalem: 12 nodes, only 3 with outgoing neighbours, graph on the second to last page of your notebook
+
+// ENCHANCEMENT:
+// Don't stop at the first deadlock instance you find
 
 #include <string>
 #include <fstream>
@@ -217,14 +222,7 @@ int main(int argc, char *argv[]) {
     for (int i = 0; i < cycle_enumerator.res_cycles.size(); ++i){
         Logger::print(LogType::DBG, "CYCLE {}: {}\n", i, dlk_checker.is_abs_dlk_pattern(cycle_enumerator.res_cycles[i]));
         
-        VectorClock vc;
-        for (const auto& node : cycle_enumerator.res_cycles[i])
-            vc.merge_into(node->second[0]->vc);
-        
-        VectorClock init_vc = vc;
-        dlk_checker._get_sync_pres_closure(vc);
-        assert(init_vc <= vc);
-        
+        dlk_checker.is_sync_preserving_dlk(cycle_enumerator.res_cycles[i]);
     }
 
     Logger::print_dash_line();
