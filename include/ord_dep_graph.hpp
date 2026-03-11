@@ -6,8 +6,9 @@
 
 #include "predictor_types.hpp"
 
-typedef std::map<AbsDependency, std::vector<VectorClock>> NodeContainerT;
-typedef std::map<AbsDependency, std::vector<VectorClock>>::const_iterator NodeConstItT;
+
+typedef std::map<AbsDependency, std::vector<const Event*>> NodeContainerT;
+typedef std::map<AbsDependency, std::vector<const Event*>>::const_iterator NodeConstItT;
 
 typedef std::vector<NodeConstItT> NodeChainT;
 typedef std::vector<NodeConstItT>::const_iterator NodeChainConstItT;

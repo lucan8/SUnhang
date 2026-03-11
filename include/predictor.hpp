@@ -9,14 +9,14 @@
 #include "vectorclock.hpp"
 
 struct Predictor{
-  std::unordered_map<ThreadIdT, ThreadInfo> thread_map;
-
   OrdDepGraphView graph_view;
+  CSHist cs_hist;
+
+  std::unordered_map<ThreadIdT, ThreadInfo> thread_map;
+  std::unordered_map<ResourceIdT, VectorClock> last_write;
 
   // Intermediary step that helps to build the neighbour list of the graph
   std::unordered_map<ResourceIdT, NodeChainT> lock_dep_map;
-
-  std::unordered_map<ResourceIdT, VectorClock> last_write;
 
   // Calls handler associated with evt.event_type
   // Return true if event if valid, false otherwise
