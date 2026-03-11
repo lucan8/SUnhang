@@ -43,16 +43,37 @@ VectorClock VectorClock::merge(const VectorClock& other) const{
 bool VectorClock::merge_into(const VectorClock& other) {
     bool changed = false;
     
-    for(const auto &[thread_id, value]: other._vector_clock) {
-        auto vc = this->_vector_clock.find(thread_id);
-        
-        if(vc == this->_vector_clock.end()) {
-            this->_vector_clock[thread_id] = value;
-            changed = true;
-        } else if(vc->second < value) {
-            vc->second = value;
-            changed = true;
-        }
+    for(const auto &epoch: other._vector_clock) {
+        changed = merge_into_epoch(epoch) || changed;
+    }
+
+    return changed;
+}
+
+bool VectorClock::pred_merge_into_epoch(const VectorClock& other, ThreadIdT tid){
+    // Find thread epoch
+    auto epoch_it = other._vector_clock.find(tid);
+    if (epoch_it == other._vector_clock.end())
+        return false;
+    
+    // Get predecesor
+    ThEpoch epoch = *epoch_it;
+    epoch.second -= 1;
+    
+    return merge_into_epoch(epoch);
+}
+
+// Merges epoch in this vector clock
+bool VectorClock::merge_into_epoch(const ThEpoch& epoch){
+    auto vc = this->_vector_clock.find(epoch.first);
+    bool changed = false;
+
+    if(vc == this->_vector_clock.end()) {
+        this->_vector_clock[epoch.first] = epoch.second;
+        changed = true;
+    } else if(vc->second < epoch.second) {
+        vc->second = epoch.second;
+        changed = true;
     }
 
     return changed;
@@ -85,6 +106,18 @@ bool operator<(const VectorClock& vc1, const VectorClock& vc2) {
         VCValueT other_vc_val = vc2.find(thread_id);
 
         if(value >= other_vc_val) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool operator>(const VectorClock& vc1, const VectorClock& vc2) {
+    for(const auto &[thread_id, value]: vc1._vector_clock) {
+        VCValueT other_vc_val = vc2.find(thread_id);
+
+        if(value <= other_vc_val) {
             return false;
         }
     }

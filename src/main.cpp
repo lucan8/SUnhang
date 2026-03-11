@@ -1,6 +1,5 @@
-//IMPORTANT: Add CSInfo comparator that compares the vector clock of the lock operation
+//IMPORTANT: Generic formatter for iterators
 //TODO: Add automatic formatting for your code
-//TODO: Either use format everywhere or show, not both(USE PRINT!)
 //TODO: Functions for stats and tests for graph construction (dependencies, locks, variables, events)
 //TODO: Create namespace for util
 //TODO: Think where to put your typedefs
@@ -9,7 +8,7 @@
 //TODO: Think about the sentinel pattern
 //TODO: Remove all asserts in release
 //TODO: Use ranges instead of start and end iterators
-//TODO: Template formater for vectors
+//TODO: Template formater for vectors(YOU HAVE IT, USE IT)
 //TODO: Pack the comparison operators of VectorClock together in one
 
 // BIG QUESTION: Shouldn't the nodes(deps) be sorted based on when they appear in the trace?
@@ -76,7 +75,6 @@ void reset_cnt_map() {
  std_lock_id_map.clear();
  std_thread_map.clear();
  std_var_map.clear();
-
 }
 
 // Returns the corresponding id for std_id from std_id_map

@@ -5,21 +5,31 @@
 #include <format>
 #include "comm_types.hpp"
 
-typedef int VCValueT;
+using VCValueT = int;
+
+using ThEpochConstIt = std::unordered_map<ThreadIdT, VCValueT>::const_iterator;
+using ThEpoch = std::unordered_map<ThreadIdT, VCValueT>::value_type;
 
 struct VectorClock {
     std::unordered_map<ThreadIdT, VCValueT> _vector_clock;
     VectorClock();
     VectorClock(ThreadIdT increment_thread_id);
 
+    // TODO: Remove this
     VCValueT find(ThreadIdT thread_id) const;
     
     VectorClock merge(const VectorClock& other) const;
     
     // Merges other into this, returns true if any change occured
     bool merge_into(const VectorClock& other);
+
+    // Get the thread's epoch and merge it's predecessor into this
+    bool pred_merge_into_epoch(const VectorClock& other, ThreadIdT tid);
+
+    // Meges epoch in this vector clock
+    bool merge_into_epoch(const ThEpoch& epoch);
     
-    void set(ThreadIdT thread_id, VCValueT);
+    void set(ThreadIdT thread_id, VCValueT val);
     
     void increment(ThreadIdT thread_id);
     void decrement(ThreadIdT thread_id);
@@ -27,9 +37,10 @@ struct VectorClock {
     //TODO: Pack these together in one
     friend bool operator<=(const VectorClock& vc1, const VectorClock& vc2);
     friend bool operator<(const VectorClock& vc1, const VectorClock& vc2);
+    friend bool operator>(const VectorClock& vc1, const VectorClock& vc2);
     
     friend bool operator==(const VectorClock& vc1, const VectorClock& vc2);
-
+    
     bool empty() const;
 };
 
