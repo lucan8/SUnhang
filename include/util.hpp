@@ -62,7 +62,7 @@ struct LazyQueue {
     LazyQueue() requires (!is_view) : queue(ContainerT{}) {}
 
     // Read only view
-    LazyQueue(const ContainerT& external) requires is_view : queue(&external) {}
+    LazyQueue(const ContainerT& external) requires is_view : queue(&external) {reset();}
 
     // FUNCTIONS FOR NON-VIEW CONTAINER
     
@@ -111,7 +111,7 @@ struct LazyQueue {
     template <typename ValT, typename CompT>
     requires std::predicate<CompT, const T&, const ValT&>
     std::optional<const T*> pop_until(const ValT& x, CompT comp, bool inclusive) {
-        ContainerT q = get();
+        const ContainerT& q = get();
 
         if (inclusive){
             start_elem = std::upper_bound(start_elem, q.cend(), x, comp);
@@ -127,7 +127,7 @@ struct LazyQueue {
     }
 
     bool empty() const{
-        return get().empty();
+        return start_elem == get().cend();
     }
 
     size_t size() const{
@@ -147,14 +147,6 @@ using OwnedLazyQueue = LazyQueue<ContainerT, false>;
 
 template <typename ContainerT>
 using ViewLazyQueue = LazyQueue<ContainerT, true>;
-
-// Format for LazyQueue, only formats start_elem
-template <typename ContainerT, bool is_view>
-struct std::formatter<LazyQueue<ContainerT, is_view>> : std::formatter<std::string> {
-    auto format(const LazyQueue<ContainerT, is_view>& lazy_queue, format_context& ctx) const {
-        return std::format_to(ctx.out(), "{}", *lazy_queue.start_elem);
-    }
-};
 
 // Generic struct used for pointer comparison
 // Note: Nullptr is treated as infinity
@@ -190,32 +182,4 @@ struct IteratorHasher {
     bool operator()(const Iter& lhs, const Iter& rhs) const {
         return lhs == rhs;
     }
-};
-
-// Formatter for container, just calls format on each element, separating them by ","
-template <typename ContainerT>
-requires std::ranges::input_range<ContainerT>
-struct std::formatter<ContainerT> : std::formatter<std::string> {
-  auto format(const ContainerT& container, format_context& ctx) const {
-        auto out = ctx.out();
-
-        for (const auto& elem : container)
-            std::format_to(out, "{}, ", elem);
-        
-        return out;
-  }
-};
-
-// Formatter for pointers, just formats the object it point to
-// Ignores void and char ptrs, makes sure the underlying type T is formatable
-template <typename T>
-requires (!std::same_as<std::remove_cv_t<T>, void>) &&  
-         (!std::same_as<std::remove_cv_t<T>, char>) &&
-         std::formattable<T, char>
-struct std::formatter<T*> : std::formatter<std::string> {
-  auto format(const T* ptr, format_context& ctx) const {
-    if (!ptr) 
-        return std::format_to(ctx.out(), "nullptr");
-    return std::format_to(ctx.out(), "{}", *ptr);
-  }
 };

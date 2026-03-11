@@ -24,6 +24,9 @@ struct VectorClock {
     bool merge_into(const VectorClock& other);
 
     // Get the thread's epoch and merge it's predecessor into this
+    bool th_pred_merge_into(const VectorClock& other, ThreadIdT tid);
+    
+    // Get the thread's epoch and merge it's predecessor into this
     bool pred_merge_into_epoch(const VectorClock& other, ThreadIdT tid);
 
     // Meges epoch in this vector clock
@@ -35,8 +38,12 @@ struct VectorClock {
     void decrement(ThreadIdT thread_id);
 
     //TODO: Pack these together in one
+    // all epoches have to be <=
     friend bool operator<=(const VectorClock& vc1, const VectorClock& vc2);
+    // all epoches need to be <= and at least one has to be <
     friend bool operator<(const VectorClock& vc1, const VectorClock& vc2);
+    
+    // at least one epoch has to be >, the rest can even be below!
     friend bool operator>(const VectorClock& vc1, const VectorClock& vc2);
     
     friend bool operator==(const VectorClock& vc1, const VectorClock& vc2);
