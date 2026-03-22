@@ -23,13 +23,14 @@ struct Logger {
         std::print("\n");
     }
 
-    // // print with end="\n"
-    // template<typename... Args>
-    // static void print(LogType log_type, std::format_string<Args...> fmt, Args&&... args){
-    //     print(log_type, fmt, std::forward<Args>(args)...);
-    // }
+    // Wrapper over print that prepends the output with stuff like [ERR]:, [WARN]: etc...
+    template<typename... Args>
+    static void print(std::FILE* stream, std::format_string<Args...> fmt, Args&&... args){
+        std::print(stream, fmt, std::forward<Args>(args)...);
+        
+        std::print(stream, "\n");
+    }
 
     static void print_dash_line();
     static void _print_log_type(LogType log_type);
-    
 };

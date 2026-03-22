@@ -18,17 +18,29 @@ struct Cycle{
     }
 };
 
+// Helper struct that holds only the relevant info about a node for output 
+struct SimpleNode{
+    ThreadIdT tid;
+    ResourceIdT res_id;
+    SrcLocT src_loc;
+};
+
+template <>
+struct std::formatter<SimpleNode> : std::formatter<std::string> {
+  auto format(const SimpleNode& node, auto& ctx) const {
+      return std::format_to(ctx.out(), "<{}, {}, {}>", node.tid, node.res_id, node.src_loc);
+  }
+};
+
 struct DeadlockChecker{
     CSHist& cs_hist;
     
     DeadlockChecker(CSHist& cs_hist)
         : cs_hist(cs_hist){}
 
-    bool is_dlk(const NodeChainT& cycle);
     bool is_abs_dlk_pattern(const NodeChainT& cycle);
 
-    // In reality at the end of the function the cycle remains unchanged
-    bool is_sync_preserving_dlk(const NodeChainT& cycle);
+    std::optional<std::vector<SimpleNode>> get_sync_preserving_dlk(const NodeChainT& cycle);
 
     void _get_sync_pres_closure(VectorClock& vc);
 

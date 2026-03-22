@@ -116,9 +116,10 @@ struct std::formatter<EventInfo> : std::formatter<std::string> {
 struct Event{
   VectorClock vc;
   TracePosT tr_pos;
-
-  Event(VectorClock vc, TracePosT tr_pos) 
-    : vc(std::move(vc)), tr_pos(tr_pos) {}
+  SrcLocT src_loc;
+  
+  Event(VectorClock vc, TracePosT tr_pos, SrcLocT src_loc) 
+    : vc(std::move(vc)), tr_pos(tr_pos), src_loc(src_loc) {}
   
   Event(){}
 

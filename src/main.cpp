@@ -1,3 +1,13 @@
+//FAILED TESTS:
+// DBCP 1 AND 2
+// ECLIPSE
+// HASHMAP?????
+// IDENTITYHASHMAP?????
+// STACK
+// CALFUZZER
+// DIMMUNIX
+// 
+
 //IMPORTANT: Generic formatter for iterators
 //TODO: Rename the comparison operators as they are actually biased toward the first argument
 //TODO: How does this handle nested cycles?
@@ -12,6 +22,7 @@
 //TODO: Use ranges instead of start and end iterators
 //TODO: Template formater for vectors(YOU HAVE IT, USE IT)
 //TODO: Pack the comparison operators of VectorClock together in one
+//TODO: Timer function
 
 // BIG QUESTION: Shouldn't the nodes(deps) be sorted based on when they appear in the trace?
 // As keeping them in a mere map does not guarantee that ordering.
@@ -50,7 +61,9 @@
 #include <optional>
 #include <future>
 #include <cassert>
+#include <filesystem>
 using namespace std::chrono_literals;
+namespace fs = std::filesystem;
 
 #include "../include/predictor.hpp"
 #include "../include/logger.hpp"
@@ -139,9 +152,7 @@ EventInfo from_std(const std::vector<std::string>& current_result) {
     return result;
 }
 
-void parse_trace(Predictor& predictor, std::ifstream& file, const std::string& pred_name) {
-    auto start_time_1 = std::chrono::steady_clock::now();
-
+void parse_trace(Predictor& predictor, std::ifstream& file) {
     std::string evt_str;
     int line_index = 0;
 
@@ -159,17 +170,23 @@ void parse_trace(Predictor& predictor, std::ifstream& file, const std::string& p
         event.line = line_index;
         
         bool is_val_evt = predictor.handle_event(event);
-        if (!is_val_evt)
-            Logger::print(LogType::WARN, "Invalid event on line {}: {}", line_index, evt_str);
+        // if (!is_val_evt)
+        //     Logger::print(LogType::WARN, "Invalid event on line {}: {}", line_index, evt_str);
 
-        Logger::print(LogType::DBG, "{}", event);
+        // Logger::print(LogType::DBG, "{}", event);
     }
-
-    auto end_time_1 = std::chrono::steady_clock::now();
-    size_t run_time_1 = std::chrono::duration_cast<std::chrono::milliseconds>(end_time_1 - start_time_1).count();
-
-    Logger::print(LogType::INFO, "Parsed and processed {} lines in {}ums.", line_index, run_time_1);
+    predictor.build_neigh_list();
 }
+
+void print_parse_summary(std::FILE* out_file, uint32_t acq_count){
+    Logger::print(out_file, "----Trace info----");
+    Logger::print(out_file, "num threads: {}", std_thread_counter);
+    Logger::print(out_file, "num events: {}", std_evt_counter);
+    Logger::print(out_file, "num locations: {}", std_var_counter);
+    Logger::print(out_file, "num locks: {}", std_lock_id_counter);
+    Logger::print(out_file, "\nnum acq/req: {}", acq_count);
+}
+
 
 // Arg1 : trace file
 // Arg2 : name of test
@@ -178,54 +195,85 @@ void parse_trace(Predictor& predictor, std::ifstream& file, const std::string& p
 int main(int argc, char *argv[]) {
     const uint8_t exp_args = 3;
     if (argc != exp_args){
-        Logger::print(LogType::ERR, "Usage: ./main.exe [input_file] [test_name]");
+        Logger::print(LogType::ERR, "Usage: ./SUnhang.exe [input_file_path] [out_summary_file_path]");
         return 1; 
     }
 
-    std::string input_file = argv[1];
-    std::string test_name = argv[2];
-    std::string pred_name = input_file + test_name;
+    auto start = std::chrono::system_clock::now();
 
-    // Logger::print(LogType::DBG, "Constructed pred_name: {}", pred_name);
-    std::ifstream file(input_file);
-    if(!file.good()) {
-        Logger::print(LogType::ERR, "File not found: {}", input_file);
+    std::string in_file_path = argv[1];
+    std::string out_summ_path = argv[2];
+
+    Logger::print(LogType::DBG, "Input path: {}", in_file_path);
+    Logger::print(LogType::DBG, "Out summary path: {}", out_summ_path);
+
+    std::ifstream in_file(in_file_path);
+    if(!in_file.good()) {
+        Logger::print(LogType::ERR, "In file not found: {}", in_file_path);
         return 1;
     }
 
-    // Test stuff
-    TestVectorClock::test();
-    TestPredictor::test();
+    std::FILE* out_file(std::fopen(out_summ_path.c_str(), "w"));
+    if (!out_file){
+        Logger::print(LogType::ERR, "Out file not found: {}", out_summ_path);
+        return 1;
+    }
+
+    // // Test stuff
+    // TestVectorClock::test();
+    // TestPredictor::test();
 
     reset_cnt_map();
     Predictor predictor;
-    parse_trace(predictor, file, pred_name);
 
-    predictor.build_neigh_list();
-    
-    predictor.print_neigh_list();
-    predictor.print_lock_deps_map();
-    predictor.print_abs_deps();
+    // Trace parsing and grpah construction
+    parse_trace(predictor, in_file);
+    print_parse_summary(out_file, predictor.acq_count);
 
-    SCCEnumerator scc_enumerator(predictor.graph_view);
-    scc_enumerator.get_min_strong_conn_comp();
-    scc_enumerator.print_info();
+    auto end = std::chrono::system_clock::now();
+    auto millis_passed_parse_trace = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
     CycleEnumerator cycle_enumerator(predictor.graph_view);
     cycle_enumerator.enum_cycles();
-    cycle_enumerator.print_info();
+    Logger::print(out_file, "num cycles: {}", cycle_enumerator.res_cycles.size());
+
+    end = std::chrono::system_clock::now();
+    auto millis_passed_cycle_enum = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
     DeadlockChecker dlk_checker(predictor.cs_hist);
-    Logger::print(LogType::INFO, "DEADLOCK CHECKER INFORMATION");
-    Logger::print_dash_line();
 
+    std::vector<int> abs_dlk_cycles_ind;
+    abs_dlk_cycles_ind.reserve(32);
     for (int i = 0; i < cycle_enumerator.res_cycles.size(); ++i){
-        Logger::print(LogType::DBG, "CYCLE {}: {}\n", i, dlk_checker.is_abs_dlk_pattern(cycle_enumerator.res_cycles[i]));
-        
-        dlk_checker.is_sync_preserving_dlk(cycle_enumerator.res_cycles[i]);
+        bool is_abs_dlk = dlk_checker.is_abs_dlk_pattern(cycle_enumerator.res_cycles[i]);
+        if (is_abs_dlk)
+            abs_dlk_cycles_ind.push_back(i);
     }
 
-    Logger::print_dash_line();
+    Logger::print(out_file, "num abstract: {}", abs_dlk_cycles_ind.size());
+    Logger::print(out_file, "num concrete: -1\n"); // Just to match the format
+    
+    end = std::chrono::system_clock::now();
+    auto millis_passed_abs_dlk_check = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    
+    uint32_t real_dlk_count = 0;
+    for (int i : abs_dlk_cycles_ind){
+        auto dlk_info_opt = dlk_checker.get_sync_preserving_dlk(cycle_enumerator.res_cycles[i]);
+        if (dlk_info_opt.has_value()){
+            real_dlk_count += 1;
+            auto dlk_info = dlk_info_opt.value();
+            Logger::print(out_file, "Deadlock found on cycle: {}", dlk_info);
+        }
+    }
 
+    end = std::chrono::system_clock::now();
+    auto millis_passed_sync_pres_check = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    
+    Logger::print(out_file, "\nnum deadlocks: {}", real_dlk_count);
+
+    Logger::print(out_file, "Time for parsing and graph construction = {} milliseconds", millis_passed_parse_trace);
+    Logger::print(out_file, "Time for cycle enumeration = {} milliseconds", millis_passed_cycle_enum - millis_passed_parse_trace);
+    Logger::print(out_file, "Time for abs deadlock checks = {} milliseconds", millis_passed_abs_dlk_check - millis_passed_cycle_enum);
+    Logger::print(out_file, "Time for sync pres check = {} milliseconds", millis_passed_sync_pres_check - millis_passed_abs_dlk_check);
     return 0;
 }
