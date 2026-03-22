@@ -33,22 +33,23 @@ bool Predictor::handle_event(const EventInfo& evt){
 }
 
 void Predictor::read_event(const EventInfo& evt) {
-    Logger::print(LogType::DBG, "Read event");
+    // Logger::print(LogType::DBG, "Read event");
     thread_map[evt.thread_id].vec_clock.merge_into(last_write[evt.target]);
 }
 
 void Predictor::write_event(const EventInfo& evt) {
-    Logger::print(LogType::DBG, "Write event");
+    // Logger::print(LogType::DBG, "Write event");
     last_write[evt.target] = thread_map[evt.thread_id].vec_clock;
 }
 
 void Predictor::acquire_event(const EventInfo& evt) {
-    Logger::print(LogType::DBG, "Acquire event");
+    // Logger::print(LogType::DBG, "Acquire event");
+    acq_count++;
     
     ThreadInfo& th_info = thread_map[evt.thread_id];
 
     // Add lock vc to critical section hisotry and add lock to lockset
-    CSInfo& cs_info = cs_hist.add_lock_ev(evt.target, evt.thread_id, Event(th_info.vec_clock, evt.line));
+    CSInfo& cs_info = cs_hist.add_lock_ev(evt.target, evt.thread_id, Event(th_info.vec_clock, evt.line, evt.src_loc));
 
     // Create abstract dependency and add it's instance's vc to the vector(as a ref to cs_hist's entry)
     AbsDependency dep(evt.thread_id, evt.target, th_info.lockset);
@@ -64,20 +65,20 @@ void Predictor::acquire_event(const EventInfo& evt) {
 }
 
 void Predictor::release_event(const EventInfo& evt) {
-    Logger::print(LogType::DBG, "Release event");
+    // Logger::print(LogType::DBG, "Release event");
 
     ThreadInfo& th_info = thread_map[evt.thread_id];
     th_info.lockset.erase(evt.target);
     
-    cs_hist.add_unlock_ev(evt.target, evt.thread_id, std::move(Event(th_info.vec_clock, evt.line)));
+    cs_hist.add_unlock_ev(evt.target, evt.thread_id, std::move(Event(th_info.vec_clock, evt.line, evt.src_loc)));
 }
 
 void Predictor::fork_event(const EventInfo& evt) {
-    Logger::print(LogType::DBG, "Fork event");
+    // Logger::print(LogType::DBG, "Fork event");
 }
 
 void Predictor::join_event(const EventInfo& evt) {
-    Logger::print(LogType::DBG, "Join event");
+    // Logger::print(LogType::DBG, "Join event");
 }
 
 void Predictor::print_abs_deps() const{

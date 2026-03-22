@@ -5,3 +5,5 @@ build/
 resources/
 test.cpp
 .vscode/
+ideeas/
+raw_benchmarks/
