@@ -1,12 +1,12 @@
 //FAILED TESTS:
-// DBCP 1 AND 2
-// ECLIPSE
-// HASHMAP?????
-// IDENTITYHASHMAP?????
-// STACK
-// CALFUZZER
-// DIMMUNIX
-// 
+// DBCP 1: expected cycles 2 found 0, none can be deduced from the graph though
+// DBCP 2: same problems, though 200 deadlocks looks sus
+// ECLIPSE : cycle enumerator find extra cycle
+// HASHMAP????? : impossible, they are wrong!
+// IDENTITYHASHMAP????? : impossible, they are wrong!
+
+// Small mistake on their side, fork/join actually create fake thread entries in the maps
+// For example fork(18) will create an entry 18 : id, and T18 will create another one which is wrong!
 
 //IMPORTANT: Generic formatter for iterators
 //TODO: Rename the comparison operators as they are actually biased toward the first argument
@@ -132,10 +132,10 @@ EventInfo from_std(const std::vector<std::string>& current_result) {
 
         // Update maps depending on operation
         if(result.event_type == EventsT::FORK || result.event_type == EventsT::JOIN) {
-          result.target = get_id(std_thread_map, std_thread_counter, target);
+          result.target = get_id(std_thread_map, std_thread_counter, "T" + target);
         } 
         else if(result.event_type == EventsT::LK || result.event_type == EventsT::UK) {  
-          result.target = get_id(std_lock_id_map, std_lock_id_counter , target);
+          result.target = get_id(std_lock_id_map, std_lock_id_counter, target);
         }      
 	    else{
           result.target = get_id(std_var_map, std_var_counter, target);
@@ -178,13 +178,14 @@ void parse_trace(Predictor& predictor, std::ifstream& file) {
     predictor.build_neigh_list();
 }
 
-void print_parse_summary(std::FILE* out_file, uint32_t acq_count){
-    Logger::print(out_file, "----Trace info----");
-    Logger::print(out_file, "num threads: {}", std_thread_counter);
-    Logger::print(out_file, "num events: {}", std_evt_counter);
-    Logger::print(out_file, "num locations: {}", std_var_counter);
-    Logger::print(out_file, "num locks: {}", std_lock_id_counter);
-    Logger::print(out_file, "\nnum acq/req: {}", acq_count);
+void print_parse_summary(std::FILE* log_file, const Predictor& pred){
+    Logger::print(log_file, "----Trace info----");
+    Logger::print(log_file, "num threads: {}", std_thread_counter);
+    Logger::print(log_file, "num events: {}", std_evt_counter);
+    Logger::print(log_file, "num locations: {}", std_var_counter);
+    Logger::print(log_file, "num locks: {}", std_lock_id_counter);
+    Logger::print(log_file, "num acq/req: {}", pred.acq_count);
+    Logger::print(log_file, "num deps: {}", pred.graph_view.graph.abs_deps_map.size());
 }
 
 
@@ -203,9 +204,11 @@ int main(int argc, char *argv[]) {
 
     std::string in_file_path = argv[1];
     std::string out_summ_path = argv[2];
+    // std::string extra_log_path = argv[3];
 
     Logger::print(LogType::DBG, "Input path: {}", in_file_path);
     Logger::print(LogType::DBG, "Out summary path: {}", out_summ_path);
+    // Logger::print(LogType::DBG, "Extra log path: {}", extra_log_path);
 
     std::ifstream in_file(in_file_path);
     if(!in_file.good()) {
@@ -213,11 +216,17 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    std::FILE* out_file(std::fopen(out_summ_path.c_str(), "w"));
-    if (!out_file){
-        Logger::print(LogType::ERR, "Out file not found: {}", out_summ_path);
+    std::FILE* log_file(std::fopen(out_summ_path.c_str(), "w"));
+    if (!log_file){
+        Logger::print(LogType::ERR, "Log file not found: {}", out_summ_path);
         return 1;
     }
+
+    // std::FILE* extra_log_file(std::fopen(extra_log_path.c_str(), "w"));
+    // if (!extra_log_file){
+    //     Logger::print(LogType::ERR, "Extra log file not found: {}", out_summ_path);
+    //     return 1;
+    // }
 
     // // Test stuff
     // TestVectorClock::test();
@@ -228,14 +237,19 @@ int main(int argc, char *argv[]) {
 
     // Trace parsing and grpah construction
     parse_trace(predictor, in_file);
-    print_parse_summary(out_file, predictor.acq_count);
+    auto help = std_thread_map;
+    print_parse_summary(log_file, predictor);
+
+    // predictor.print_abs_deps();
+    // Logger::print_dash_line();
+    // predictor.print_neigh_list();
 
     auto end = std::chrono::system_clock::now();
     auto millis_passed_parse_trace = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
     CycleEnumerator cycle_enumerator(predictor.graph_view);
     cycle_enumerator.enum_cycles();
-    Logger::print(out_file, "num cycles: {}", cycle_enumerator.res_cycles.size());
+    Logger::print(log_file, "num cycles: {}", cycle_enumerator.res_cycles.size());
 
     end = std::chrono::system_clock::now();
     auto millis_passed_cycle_enum = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
@@ -250,8 +264,8 @@ int main(int argc, char *argv[]) {
             abs_dlk_cycles_ind.push_back(i);
     }
 
-    Logger::print(out_file, "num abstract: {}", abs_dlk_cycles_ind.size());
-    Logger::print(out_file, "num concrete: -1\n"); // Just to match the format
+    Logger::print(log_file, "num abstract: {}", abs_dlk_cycles_ind.size());
+    Logger::print(log_file, "num concrete: -1\n"); // Just to match the format
     
     end = std::chrono::system_clock::now();
     auto millis_passed_abs_dlk_check = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
@@ -262,18 +276,18 @@ int main(int argc, char *argv[]) {
         if (dlk_info_opt.has_value()){
             real_dlk_count += 1;
             auto dlk_info = dlk_info_opt.value();
-            Logger::print(out_file, "Deadlock found on cycle: {}", dlk_info);
+            Logger::print(log_file, "Deadlock found on cycle: {}", dlk_info);
         }
     }
 
     end = std::chrono::system_clock::now();
     auto millis_passed_sync_pres_check = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
     
-    Logger::print(out_file, "\nnum deadlocks: {}", real_dlk_count);
+    Logger::print(log_file, "\nnum deadlocks: {}", real_dlk_count);
 
-    Logger::print(out_file, "Time for parsing and graph construction = {} milliseconds", millis_passed_parse_trace);
-    Logger::print(out_file, "Time for cycle enumeration = {} milliseconds", millis_passed_cycle_enum - millis_passed_parse_trace);
-    Logger::print(out_file, "Time for abs deadlock checks = {} milliseconds", millis_passed_abs_dlk_check - millis_passed_cycle_enum);
-    Logger::print(out_file, "Time for sync pres check = {} milliseconds", millis_passed_sync_pres_check - millis_passed_abs_dlk_check);
+    Logger::print(log_file, "Time for parsing and graph construction = {} milliseconds", millis_passed_parse_trace);
+    Logger::print(log_file, "Time for cycle enumeration = {} milliseconds", millis_passed_cycle_enum - millis_passed_parse_trace);
+    Logger::print(log_file, "Time for abs deadlock checks = {} milliseconds", millis_passed_abs_dlk_check - millis_passed_cycle_enum);
+    Logger::print(log_file, "Time for sync pres check = {} milliseconds", millis_passed_sync_pres_check - millis_passed_abs_dlk_check);
     return 0;
 }

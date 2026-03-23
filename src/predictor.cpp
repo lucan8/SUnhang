@@ -48,7 +48,7 @@ void Predictor::acquire_event(const EventInfo& evt) {
     
     ThreadInfo& th_info = thread_map[evt.thread_id];
 
-    // Add lock vc to critical section hisotry and add lock to lockset
+    // Add lock vc to critical section history and add lock to lockset
     CSInfo& cs_info = cs_hist.add_lock_ev(evt.target, evt.thread_id, Event(th_info.vec_clock, evt.line, evt.src_loc));
 
     // Create abstract dependency and add it's instance's vc to the vector(as a ref to cs_hist's entry)
@@ -102,7 +102,7 @@ void Predictor::build_neigh_list() {
         
         // Add valid candidates to the neigbour list of dep
         for (auto cand : lock_dep_it->second)
-            if (node_it->first.is_valid_neigh_cand_opt(cand->first))
+            if (node_it->first.is_valid_neigh_cand(cand->first))
                 graph_view.graph.neigh_list[node_it].push_back(cand);
     }
 
