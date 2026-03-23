@@ -1,0 +1,7 @@
+----Trace info----
+num threads: 3
+num events: 32
+num locations: 4
+num locks: 4
+num acq/req: 12
+num deps: 8
