@@ -81,18 +81,6 @@ void Predictor::join_event(const EventInfo& evt) {
     // Logger::print(LogType::DBG, "Join event");
 }
 
-void Predictor::print_abs_deps() const{
-    Logger::print(LogType::INFO, "ABSTRACT DEPENDENCIES");
-    Logger::print(LogType::INFO, "------------------------------------");
-
-    for (const auto& [dep, timestamps] : graph_view.graph.abs_deps_map){
-        Logger::print(LogType::DBG, "{}: {}", dep ,timestamps.size());
-    }
-
-    Logger::print(LogType::INFO, "Num deps: {}", graph_view.graph.abs_deps_map.size());
-    Logger::print(LogType::INFO, "------------------------------------");
-}
-
 void Predictor::build_neigh_list() {
     for (auto node_it = graph_view.get_real_nodes_start(); node_it != graph_view.get_nodes_end(); ++node_it){
         // Get candidate neighbours
@@ -112,6 +100,18 @@ void Predictor::build_neigh_list() {
     }
 
     graph_view.init_start_structs();
+}
+
+void Predictor::print_abs_deps() const{
+    Logger::print(LogType::INFO, "ABSTRACT DEPENDENCIES");
+    Logger::print(LogType::INFO, "------------------------------------");
+
+    for (const auto& [dep, timestamps] : graph_view.graph.abs_deps_map){
+        Logger::print(LogType::DBG, "{}: {}", dep ,timestamps.size());
+    }
+
+    Logger::print(LogType::INFO, "Num deps: {}", graph_view.graph.abs_deps_map.size());
+    Logger::print(LogType::INFO, "------------------------------------");
 }
 
 void Predictor::print_lock_deps_map() const{
@@ -140,4 +140,30 @@ void Predictor::print_neigh_list() const{
 
     Logger::print(LogType::INFO, "Num deps that have neigh: {}", graph_view.graph.neigh_list.size());
     Logger::print(LogType::INFO, "------------------------------------");
+}
+
+void Predictor::print_abs_deps(std::FILE* out_file) const{
+    Logger::print(out_file, "ABSTRACT DEPENDENCIES");
+    Logger::print(out_file, "------------------------------------");
+
+    for (const auto& [dep, timestamps] : graph_view.graph.abs_deps_map){
+        Logger::print(out_file, "{}: {}", dep ,timestamps.size());
+    }
+
+    Logger::print(out_file, "Num deps: {}", graph_view.graph.abs_deps_map.size());
+    Logger::print(out_file, "------------------------------------");
+}
+
+void Predictor::print_neigh_list(std::FILE* out_file) const{
+    Logger::print(out_file, "NEIGHBOUR LIST");
+    Logger::print(out_file, "------------------------------------");
+
+    for (const auto& [dep, neigh_list] : graph_view.graph.neigh_list){
+        Logger::print(out_file, "{}(dep): {}(neigh count)", dep->first, neigh_list.size());
+        for (const auto neigh : neigh_list)
+            Logger::print(out_file, "{}", neigh->first);
+    }
+
+    Logger::print(out_file, "Num deps that have neigh: {}", graph_view.graph.neigh_list.size());
+    Logger::print(out_file, "------------------------------------");
 }

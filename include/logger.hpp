@@ -31,6 +31,6 @@ struct Logger {
         std::print(stream, "\n");
     }
 
-    static void print_dash_line();
+    static void print_dash_line(std::FILE* out_file = nullptr);
     static void _print_log_type(LogType log_type);
 };

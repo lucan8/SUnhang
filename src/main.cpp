@@ -1,12 +1,57 @@
-//FAILED TESTS:
+//FAILED TESTS NEW:
 // DBCP 1: expected cycles 2 found 0, none can be deduced from the graph though
 // DBCP 2: same problems, though 200 deadlocks looks sus
-// ECLIPSE : cycle enumerator find extra cycle
+
+// ECLIPSE : cycle enumerator find extra cycle 
+//  (excluded by second paper because it is not well-formed, something pointed out by initial authors)
+
 // HASHMAP????? : impossible, they are wrong!
 // IDENTITYHASHMAP????? : impossible, they are wrong!
 
+// FAILED TEST OG:
+// DBCP 1: expected 1 cycle found 0
+// eclipse: failed
+// JDBCMYSQL 2: expected 0 found 2 cycles
+// JDBCMYSQL 3: failed
+// JDBCMYSQL 4: expected 1 found 0 cycles
+
+// OBSERVATIONS/IMPROVEMENTS
+
+// IMPORTANT:
+// Track threads that are alive, all dependencies generated whilst only one thread
+// is executing shall be ignored, this makes everything much more efficient
+// and eliminates some false positives
+//1. 
 // Small mistake on their side, fork/join actually create fake thread entries in the maps
 // For example fork(18) will create an entry 18 : id, and T18 will create another one which is wrong!
+
+
+//2. 
+
+// A source of false positives:
+// t1 locks l1, l2, forks t2, releases l1 and l2
+// t2 locks l2, l1, exits
+// This will get signaled by the algorithm as a deadlock when in reality it isn't!
+// Solution: Do the following on join:
+// - Run the deadlock predictor on the current state of the graph
+// - Eliminate the thread's deps
+
+//3. 
+// Another source of false positives appears because it can't track control flow
+
+//4.
+
+// Every lock will also have a read operation which is redundant
+
+//5.
+// Only looks at lock operations that use monitors(synchronized blocks)
+// And ignores explicit locking like using java.util.concurrent.locks.Lock;
+
+//6. HANDLED 
+// we should have waitBefore and notifyAfter but they are tracked in reverse
+
+//7. 
+// How should reentrant locks be handled?
 
 //IMPORTANT: Generic formatter for iterators
 //TODO: Rename the comparison operators as they are actually biased toward the first argument
@@ -132,7 +177,7 @@ EventInfo from_std(const std::vector<std::string>& current_result) {
 
         // Update maps depending on operation
         if(result.event_type == EventsT::FORK || result.event_type == EventsT::JOIN) {
-          result.target = get_id(std_thread_map, std_thread_counter, "T" + target);
+          result.target = get_id(std_thread_map, std_thread_counter, target);
         } 
         else if(result.event_type == EventsT::LK || result.event_type == EventsT::UK) {  
           result.target = get_id(std_lock_id_map, std_lock_id_counter, target);
@@ -194,6 +239,12 @@ void print_parse_summary(std::FILE* log_file, const Predictor& pred){
 // Arg1 + Arg2 is used to build the name of the output files
 
 int main(int argc, char *argv[]) {
+    // const uint8_t exp_args = 4;
+    // if (argc != exp_args){
+    //     Logger::print(LogType::ERR, "Usage: ./SUnhang.exe [input_file_path] [out_summary_file_path] [extra_log_file_path]");
+    //     return 1; 
+    // }
+
     const uint8_t exp_args = 3;
     if (argc != exp_args){
         Logger::print(LogType::ERR, "Usage: ./SUnhang.exe [input_file_path] [out_summary_file_path]");
@@ -237,12 +288,12 @@ int main(int argc, char *argv[]) {
 
     // Trace parsing and grpah construction
     parse_trace(predictor, in_file);
-    auto help = std_thread_map;
+    // auto help = std_thread_map;
     print_parse_summary(log_file, predictor);
 
-    // predictor.print_abs_deps();
-    // Logger::print_dash_line();
-    // predictor.print_neigh_list();
+    // predictor.print_abs_deps(extra_log_file);
+    // Logger::print_dash_line(extra_log_file);
+    // predictor.print_neigh_list(extra_log_file);
 
     auto end = std::chrono::system_clock::now();
     auto millis_passed_parse_trace = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
