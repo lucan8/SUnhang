@@ -177,7 +177,7 @@ EventInfo from_std(const std::vector<std::string>& current_result) {
 
         // Update maps depending on operation
         if(result.event_type == EventsT::FORK || result.event_type == EventsT::JOIN) {
-          result.target = get_id(std_thread_map, std_thread_counter, target);
+          result.target = get_id(std_thread_map, std_thread_counter, "T" + target);
         } 
         else if(result.event_type == EventsT::LK || result.event_type == EventsT::UK) {  
           result.target = get_id(std_lock_id_map, std_lock_id_counter, target);

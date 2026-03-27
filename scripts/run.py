@@ -6,6 +6,7 @@ from pathlib import Path
 
 out_files_base = "benchmarks/generated/output"
 bench_in_path = "benchmarks/generated/data"
+predictor = "SUnhang1"
 
 def create_out_folders(path):
     if not os.path.exists(os.path.join(path)):
@@ -21,7 +22,7 @@ def run_cpp_spdoffline(bench_name):
 
     print(f"Running benchmark: {bench_name}...\n")
 
-    out_path = (Path(out_files_base) / bench_name / "SUnhang" / "log.txt")
+    out_path = (Path(out_files_base) / bench_name / predictor / "log.txt")
     create_out_folders(os.path.dirname(out_path))
     
     input_path = os.path.join(bench_in_path, bench_name + ".std")
