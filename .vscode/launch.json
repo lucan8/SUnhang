@@ -6,7 +6,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/SUnhang.exe",
-            "args": ["paper_complex_ex.std", "test"],
+            "args": [".\\benchmarks\\data\\Stack_dlf.std", ".\\benchmarks\\output\\Stack_dlf\\SUnhang\\log.txt"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/",
             "environment": [],

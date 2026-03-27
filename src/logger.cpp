@@ -19,6 +19,9 @@ void Logger::_print_log_type(LogType log_type){
     }
 }
 
-void Logger::print_dash_line(){
-    Logger::print(LogType::INFO, "------------------------------------");
+void Logger::print_dash_line(std::FILE* out_file){
+    if (!out_file)
+        Logger::print(LogType::NONE, "------------------------------------");
+    else
+        Logger::print(out_file, "------------------------------------");
 }

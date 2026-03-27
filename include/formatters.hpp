@@ -2,10 +2,10 @@
 #include "predictor_types.hpp"
 #include "util.hpp"
 
+//TODO: Why does it work with auto& and not format_context&?
 // Formatter for event, only formats trace position
 template <>
 struct std::formatter<Event> : std::formatter<std::string> {
-  
   auto format(const Event& ev, auto& ctx) const {
       return std::format_to(ctx.out(), "{}", ev.tr_pos);
   }

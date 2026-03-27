@@ -1,0 +1,56 @@
+import os
+import zipfile
+import optparse
+import subprocess
+from pathlib import Path
+
+out_files_base = "benchmarks/generated/output"
+bench_in_path = "benchmarks/generated/data"
+
+def create_out_folders(path):
+    if not os.path.exists(os.path.join(path)):
+        os.makedirs(os.path.join(path))
+
+# cmd: [exe, exe_arg1, exe_arg2...]
+def execute_cmd(cmd: list[str]):
+    p = subprocess.Popen(cmd, shell=True)
+    p.wait()
+
+def run_cpp_spdoffline(bench_name):
+    global out_files_base, bench_in_path
+
+    print(f"Running benchmark: {bench_name}...\n")
+
+    out_path = (Path(out_files_base) / bench_name / "SUnhang" / "log.txt")
+    create_out_folders(os.path.dirname(out_path))
+    
+    input_path = os.path.join(bench_in_path, bench_name + ".std")
+
+    print("Input path: ", input_path)
+    print("Output path: ", out_path)
+    
+    cmd = [Path("./build/SUnhang.exe").resolve(), input_path, out_path]
+    execute_cmd(cmd)
+    print()
+
+def get_benchmarks():
+    return [path.stem for path in Path(bench_in_path).iterdir()]
+
+def main():
+    global bench_in_path
+    parser = optparse.OptionParser()
+    parser.add_option("-b", "--benchmarks", dest="benchmarks", default="all",
+                    help="run the script on a selected group of benchmarks. " \
+                            "Specify the names of the benchmarks and seperate them with a comma " \
+                            "(e.g., Bensalem,Account) (Default: all).")
+    
+    (options, args) = parser.parse_args()
+    if options.benchmarks == "all":
+        benchmarks = get_benchmarks()
+    else:
+        benchmarks = options.benchmarks.split(",")
+
+    for bench in benchmarks:
+        run_cpp_spdoffline(bench)
+
+main()
