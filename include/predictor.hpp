@@ -39,4 +39,7 @@ struct Predictor{
   void print_abs_deps() const;
   void print_lock_deps_map() const;
   void print_neigh_list() const;
+
+  void print_abs_deps(std::FILE* out_file) const;
+  void print_neigh_list(std::FILE* out_file) const;
 };
