@@ -13,7 +13,7 @@ std::vector<NodeChainT> CycleEnumerator::enum_cycles(){
         if (curr_min_scc.is_empty())
             break;
         
-        Logger::print(LogType::DBG, "SCC {}: NODES({}):\n{}\n", i++, curr_min_scc.nodes.size(), curr_min_scc);
+        // Logger::print(LogType::DBG, "SCC {}: NODES({}):\n{}\n", i++, curr_min_scc.nodes.size(), curr_min_scc);
         
         graph_view.set_start_node(curr_min_scc.min_node);
         _reset_helper_structs(curr_min_scc);
@@ -40,7 +40,7 @@ bool CycleEnumerator::_enum_cycles(NodeConstItT node){
             if (neigh == graph_view.start_node_it){
                 res_cycles.push_back(stack);
                 cycle_on_curr_path = true;
-                Logger::print(LogType::DBG, "CYCLE {}: NODES({}):\n{}\n", res_cycles.size(), res_cycles.back().size(), res_cycles.back());
+                // Logger::print(LogType::DBG, "CYCLE {}: NODES({}):\n{}\n", res_cycles.size(), res_cycles.back().size(), res_cycles.back());
             }
             // DFS on unvisited node, only looking at nodes in the current SCC!
             else if (curr_min_scc.has(neigh) && blocked_nodes.find(neigh) == blocked_nodes.end()){

@@ -2,10 +2,6 @@
 #include "../include/deadlock_checker.hpp"
 #include "../include/logger.hpp"
 
-bool DeadlockChecker::is_dlk(const NodeChainT& cycle) {
-    return is_abs_dlk_pattern(cycle) && is_sync_preserving_dlk(cycle);
-}
-
 bool DeadlockChecker::is_abs_dlk_pattern(const NodeChainT& cycle){
     ULocksetT desired_locks;
     UThreadSetT threads;
@@ -32,7 +28,7 @@ bool DeadlockChecker::is_abs_dlk_pattern(const NodeChainT& cycle){
     return true;
 }
 
-bool DeadlockChecker::is_sync_preserving_dlk(const NodeChainT& cycle){
+std::optional<std::vector<SimpleNode>> DeadlockChecker::get_sync_preserving_dlk(const NodeChainT& cycle){
     VectorClock vc;
     cs_hist.reset();
 
@@ -45,19 +41,25 @@ bool DeadlockChecker::is_sync_preserving_dlk(const NodeChainT& cycle){
 
         _get_sync_pres_closure(vc);
         
-        Logger::print(LogType::DBG, "{}", cycle_evt);
+        // Logger::print(LogType::DBG, "{}", cycle_evt);
 
         bool is_sync_pres_dlk = _check_sync_pres_closure(cycle_evt, vc);
         
-        Logger::print(LogType::NONE, "{}", is_sync_pres_dlk);
+        // Logger::print(LogType::NONE, "{}", is_sync_pres_dlk);
         
-        if (is_sync_pres_dlk)
-            return true;
-           
+        if (is_sync_pres_dlk){
+            std::vector<SimpleNode> res;
+            res.reserve(cycle_evt.size());
+            for (int i = 0; i < cycle.size(); ++i){
+                res.emplace_back(cycle[i]->first.thread_id, cycle[i]->first.resource_id, (*cycle_evt[i].start_elem)->src_loc);
+            }
+            return res;
+        }
+        
         all_nodes_alive = _update_abs_dep_start_ev(cycle_evt, vc);
     }
 
-    return false;
+    return {};
 }
 
 // Computes the sync preserving closure of vc and updates it in place

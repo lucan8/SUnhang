@@ -26,30 +26,28 @@ void SCCEnumerator::_get_min_strong_conn_comp(NodeConstItT dep){
     // Get the valid neighbour list of dep
     auto neigh_list = graph_view.get_and_update_neigh_list_range(dep);
 
-    if (!neigh_list.has_value())
-        return;
+    if (neigh_list.has_value()){
+        // DFS on the valid neighbours
+        for (auto neigh : neigh_list.value()){
+            auto neigh_info_entry = dep_info_map.find(neigh);
 
-    // DFS on the valid neighbours
-    for (auto neigh : neigh_list.value()){
-        auto neigh_info_entry = dep_info_map.find(neigh);
+            // Recurse on unvisited dep
+            if (neigh_info_entry == dep_info_map.end()){
+                _get_min_strong_conn_comp(neigh);
 
-        // Recurse on unvisited dep
-        if (neigh_info_entry == dep_info_map.end()){
-            _get_min_strong_conn_comp(neigh);
-
-            auto neigh_info_it =  dep_info_map.find(neigh);
-            assert(neigh_info_it != dep_info_map.end()); // Remove in release mode
-            
-            dep_info.low_index = std::min(dep_info.low_index, neigh_info_it->second.low_index);
-        }
-        else{ // Update the low index if the neighbour is already visited and on the stack
-            AbsDepInfo& neigh_info = neigh_info_entry->second;
-            if (neigh_info.on_stack){
-                dep_info.low_index = std::min(dep_info.low_index, neigh_info.index);
+                auto neigh_info_it =  dep_info_map.find(neigh);
+                assert(neigh_info_it != dep_info_map.end()); // Remove in release mode
+                
+                dep_info.low_index = std::min(dep_info.low_index, neigh_info_it->second.low_index);
+            }
+            else{ // Update the low index if the neighbour is already visited and on the stack
+                AbsDepInfo& neigh_info = neigh_info_entry->second;
+                if (neigh_info.on_stack){
+                    dep_info.low_index = std::min(dep_info.low_index, neigh_info.index);
+                }
             }
         }
     }
-
     MinSCC scc(graph_view.get_nodes_end());
 
     // Every node after this one(inclusive) will be part of the same new scc
