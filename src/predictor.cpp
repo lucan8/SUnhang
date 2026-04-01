@@ -51,7 +51,8 @@ void Predictor::acquire_event(const EventInfo& evt) {
     // Add lock vc to critical section history and add lock to lockset
     CSInfo& cs_info = cs_hist.add_lock_ev(evt.target, evt.thread_id, Event(th_info.vec_clock, evt.line, evt.src_loc));
 
-    // Don't create dependencies for first level lock acquisitions
+    // Don't create deps for first level lock acquisitions
+    // Ignore deps created when only one thread executes
     if (!th_info.lockset.empty()){
         // Create abstract dependency and add it's instance's vc to the vector(as a ref to cs_hist's entry)
         AbsDependency dep(evt.thread_id, evt.target, th_info.lockset);
@@ -78,10 +79,18 @@ void Predictor::release_event(const EventInfo& evt) {
 
 void Predictor::fork_event(const EventInfo& evt) {
     // Logger::print(LogType::DBG, "Fork event");
+    ThreadInfo& th_info = thread_map[evt.thread_id];
+    ThreadInfo& target_info = thread_map.emplace(evt.target, ThreadInfo()).first->second;
+
+    target_info.vec_clock.merge_into(th_info.vec_clock);
 }
 
 void Predictor::join_event(const EventInfo& evt) {
     // Logger::print(LogType::DBG, "Join event");
+    ThreadInfo& th_info = thread_map[evt.thread_id];
+    ThreadInfo& target_info = thread_map.extract(evt.target).mapped();
+
+    th_info.vec_clock.merge_into(target_info.vec_clock);
 }
 
 void Predictor::build_neigh_list() {

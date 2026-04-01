@@ -28,7 +28,7 @@
 
 //2. 
 
-// A source of false positives:
+// A source of false positives (Bensalem has one of these):
 // t1 locks l1, l2, forks t2, releases l1 and l2
 // t2 locks l2, l1, exits
 // This will get signaled by the algorithm as a deadlock when in reality it isn't!
@@ -234,32 +234,28 @@ void print_parse_summary(std::FILE* log_file, const Predictor& pred){
 }
 
 
-// Arg1 : trace file
-// Arg2 : name of test
-// Arg1 + Arg2 is used to build the name of the output files
-
 int main(int argc, char *argv[]) {
-    // const uint8_t exp_args = 4;
-    // if (argc != exp_args){
-    //     Logger::print(LogType::ERR, "Usage: ./SUnhang.exe [input_file_path] [out_summary_file_path] [extra_log_file_path]");
-    //     return 1; 
-    // }
-
-    const uint8_t exp_args = 3;
+    const uint8_t exp_args = 4;
     if (argc != exp_args){
-        Logger::print(LogType::ERR, "Usage: ./SUnhang.exe [input_file_path] [out_summary_file_path]");
+        Logger::print(LogType::ERR, "Usage: ./SUnhang.exe [input_file_path] [out_summary_file_path] [extra_log_file_path]");
         return 1; 
     }
+
+    // const uint8_t exp_args = 3;
+    // if (argc != exp_args){
+    //     Logger::print(LogType::ERR, "Usage: ./SUnhang.exe [input_file_path] [out_summary_file_path]");
+    //     return 1; 
+    // }
 
     auto start = std::chrono::system_clock::now();
 
     std::string in_file_path = argv[1];
     std::string out_summ_path = argv[2];
-    // std::string extra_log_path = argv[3];
+    std::string extra_log_path = argv[3];
 
     Logger::print(LogType::DBG, "Input path: {}", in_file_path);
     Logger::print(LogType::DBG, "Out summary path: {}", out_summ_path);
-    // Logger::print(LogType::DBG, "Extra log path: {}", extra_log_path);
+    Logger::print(LogType::DBG, "Extra log path: {}", extra_log_path);
 
     std::ifstream in_file(in_file_path);
     if(!in_file.good()) {
@@ -273,11 +269,11 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // std::FILE* extra_log_file(std::fopen(extra_log_path.c_str(), "w"));
-    // if (!extra_log_file){
-    //     Logger::print(LogType::ERR, "Extra log file not found: {}", out_summ_path);
-    //     return 1;
-    // }
+    std::FILE* extra_log_file(std::fopen(extra_log_path.c_str(), "w"));
+    if (!extra_log_file){
+        Logger::print(LogType::ERR, "Extra log file not found: {}", out_summ_path);
+        return 1;
+    }
 
     // // Test stuff
     // TestVectorClock::test();
@@ -291,9 +287,9 @@ int main(int argc, char *argv[]) {
     // auto help = std_thread_map;
     print_parse_summary(log_file, predictor);
 
-    // predictor.print_abs_deps(extra_log_file);
-    // Logger::print_dash_line(extra_log_file);
-    // predictor.print_neigh_list(extra_log_file);
+    predictor.print_abs_deps(extra_log_file);
+    Logger::print_dash_line(extra_log_file);
+    predictor.print_neigh_list(extra_log_file);
 
     auto end = std::chrono::system_clock::now();
     auto millis_passed_parse_trace = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
