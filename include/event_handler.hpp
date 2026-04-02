@@ -3,15 +3,17 @@
 #include <unordered_map>
 #include <map>
 #include <vector>
-
+#include <fstream>
 #include "predictor_types.hpp"
 #include "ord_dep_graph.hpp"
 #include "vectorclock.hpp"
 
-struct Predictor{
+struct EventHandler{
+  // RESULTS
   OrdDepGraphView graph_view;
   CSHist cs_hist;
 
+  // INTERNAL STUFF
   std::unordered_map<ThreadIdT, ThreadInfo> thread_map;
   std::unordered_map<ResourceIdT, VectorClock> last_write;
 
@@ -21,9 +23,7 @@ struct Predictor{
   // Statistical info
   uint32_t acq_count;
 
-  Predictor() : acq_count(0){}
-
-  // Calls handler associated with evt.event_type
+  // Calls handler  associated with evt.event_type
   // Return true if event if valid, false otherwise
   bool handle_event(const EventInfo& evt);
   
@@ -44,4 +44,6 @@ struct Predictor{
 
   void print_abs_deps(std::FILE* out_file) const;
   void print_neigh_list(std::FILE* out_file) const;
+
+  void print_summary(std::FILE* log_file) const;
 };

@@ -1,7 +1,5 @@
 #pragma once
 
-#include "predictor.hpp"
-
 struct TestPredictor{
     void static test();
   

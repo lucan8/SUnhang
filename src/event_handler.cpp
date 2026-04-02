@@ -1,9 +1,9 @@
+#include "../include/event_handler.hpp"
+#include "../include/logger.hpp"
 #include <algorithm>
 
-#include "../include/predictor.hpp"
-#include "../include/logger.hpp"
 
-bool Predictor::handle_event(const EventInfo& evt){
+bool EventHandler::handle_event(const EventInfo& evt){
     switch (evt.event_type){
         case EventsT::LK:
             acquire_event(evt);
@@ -32,7 +32,7 @@ bool Predictor::handle_event(const EventInfo& evt){
     return true;
 }
 
-void Predictor::read_event(const EventInfo& evt) {
+void EventHandler::read_event(const EventInfo& evt) {
     // Logger::print(LogType::DBG, "Read event");
 
     if (thread_map.size() <= 1)
@@ -41,7 +41,7 @@ void Predictor::read_event(const EventInfo& evt) {
     thread_map[evt.thread_id].vec_clock.merge_into(last_write[evt.target]);
 }
 
-void Predictor::write_event(const EventInfo& evt) {
+void EventHandler::write_event(const EventInfo& evt) {
     // Logger::print(LogType::DBG, "Write event");
 
     if (thread_map.size() <= 1)
@@ -50,7 +50,7 @@ void Predictor::write_event(const EventInfo& evt) {
     last_write[evt.target] = thread_map[evt.thread_id].vec_clock;
 }
 
-void Predictor::acquire_event(const EventInfo& evt) {
+void EventHandler::acquire_event(const EventInfo& evt) {
     // Logger::print(LogType::DBG, "Acquire event");
     acq_count++;
 
@@ -82,7 +82,7 @@ void Predictor::acquire_event(const EventInfo& evt) {
     th_info.u_reen_lockset.acquire(evt.target);
 }
 
-void Predictor::release_event(const EventInfo& evt) {
+void EventHandler::release_event(const EventInfo& evt) {
     // Logger::print(LogType::DBG, "Release event");
 
     if (thread_map.size() <= 1)
@@ -97,7 +97,7 @@ void Predictor::release_event(const EventInfo& evt) {
     cs_hist.add_unlock_ev(evt.target, evt.thread_id, std::move(Event(th_info.vec_clock, evt.line, evt.src_loc)));
 }
 
-void Predictor::fork_event(const EventInfo& evt) {
+void EventHandler::fork_event(const EventInfo& evt) {
     // Logger::print(LogType::DBG, "Fork event");
     ThreadInfo& th_info = thread_map[evt.thread_id];
     ThreadInfo& target_info = thread_map.emplace(evt.target, ThreadInfo()).first->second;
@@ -105,7 +105,7 @@ void Predictor::fork_event(const EventInfo& evt) {
     target_info.vec_clock.merge_into(th_info.vec_clock);
 }
 
-void Predictor::join_event(const EventInfo& evt) {
+void EventHandler::join_event(const EventInfo& evt) {
     // Logger::print(LogType::DBG, "Join event");
     ThreadInfo& th_info = thread_map[evt.thread_id];
     ThreadInfo& target_info = thread_map.extract(evt.target).mapped();
@@ -113,7 +113,7 @@ void Predictor::join_event(const EventInfo& evt) {
     th_info.vec_clock.merge_into(target_info.vec_clock);
 }
 
-void Predictor::build_neigh_list() {
+void EventHandler::build_neigh_list() {
     for (auto node_it = graph_view.get_real_nodes_start(); node_it != graph_view.get_nodes_end(); ++node_it){
         // Get candidate neighbours
         auto lock_dep_it = lock_dep_map.find(node_it->first.resource_id);
@@ -134,7 +134,7 @@ void Predictor::build_neigh_list() {
     graph_view.init_start_structs();
 }
 
-void Predictor::print_abs_deps() const{
+void EventHandler::print_abs_deps() const{
     Logger::print(LogType::INFO, "ABSTRACT DEPENDENCIES");
     Logger::print(LogType::INFO, "------------------------------------");
 
@@ -146,7 +146,7 @@ void Predictor::print_abs_deps() const{
     Logger::print(LogType::INFO, "------------------------------------");
 }
 
-void Predictor::print_lock_deps_map() const{
+void EventHandler::print_lock_deps_map() const{
     Logger::print(LogType::INFO, "LOCK DEPENDENCIES MAP");
     Logger::print(LogType::INFO, "------------------------------------");
 
@@ -160,7 +160,7 @@ void Predictor::print_lock_deps_map() const{
     Logger::print(LogType::INFO, "------------------------------------");
 }
 
-void Predictor::print_neigh_list() const{
+void EventHandler::print_neigh_list() const{
     Logger::print(LogType::INFO, "NEIGHBOUR LIST");
     Logger::print(LogType::INFO, "------------------------------------");
 
@@ -174,7 +174,7 @@ void Predictor::print_neigh_list() const{
     Logger::print(LogType::INFO, "------------------------------------");
 }
 
-void Predictor::print_abs_deps(std::FILE* out_file) const{
+void EventHandler::print_abs_deps(std::FILE* out_file) const{
     Logger::print(out_file, "ABSTRACT DEPENDENCIES");
     Logger::print(out_file, "------------------------------------");
 
@@ -186,7 +186,7 @@ void Predictor::print_abs_deps(std::FILE* out_file) const{
     Logger::print(out_file, "------------------------------------");
 }
 
-void Predictor::print_neigh_list(std::FILE* out_file) const{
+void EventHandler::print_neigh_list(std::FILE* out_file) const{
     Logger::print(out_file, "NEIGHBOUR LIST");
     Logger::print(out_file, "------------------------------------");
 
@@ -198,4 +198,9 @@ void Predictor::print_neigh_list(std::FILE* out_file) const{
 
     Logger::print(out_file, "Num deps that have neigh: {}", graph_view.graph.neigh_list.size());
     Logger::print(out_file, "------------------------------------");
+}
+
+void EventHandler::print_summary(std::FILE* log_file) const{
+    Logger::print(log_file, "num acq/req: {}", acq_count);
+    Logger::print(log_file, "num deps: {}", graph_view.graph.abs_deps_map.size());
 }
