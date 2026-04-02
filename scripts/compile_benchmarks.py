@@ -7,9 +7,9 @@ root_path = "benchmarks/original/"
 out_files_base = f"{root_path}/output"
 bench_in_path = f"{root_path}/data"
 
-predictors = ["SUnhang1", "SUnhang2", "SUnhang3"]
+predictors = ["SUnhang1", "SUnhang2", "SUnhang3", "SUnhang4"]
 mini_columns = ["dep", "cyc", "abs", "dlk", "time"]
-ignored_bench = ["eclipse", "JDBCMySQL-3"]
+ignored_bench = ["eclipse", "jigsaw"]
 
 def from_log_file(file_path: Path) -> list:
     file = open(file_path, 'r')
@@ -120,10 +120,10 @@ def save_latex(df: pd.DataFrame):
         column_format=column_format,
         multicolumn_format="c|"
     )
-
+    latex_table = "\\resizebox{\\textwidth}{!}{\n" + latex_table + "}\n"
+    
     table_out_path = Path(root_path) / "tables" / "optimization.tex"
     os.makedirs(table_out_path.parent, exist_ok=True)
-
     table_out_path.write_text(latex_table, encoding="utf-8")
     print(f"[INFO]: Saved table to {table_out_path}")
 

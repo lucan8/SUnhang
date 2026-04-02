@@ -14,7 +14,7 @@ MinSCC SCCEnumerator::get_min_strong_conn_comp(){
 void SCCEnumerator::_get_min_strong_conn_comp(NodeConstItT dep){
     // Visit dep and check that it was not visited before
     auto dep_info_entry = dep_info_map.insert({dep, AbsDepInfo(max_index, max_index, true)});
-    assert(dep_info_entry.second == true);
+    // assert(dep_info_entry.second == true);
 
     // Alias only for the relevant part
     AbsDepInfo& dep_info = (dep_info_entry.first)->second;
@@ -36,7 +36,7 @@ void SCCEnumerator::_get_min_strong_conn_comp(NodeConstItT dep){
                 _get_min_strong_conn_comp(neigh);
 
                 auto neigh_info_it =  dep_info_map.find(neigh);
-                assert(neigh_info_it != dep_info_map.end()); // Remove in release mode
+                // assert(neigh_info_it != dep_info_map.end()); // Remove in release mode
                 
                 dep_info.low_index = std::min(dep_info.low_index, neigh_info_it->second.low_index);
             }

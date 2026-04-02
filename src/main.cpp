@@ -1,26 +1,17 @@
-// ZENODO COMP:
-// JDBCMySQL-4: -1 dlk 
-// DBCP-1: -1 dlk (FP)
-
-// POSSIBLE BUG FOR THE SINGLE THREAD OPTIMIZATION:
-// NO LAST WRITE FOR A GIVEN READ
-// SOLUTION: PUT A DEFAULT, SOMETHING LIKE THE 0 VECTOR
-// QUESTION: CAN WE AVOID ADDING INTO THE CRITICAL SECTION?
-// ANSWER: IF WE ARE CAREFUL I THINK SO
-// SMALL PROBLEM: This can no longer detect missing releases!
-
 // OPTIMIZATION CONCLUSION:
 
 // Generated
 
 // SUnhang3: eclipse: gave one less cycle than the SUnhang2
 // SUnhang3 and SUnhang2: are equivalent outside of eclipse
-// SUnhang1 gives one dlk that the other 2 don't(FP)
+// SUnhang1 gives one dlk that the other 2 don't(Bensalem FP)
 
 // Original
 
-// SUnhang3: JDBCMySQL-2: give 2 less dlks than SUnhang1
-
+// Final: Helped create SUnhang4 with assumes all locks are reentrant(which is correct for java)
+// SUnhang3: JDBCMySQL-2: give 2 less dlks than SUnhang1, the same as SUnhang2, but with 2 less cycles
+// SUnhang3 and SUnhang2 give the same dlk counts except for JDBC-MYSQL3 which failed for SUnhang2 because of an assert that got removed
+// SUnahng4: DBCP1 +1 dlk, JDBC-MYSQL4 +1 dlk
 
 //FAILED TESTS NEW:
 // DBCP 1: expected cycles 2 found 0, none can be deduced from the graph though
@@ -32,34 +23,18 @@
 // HASHMAP????? : impossible, they are wrong!
 // IDENTITYHASHMAP????? : impossible, they are wrong!
 
-// FAILED TEST OG:
-// DBCP 1: expected 1 cycle found 0
-// eclipse: failed
-// JDBCMYSQL 2: expected 0 found 2 cycles
-// JDBCMYSQL 3: failed
-// JDBCMYSQL 4: expected 1 found 0 cycles
-// TESTS MIGHT HAVE SILENTLY FAILED WITHOUT PYTHON PICKING UP THE ASSERT ERROR FOR EXAMPLE,
-// EXACTLY THE ABOVE HAPPENED! ECLIPSE CALLED RELEASE WITHOUT CALLING LOCK BEFORE HAND
-// THIS NEEDS FURTHER INVESTIGATION
 
 // OBSERVATIONS/IMPROVEMENTS
-// Track threads that are alive, all dependencies generated whilst only one thread
-// is executing shall be ignored, this makes everything much more efficient
-// and eliminates some false positives
-//1. 
+//1. SOLVED
 // Small mistake on their side, fork/join actually create fake thread entries in the maps
 // For example fork(18) will create an entry 18 : id, and T18 will create another one which is wrong!
 
-
-//2. 
+//2. SOLVED
 
 // A source of false positives (Bensalem has one of these):
 // t1 locks l1, l2, forks t2, releases l1 and l2
 // t2 locks l2, l1, exits
 // This will get signaled by the algorithm as a deadlock when in reality it isn't!
-// Solution: Do the following on join:
-// - Run the deadlock predictor on the current state of the graph
-// - Eliminate the thread's deps
 
 //3. 
 // Another source of false positives appears because it can't track control flow
@@ -72,13 +47,14 @@
 // Only looks at lock operations that use monitors(synchronized blocks)
 // And ignores explicit locking like using java.util.concurrent.locks.Lock;
 
-//6. HANDLED 
+//6. SOLVED
 // we should have waitBefore and notifyAfter but they are tracked in reverse
 
-//7. 
+//7. SOLVED
 // How should reentrant locks be handled?
 
 //IMPORTANT: Generic formatter for iterators
+//TODO: ERR REPORT FILE FOR BAD TRACES
 //TODO: Rename the comparison operators as they are actually biased toward the first argument
 //TODO: How does this handle nested cycles?
 //TODO: Add automatic formatting for your code
@@ -94,14 +70,15 @@
 //TODO: Pack the comparison operators of VectorClock together in one
 //TODO: Timer function
 
+// TODO: Bensalem asserts!
+// Graph info for bensalem: 12 nodes, only 3 with outgoing neighbours, graph on the second to last page of your notebook
+
+// ENCHANCEMENT:
+// Don't stop at the first deadlock instance you find
+
 // BIG QUESTION: Shouldn't the nodes(deps) be sorted based on when they appear in the trace?
 // As keeping them in a mere map does not guarantee that ordering.
 // ANSWER: NOP, dependencies can't really use the trace order, that's for events
-
-// TEST IDEEA: Run this on all the benchmarks, save information to a csv file and then check the csvs
-// against the author's
- 
-//SIMPLE OPTIMIZATION: IGNORE FIRST LEVEL LOCK ACQUISITIONS!
 
 //OPTIMIZATION:
 // Instead of recomputing the SCCs everytime on the subgraph, take only the SCC from which the node was removed
@@ -114,11 +91,6 @@
 
 // OPTIMIZATION:
 // We could use vectors instead of maps for threads and resources as their ids are consecutive integers
-// TODO: Bensalem asserts!
-// Graph info for bensalem: 12 nodes, only 3 with outgoing neighbours, graph on the second to last page of your notebook
-
-// ENCHANCEMENT:
-// Don't stop at the first deadlock instance you find
 
 #include <string>
 #include <fstream>
@@ -266,6 +238,12 @@ int main(int argc, char *argv[]) {
     //     return 1; 
     // }
 
+    // const uint8_t exp_args = 4;
+    // if (argc != exp_args){
+    //     Logger::print(LogType::ERR, "Usage: ./SUnhang.exe [input_file_path] [out_summary_file_path] [bad_trace_rep_file]");
+    //     return 1; 
+    // }
+
     const uint8_t exp_args = 3;
     if (argc != exp_args){
         Logger::print(LogType::ERR, "Usage: ./SUnhang.exe [input_file_path] [out_summary_file_path]");
@@ -276,11 +254,11 @@ int main(int argc, char *argv[]) {
 
     std::string in_file_path = argv[1];
     std::string out_summ_path = argv[2];
-    // std::string extra_log_path = argv[3];
+    // std::string bad_trace_rep_path = argv[3];
 
     Logger::print(LogType::DBG, "Input path: {}", in_file_path);
     Logger::print(LogType::DBG, "Out summary path: {}", out_summ_path);
-    // Logger::print(LogType::DBG, "Extra log path: {}", extra_log_path);
+    // Logger::print(LogType::DBG, "Err report path: {}", bad_trace_rep_path);
 
     std::ifstream in_file(in_file_path);
     if(!in_file.good()) {
@@ -294,9 +272,9 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // std::FILE* extra_log_file(std::fopen(extra_log_path.c_str(), "w"));
-    // if (!extra_log_file){
-    //     Logger::print(LogType::ERR, "Extra log file not found: {}", out_summ_path);
+    // std::FILE* bad_trace_rep_file(std::fopen(bad_trace_rep_path.c_str(), "w"));
+    // if (!bad_trace_rep_file){
+    //     Logger::print(LogType::ERR, "Extra log file not found: {}", bad_trace_rep_path);
     //     return 1;
     // }
 

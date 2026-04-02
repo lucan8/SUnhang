@@ -64,19 +64,22 @@ void Predictor::acquire_event(const EventInfo& evt) {
 
     // Don't create deps for first level lock acquisitions
     // Ignore deps created when only one thread executes
-    if (!th_info.lockset.empty()){
+    if (!th_info.u_reen_lockset.empty()){
+        // The dependency only cares about the locks, not their counters
+        LocksetT lockset = th_info.u_reen_lockset.to_lockset();
+
         // Create abstract dependency and add it's instance's vc to the vector(as a ref to cs_hist's entry)
-        AbsDependency dep(evt.thread_id, evt.target, th_info.lockset);
+        AbsDependency dep(evt.thread_id, evt.target, lockset);
         auto [it, inserted] = graph_view.graph.abs_deps_map.try_emplace(std::move(dep), std::vector<const Event*>{});
         it->second.push_back(&cs_info.lock_ev);
 
         // Locks from lockset should point to this dependency
         if (inserted)
-            for (const auto lock : th_info.lockset)
+            for (const auto lock : lockset)
                 lock_dep_map[lock].push_back(it);
     }
 
-    th_info.lockset.insert(evt.target);
+    th_info.u_reen_lockset.acquire(evt.target);
 }
 
 void Predictor::release_event(const EventInfo& evt) {
@@ -86,7 +89,10 @@ void Predictor::release_event(const EventInfo& evt) {
         return;
         
     ThreadInfo& th_info = thread_map[evt.thread_id];
-    th_info.lockset.erase(evt.target);
+    
+    // TODO: This could use a safe mode that checks the release was spurious
+    // Check it using the u_reen_lockset, cs_hist is not very reliable
+    th_info.u_reen_lockset.release(evt.target);
     
     cs_hist.add_unlock_ev(evt.target, evt.thread_id, std::move(Event(th_info.vec_clock, evt.line, evt.src_loc)));
 }

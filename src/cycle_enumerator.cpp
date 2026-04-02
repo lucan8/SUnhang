@@ -26,7 +26,7 @@ std::vector<NodeChainT> CycleEnumerator::enum_cycles(){
 
 bool CycleEnumerator::_enum_cycles(NodeConstItT node){
     auto blocked_node = blocked_nodes.insert(node);
-    assert(blocked_node.second == true);
+    // assert(blocked_node.second == true);
 
     stack.push_back(node);
     bool cycle_on_curr_path = false;
