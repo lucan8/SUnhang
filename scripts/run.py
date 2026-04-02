@@ -4,9 +4,11 @@ import optparse
 import subprocess
 from pathlib import Path
 
-out_files_base = "benchmarks/generated/output"
-bench_in_path = "benchmarks/generated/data"
-predictor = "SUnhang_no_1_lev_locks-no_dead_th_fp-no_1_th_ev"
+out_files_base = "benchmarks/original/output"
+bench_in_path = "benchmarks/original/data"
+predictor1 = "SUnhang_no_1_lev_locks-no_dead_th_fp"
+predictor2 = "SUnhang_no_1_lev_locks-no_dead_th_fp-no_1_th_ev"
+predictor = predictor2
 
 def create_out_folders(path):
     if not os.path.exists(os.path.join(path)):
@@ -15,7 +17,9 @@ def create_out_folders(path):
 # cmd: [exe, exe_arg1, exe_arg2...]
 def execute_cmd(cmd: list[str]):
     p = subprocess.Popen(cmd, shell=True)
-    p.wait()
+    err = p.wait()
+    if err:
+        print(f"[ERROR]: {cmd}: {err}")
 
 def run_cpp_spdoffline(bench_name):
     global out_files_base, bench_in_path
@@ -30,9 +34,9 @@ def run_cpp_spdoffline(bench_name):
 
     print("Input path: ", input_path)
     print("Output path: ", out_path)
-    print("Extra output path: ", extra_out_path)
+    # print("Extra output path: ", extra_out_path)
     
-    cmd = [Path("./build/SUnhang.exe").resolve(), input_path, out_path, extra_out_path]
+    cmd = [Path("./build/SUnhang.exe").resolve(), input_path, out_path]
     execute_cmd(cmd)
     print()
 

@@ -1,8 +1,32 @@
+// ZENODO COMP:
+// JDBCMySQL-4: -1 dlk 
+// DBCP-1: -1 dlk (FP)
+
+// POSSIBLE BUG FOR THE SINGLE THREAD OPTIMIZATION:
+// NO LAST WRITE FOR A GIVEN READ
+// SOLUTION: PUT A DEFAULT, SOMETHING LIKE THE 0 VECTOR
+// QUESTION: CAN WE AVOID ADDING INTO THE CRITICAL SECTION?
+// ANSWER: IF WE ARE CAREFUL I THINK SO
+// SMALL PROBLEM: This can no longer detect missing releases!
+
+// OPTIMIZATION CONCLUSION:
+
+// Generated
+
+// SUnhang3: eclipse: gave one less cycle than the SUnhang2
+// SUnhang3 and SUnhang2: are equivalent outside of eclipse
+// SUnhang1 gives one dlk that the other 2 don't(FP)
+
+// Original
+
+// SUnhang3: JDBCMySQL-2: give 2 less dlks than SUnhang1
+
+
 //FAILED TESTS NEW:
 // DBCP 1: expected cycles 2 found 0, none can be deduced from the graph though
 // DBCP 2: same problems, though 200 deadlocks looks sus
 
-// ECLIPSE : cycle enumerator find extra cycle 
+// ECLIPSE : cycle enumerator find extra cycle
 //  (excluded by second paper because it is not well-formed, something pointed out by initial authors)
 
 // HASHMAP????? : impossible, they are wrong!
@@ -14,10 +38,11 @@
 // JDBCMYSQL 2: expected 0 found 2 cycles
 // JDBCMYSQL 3: failed
 // JDBCMYSQL 4: expected 1 found 0 cycles
+// TESTS MIGHT HAVE SILENTLY FAILED WITHOUT PYTHON PICKING UP THE ASSERT ERROR FOR EXAMPLE,
+// EXACTLY THE ABOVE HAPPENED! ECLIPSE CALLED RELEASE WITHOUT CALLING LOCK BEFORE HAND
+// THIS NEEDS FURTHER INVESTIGATION
 
 // OBSERVATIONS/IMPROVEMENTS
-
-// IMPORTANT:
 // Track threads that are alive, all dependencies generated whilst only one thread
 // is executing shall be ignored, this makes everything much more efficient
 // and eliminates some false positives
@@ -163,21 +188,21 @@ EventInfo from_std(const std::vector<std::string>& current_result) {
     EventInfo result = {};
 
     // Set thread id
-    result.thread_id = get_id(std_thread_map, std_thread_counter, current_result.at(0));
+    result.thread_id = get_id(std_thread_map, std_thread_counter, current_result[0]);
 
     // Set event type
-    auto event_len = current_result.at(1).find("(");
-    auto event_type = std_event_map.find(current_result.at(1).substr(0, event_len));
+    auto event_len = current_result[1].find("(");
+    auto event_type = std_event_map.find(current_result[1].substr(0, event_len));
 
     // Event found
     if(event_type != std_event_map.end()) {
         result.event_type = event_type->second;
         // The event target(the variable on which the event is happening)
-        auto target = current_result.at(1).substr(event_len + 1, current_result.at(1).length() - event_len - 2);
+        auto target = current_result[1].substr(event_len + 1, current_result[1].length() - event_len - 2);
 
         // Update maps depending on operation
         if(result.event_type == EventsT::FORK || result.event_type == EventsT::JOIN) {
-          result.target = get_id(std_thread_map, std_thread_counter, "T" + target);
+          result.target = get_id(std_thread_map, std_thread_counter, target.contains('T') ? target : "T" + target);
         } 
         else if(result.event_type == EventsT::LK || result.event_type == EventsT::UK) {  
           result.target = get_id(std_lock_id_map, std_lock_id_counter, target);
@@ -187,7 +212,7 @@ EventInfo from_std(const std::vector<std::string>& current_result) {
 	    }
       
       // Set src code location
-      result.src_loc = std::stoi(current_result.at(2));
+      result.src_loc = std::stoi(current_result[2]);
     } else { // Event not found
       result.event_type = EventsT::NONE;
     }
@@ -235,27 +260,27 @@ void print_parse_summary(std::FILE* log_file, const Predictor& pred){
 
 
 int main(int argc, char *argv[]) {
-    const uint8_t exp_args = 4;
-    if (argc != exp_args){
-        Logger::print(LogType::ERR, "Usage: ./SUnhang.exe [input_file_path] [out_summary_file_path] [extra_log_file_path]");
-        return 1; 
-    }
-
-    // const uint8_t exp_args = 3;
+    // const uint8_t exp_args = 4;
     // if (argc != exp_args){
-    //     Logger::print(LogType::ERR, "Usage: ./SUnhang.exe [input_file_path] [out_summary_file_path]");
+    //     Logger::print(LogType::ERR, "Usage: ./SUnhang.exe [input_file_path] [out_summary_file_path] [extra_log_file_path]");
     //     return 1; 
     // }
+
+    const uint8_t exp_args = 3;
+    if (argc != exp_args){
+        Logger::print(LogType::ERR, "Usage: ./SUnhang.exe [input_file_path] [out_summary_file_path]");
+        return 1; 
+    }
 
     auto start = std::chrono::system_clock::now();
 
     std::string in_file_path = argv[1];
     std::string out_summ_path = argv[2];
-    std::string extra_log_path = argv[3];
+    // std::string extra_log_path = argv[3];
 
     Logger::print(LogType::DBG, "Input path: {}", in_file_path);
     Logger::print(LogType::DBG, "Out summary path: {}", out_summ_path);
-    Logger::print(LogType::DBG, "Extra log path: {}", extra_log_path);
+    // Logger::print(LogType::DBG, "Extra log path: {}", extra_log_path);
 
     std::ifstream in_file(in_file_path);
     if(!in_file.good()) {
@@ -269,11 +294,11 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    std::FILE* extra_log_file(std::fopen(extra_log_path.c_str(), "w"));
-    if (!extra_log_file){
-        Logger::print(LogType::ERR, "Extra log file not found: {}", out_summ_path);
-        return 1;
-    }
+    // std::FILE* extra_log_file(std::fopen(extra_log_path.c_str(), "w"));
+    // if (!extra_log_file){
+    //     Logger::print(LogType::ERR, "Extra log file not found: {}", out_summ_path);
+    //     return 1;
+    // }
 
     // // Test stuff
     // TestVectorClock::test();
@@ -287,9 +312,9 @@ int main(int argc, char *argv[]) {
     // auto help = std_thread_map;
     print_parse_summary(log_file, predictor);
 
-    predictor.print_abs_deps(extra_log_file);
-    Logger::print_dash_line(extra_log_file);
-    predictor.print_neigh_list(extra_log_file);
+    // predictor.print_abs_deps(extra_log_file);
+    // Logger::print_dash_line(extra_log_file);
+    // predictor.print_neigh_list(extra_log_file);
 
     auto end = std::chrono::system_clock::now();
     auto millis_passed_parse_trace = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
@@ -336,5 +361,6 @@ int main(int argc, char *argv[]) {
     Logger::print(log_file, "Time for cycle enumeration = {} milliseconds", millis_passed_cycle_enum - millis_passed_parse_trace);
     Logger::print(log_file, "Time for abs deadlock checks = {} milliseconds", millis_passed_abs_dlk_check - millis_passed_cycle_enum);
     Logger::print(log_file, "Time for sync pres check = {} milliseconds", millis_passed_sync_pres_check - millis_passed_abs_dlk_check);
+    Logger::print(log_file, "{}", millis_passed_sync_pres_check);
     return 0;
 }
