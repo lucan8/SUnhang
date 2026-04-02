@@ -201,12 +201,14 @@ struct CSHist{
   }
 
   // Sets the unlock event in the history
-  CSInfo& add_unlock_ev(ResourceIdT res_id, ThreadIdT tid, Event unlock_ev){
+  std::optional<CSInfo*> add_unlock_ev(ResourceIdT res_id, ThreadIdT tid, Event unlock_ev){
     std::optional<CSInfo*> cs = get_back(res_id, tid);
-    assert(cs.has_value()); // There should be a lock before an unlock!
+    // assert(cs.has_value()); // There should be a lock before an unlock!
+    if (!cs.has_value())
+      return {};
 
     cs.value()->unlock_ev = std::move(unlock_ev);
-    return *cs.value();
+    return cs.value();
   }
  
   // Returns the last cs of tid involving res_id if it exists

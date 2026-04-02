@@ -34,17 +34,28 @@ bool Predictor::handle_event(const EventInfo& evt){
 
 void Predictor::read_event(const EventInfo& evt) {
     // Logger::print(LogType::DBG, "Read event");
+
+    if (thread_map.size() <= 1)
+        return;
+
     thread_map[evt.thread_id].vec_clock.merge_into(last_write[evt.target]);
 }
 
 void Predictor::write_event(const EventInfo& evt) {
     // Logger::print(LogType::DBG, "Write event");
+
+    if (thread_map.size() <= 1)
+        return;
+
     last_write[evt.target] = thread_map[evt.thread_id].vec_clock;
 }
 
 void Predictor::acquire_event(const EventInfo& evt) {
     // Logger::print(LogType::DBG, "Acquire event");
     acq_count++;
+
+    if (thread_map.size() <= 1)
+        return;
     
     ThreadInfo& th_info = thread_map[evt.thread_id];
 
@@ -71,6 +82,9 @@ void Predictor::acquire_event(const EventInfo& evt) {
 void Predictor::release_event(const EventInfo& evt) {
     // Logger::print(LogType::DBG, "Release event");
 
+    if (thread_map.size() <= 1)
+        return;
+        
     ThreadInfo& th_info = thread_map[evt.thread_id];
     th_info.lockset.erase(evt.target);
     
