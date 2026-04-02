@@ -34,51 +34,83 @@ bool Predictor::handle_event(const EventInfo& evt){
 
 void Predictor::read_event(const EventInfo& evt) {
     // Logger::print(LogType::DBG, "Read event");
+
+    if (thread_map.size() <= 1)
+        return;
+
     thread_map[evt.thread_id].vec_clock.merge_into(last_write[evt.target]);
 }
 
 void Predictor::write_event(const EventInfo& evt) {
     // Logger::print(LogType::DBG, "Write event");
+
+    if (thread_map.size() <= 1)
+        return;
+
     last_write[evt.target] = thread_map[evt.thread_id].vec_clock;
 }
 
 void Predictor::acquire_event(const EventInfo& evt) {
     // Logger::print(LogType::DBG, "Acquire event");
     acq_count++;
+
+    if (thread_map.size() <= 1)
+        return;
     
     ThreadInfo& th_info = thread_map[evt.thread_id];
 
     // Add lock vc to critical section history and add lock to lockset
     CSInfo& cs_info = cs_hist.add_lock_ev(evt.target, evt.thread_id, Event(th_info.vec_clock, evt.line, evt.src_loc));
 
-    // Create abstract dependency and add it's instance's vc to the vector(as a ref to cs_hist's entry)
-    AbsDependency dep(evt.thread_id, evt.target, th_info.lockset);
-    auto [it, inserted] = graph_view.graph.abs_deps_map.try_emplace(std::move(dep), std::vector<const Event*>{});
-    it->second.push_back(&cs_info.lock_ev);
+    // Don't create deps for first level lock acquisitions
+    // Ignore deps created when only one thread executes
+    if (!th_info.u_reen_lockset.empty()){
+        // The dependency only cares about the locks, not their counters
+        LocksetT lockset = th_info.u_reen_lockset.to_lockset();
 
-    // Locks from lockset should point to this dependency
-    if (inserted)
-        for (const auto lock : th_info.lockset)
-            lock_dep_map[lock].push_back(it);
+        // Create abstract dependency and add it's instance's vc to the vector(as a ref to cs_hist's entry)
+        AbsDependency dep(evt.thread_id, evt.target, lockset);
+        auto [it, inserted] = graph_view.graph.abs_deps_map.try_emplace(std::move(dep), std::vector<const Event*>{});
+        it->second.push_back(&cs_info.lock_ev);
 
-    th_info.lockset.insert(evt.target);
+        // Locks from lockset should point to this dependency
+        if (inserted)
+            for (const auto lock : lockset)
+                lock_dep_map[lock].push_back(it);
+    }
+
+    th_info.u_reen_lockset.acquire(evt.target);
 }
 
 void Predictor::release_event(const EventInfo& evt) {
     // Logger::print(LogType::DBG, "Release event");
 
+    if (thread_map.size() <= 1)
+        return;
+        
     ThreadInfo& th_info = thread_map[evt.thread_id];
-    th_info.lockset.erase(evt.target);
+    
+    // TODO: This could use a safe mode that checks the release was spurious
+    // Check it using the u_reen_lockset, cs_hist is not very reliable
+    th_info.u_reen_lockset.release(evt.target);
     
     cs_hist.add_unlock_ev(evt.target, evt.thread_id, std::move(Event(th_info.vec_clock, evt.line, evt.src_loc)));
 }
 
 void Predictor::fork_event(const EventInfo& evt) {
     // Logger::print(LogType::DBG, "Fork event");
+    ThreadInfo& th_info = thread_map[evt.thread_id];
+    ThreadInfo& target_info = thread_map.emplace(evt.target, ThreadInfo()).first->second;
+
+    target_info.vec_clock.merge_into(th_info.vec_clock);
 }
 
 void Predictor::join_event(const EventInfo& evt) {
     // Logger::print(LogType::DBG, "Join event");
+    ThreadInfo& th_info = thread_map[evt.thread_id];
+    ThreadInfo& target_info = thread_map.extract(evt.target).mapped();
+
+    th_info.vec_clock.merge_into(target_info.vec_clock);
 }
 
 void Predictor::build_neigh_list() {

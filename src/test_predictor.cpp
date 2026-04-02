@@ -53,7 +53,7 @@ void TestPredictor::_test_acquire_event(){
     assert (dummy_pred.thread_map[1].vec_clock <= pred.thread_map[1].vec_clock);
     
     // Lockset grows
-    assert (pred.thread_map[1].lockset.find(1) != pred.thread_map[1].lockset.end());
+    assert (pred.thread_map[1].u_reen_lockset.contains(1));
     
     // CSHist chnages
     auto cs_opt = pred.cs_hist.get_back(1, 1);
@@ -71,7 +71,7 @@ void TestPredictor::_test_acquire_event(){
     // First level lock acq are ignored by lock_dep_map
     assert (pred.lock_dep_map.empty() == true);
 
-    // Remove lock from lockset and add it back to recreate the dependency
+    // Remove lock from u_reen_lockset and add it back to recreate the dependency
     ev.event_type = EventsT::UK;
     ev.line = 2;
     pred.handle_event(ev);
@@ -104,7 +104,7 @@ void TestPredictor::_test_acquire_event(){
     auto lock_it = pred.lock_dep_map.find(1);
     assert (lock_it != pred.lock_dep_map.end());
 
-    // Make sure the corr dep has old lock in it's lockset
+    // Make sure the corr dep has old lock in it's u_reen_lockset
     auto& ls = lock_it->second.at(0)->first.lockset;
     assert (ls.find(lock_it->first) != ls.end());
     Logger::print(LogType::INFO, "test_acquire_event passed");
@@ -123,7 +123,7 @@ void TestPredictor::_test_release_event(){
     assert (dummy_pred.thread_map[1].vec_clock <= pred.thread_map[1].vec_clock);
     
     // Lockset shrinks
-    assert (pred.thread_map[1].lockset.find(1) == pred.thread_map[1].lockset.end());
+    assert (pred.thread_map[1].u_reen_lockset.contains(1));
 
     Logger::print(LogType::INFO, "test_release_event passed");
 }
