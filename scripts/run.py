@@ -8,11 +8,8 @@ out_files_base = "benchmarks/original/output"
 bench_in_path = "benchmarks/original/data"
 predictor1 = "SUnhang_no_1_lev_locks-no_dead_th_fp"
 predictor2 = "SUnhang_no_1_lev_locks-no_dead_th_fp-no_1_th_ev"
-predictor = predictor2
-
-def create_out_folders(path):
-    if not os.path.exists(os.path.join(path)):
-        os.makedirs(os.path.join(path))
+predictor3 = "SUnhang_no_1_lev_locks-no_dead_th_fp-no_1_th_ev-reen_locks"
+predictor = predictor3
 
 # cmd: [exe, exe_arg1, exe_arg2...]
 def execute_cmd(cmd: list[str]):
@@ -28,7 +25,7 @@ def run_cpp_spdoffline(bench_name):
 
     out_path = (Path(out_files_base) / bench_name / predictor / "log.txt")
     extra_out_path = (Path(out_files_base) / bench_name / predictor / "extra_log.txt")
-    create_out_folders(os.path.dirname(out_path))
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
     
     input_path = os.path.join(bench_in_path, bench_name + ".std")
 
