@@ -24,8 +24,48 @@ struct std::formatter<LocksetT> : std::formatter<std::string> {
     }
 };
 
+struct UReentrantLocksetT{
+  std::unordered_map<ResourceIdT, int> _u_lock_map;
+  int global_cnt;
+
+  UReentrantLocksetT(): global_cnt(0){}
+
+  void acquire(ResourceIdT lock_id){
+    global_cnt += 1;
+
+    _u_lock_map[lock_id] += 1;
+  }
+  
+  void release(ResourceIdT lock_id){
+    global_cnt -= 1;
+
+    _u_lock_map[lock_id] -= 1;
+  }
+
+  bool contains(ResourceIdT lock_id) const{
+    return _u_lock_map.find(lock_id) != _u_lock_map.end();
+  }
+
+  bool empty() const{
+    return global_cnt <= 0;
+  }
+  
+  LocksetT to_lockset(){
+    LocksetT result;
+    
+    for (const auto& [lock_id, cnt] : this->_u_lock_map){
+      if (cnt > 0){
+        result.insert(lock_id);
+      }
+    }
+    
+    return result;
+  }
+
+};
+
 struct ThreadInfo{
-  LocksetT lockset;
+  UReentrantLocksetT u_reen_lockset;
   VectorClock vec_clock;
 };
 
@@ -201,12 +241,14 @@ struct CSHist{
   }
 
   // Sets the unlock event in the history
-  CSInfo& add_unlock_ev(ResourceIdT res_id, ThreadIdT tid, Event unlock_ev){
+  std::optional<CSInfo*> add_unlock_ev(ResourceIdT res_id, ThreadIdT tid, Event unlock_ev){
     std::optional<CSInfo*> cs = get_back(res_id, tid);
-    assert(cs.has_value()); // There should be a lock before an unlock!
+    // assert(cs.has_value()); // There should be a lock before an unlock!
+    if (!cs.has_value())
+      return {};
 
     cs.value()->unlock_ev = std::move(unlock_ev);
-    return *cs.value();
+    return cs.value();
   }
  
   // Returns the last cs of tid involving res_id if it exists
