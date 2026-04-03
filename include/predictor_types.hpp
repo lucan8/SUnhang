@@ -24,6 +24,36 @@ struct std::formatter<LocksetT> : std::formatter<std::string> {
     }
 };
 
+struct StdIdMap{
+  size_t id_counter;
+  std::unordered_map<std::string, int> _map;
+
+  StdIdMap() : id_counter(0){}
+
+  void reset(){
+    id_counter = 0;
+    _map.clear();
+  }
+
+  // Returns the corresponding id for std_id from _map
+  // Updates the _map and counter if not found
+  int get(const std::string& std_id){
+    auto map_entry = _map.find(std_id);
+    int result_id;
+
+    if(map_entry == _map.end()) {
+        _map[std_id] = id_counter;
+        result_id = id_counter;
+        id_counter += 1;
+      } else {
+        result_id = map_entry->second;
+      }
+
+      return result_id;
+  }
+
+};
+
 struct UReentrantLocksetT{
   std::unordered_map<ResourceIdT, int> _u_lock_map;
   int global_cnt;
@@ -107,11 +137,6 @@ enum class EventsT {
   JOIN = 4,
   LK = 5,
   UK = 6,
-  NONE = 7
-};
-
-inline std::unordered_map<std::string, EventsT> std_event_map = {
-    {"r", EventsT::RD}, {"w", EventsT::WR}, {"fork", EventsT::FORK}, {"join", EventsT::JOIN}, {"acq", EventsT::LK}, {"rel", EventsT::UK}
 };
 
 // Formats EventsT

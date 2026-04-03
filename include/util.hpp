@@ -9,9 +9,6 @@
 #include <concepts>
 #include "comm_types.hpp"
 
-const char trace_sep = '|';
-const uint8_t exp_split_trace_size = 3;
-
 // Splits str by sep
 inline std::vector<std::string> split(const std::string& str, char sep){
     std::stringstream ss(str);
