@@ -1,40 +1,25 @@
-// OPTIMIZATION CONCLUSION:
+// Benchmark conclusions
 
 // Generated
 
-// SUnhang3: eclipse: gave one less cycle than the SUnhang2
-// SUnhang3 and SUnhang2: are equivalent outside of eclipse
-// SUnhang1 gives one dlk that the other 2 don't(Bensalem FP)
+// Bensalem has one false positive due to thread timestamp inheritance being absent from the author's solution
+// DBCP1 has one false positive due to thread timestamp inheritance being absent from the author's solution
+// DBCP2 still kinda sus with 200 dlks(both theirs and my solution gave this result)
+// Eclipse has one more cycles
+// HASHMAP gives a higher number of abs dlk patterns than cycles, which is impossible
+// IDENTITYHASHMAP gives a higher number of abs dlk patterns than cycles, which is impossible
 
 // Original
 
-// Final: Helped create SUnhang4 with assumes all locks are reentrant(which is correct for java)
 // SUnhang3: JDBCMySQL-2: give 2 less dlks than SUnhang1, the same as SUnhang2, but with 2 less cycles
 // SUnhang3 and SUnhang2 give the same dlk counts except for JDBC-MYSQL3 which failed for SUnhang2 because of an assert that got removed
 // SUnahng4: DBCP1 +1 dlk, JDBC-MYSQL4 +1 dlk
 
-//FAILED TESTS NEW:
-// DBCP 1: expected cycles 2 found 0, none can be deduced from the graph though
-// DBCP 2: same problems, though 200 deadlocks looks sus
-
-// ECLIPSE : cycle enumerator find extra cycle
-//  (excluded by second paper because it is not well-formed, something pointed out by initial authors)
-
-// HASHMAP????? : impossible, they are wrong!
-// IDENTITYHASHMAP????? : impossible, they are wrong!
-
-
 // OBSERVATIONS/IMPROVEMENTS
-//1. SOLVED
+//1. SOLVED (MENTION IT IN THE PAPER)
 // Small mistake on their side, fork/join actually create fake thread entries in the maps
 // For example fork(18) will create an entry 18 : id, and T18 will create another one which is wrong!
-
-//2. SOLVED
-
-// A source of false positives (Bensalem has one of these):
-// t1 locks l1, l2, forks t2, releases l1 and l2
-// t2 locks l2, l1, exits
-// This will get signaled by the algorithm as a deadlock when in reality it isn't!
+// They also seem to be counting acquires twice, this makes the benchmarks seem more impressive than they are
 
 //3. 
 // Another source of false positives appears because it can't track control flow
@@ -47,18 +32,11 @@
 // Only looks at lock operations that use monitors(synchronized blocks)
 // And ignores explicit locking like using java.util.concurrent.locks.Lock;
 
-//6. SOLVED
-// we should have waitBefore and notifyAfter but they are tracked in reverse
-
-//7. SOLVED
-// How should reentrant locks be handled?
-
 //IMPORTANT: Generic formatter for iterators
 //TODO: ERR REPORT FILE FOR BAD TRACES
 //TODO: Rename the comparison operators as they are actually biased toward the first argument
 //TODO: How does this handle nested cycles?
 //TODO: Add automatic formatting for your code
-//TODO: Functions for stats and tests for graph construction (dependencies, locks, variables, events)
 //TODO: Create namespace for util
 //TODO: Think where to put your typedefs
 //TODO: Rethink the graph situation
