@@ -53,9 +53,6 @@ void EventHandler::write_event(const EventInfo& evt) {
 void EventHandler::acquire_event(const EventInfo& evt) {
     // Logger::print(LogType::DBG, "Acquire event");
     acq_count++;
-
-    if (thread_map.size() <= 1)
-        return;
     
     ThreadInfo& th_info = thread_map[evt.thread_id];
 
@@ -64,7 +61,7 @@ void EventHandler::acquire_event(const EventInfo& evt) {
 
     // Don't create deps for first level lock acquisitions
     // Ignore deps created when only one thread executes
-    if (!th_info.u_reen_lockset.empty()){
+    if (!th_info.u_reen_lockset.empty() && thread_map.size() > 1){
         // The dependency only cares about the locks, not their counters
         LocksetT lockset = th_info.u_reen_lockset.to_lockset();
 
@@ -84,9 +81,6 @@ void EventHandler::acquire_event(const EventInfo& evt) {
 
 void EventHandler::release_event(const EventInfo& evt) {
     // Logger::print(LogType::DBG, "Release event");
-
-    if (thread_map.size() <= 1)
-        return;
         
     ThreadInfo& th_info = thread_map[evt.thread_id];
     

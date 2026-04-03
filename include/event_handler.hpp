@@ -21,7 +21,7 @@ struct EventHandler{
   std::unordered_map<ResourceIdT, NodeChainT> lock_dep_map;
 
   // Statistical info
-  uint32_t acq_count;
+  uint32_t acq_count = 0;
 
   // Calls handler  associated with evt.event_type
   // Return true if event if valid, false otherwise
