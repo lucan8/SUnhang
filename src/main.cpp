@@ -1,40 +1,25 @@
-// OPTIMIZATION CONCLUSION:
+// Benchmark conclusions
 
 // Generated
 
-// SUnhang3: eclipse: gave one less cycle than the SUnhang2
-// SUnhang3 and SUnhang2: are equivalent outside of eclipse
-// SUnhang1 gives one dlk that the other 2 don't(Bensalem FP)
+// Bensalem has one false positive due to thread timestamp inheritance being absent from the author's solution
+// DBCP1 has one false positive due to thread timestamp inheritance being absent from the author's solution
+// DBCP2 still kinda sus with 200 dlks(both theirs and my solution gave this result)
+// Eclipse has one more cycles
+// HASHMAP gives a higher number of abs dlk patterns than cycles, which is impossible
+// IDENTITYHASHMAP gives a higher number of abs dlk patterns than cycles, which is impossible
 
 // Original
 
-// Final: Helped create SUnhang4 with assumes all locks are reentrant(which is correct for java)
 // SUnhang3: JDBCMySQL-2: give 2 less dlks than SUnhang1, the same as SUnhang2, but with 2 less cycles
 // SUnhang3 and SUnhang2 give the same dlk counts except for JDBC-MYSQL3 which failed for SUnhang2 because of an assert that got removed
 // SUnahng4: DBCP1 +1 dlk, JDBC-MYSQL4 +1 dlk
 
-//FAILED TESTS NEW:
-// DBCP 1: expected cycles 2 found 0, none can be deduced from the graph though
-// DBCP 2: same problems, though 200 deadlocks looks sus
-
-// ECLIPSE : cycle enumerator find extra cycle
-//  (excluded by second paper because it is not well-formed, something pointed out by initial authors)
-
-// HASHMAP????? : impossible, they are wrong!
-// IDENTITYHASHMAP????? : impossible, they are wrong!
-
-
 // OBSERVATIONS/IMPROVEMENTS
-//1. SOLVED
+//1. SOLVED (MENTION IT IN THE PAPER)
 // Small mistake on their side, fork/join actually create fake thread entries in the maps
 // For example fork(18) will create an entry 18 : id, and T18 will create another one which is wrong!
-
-//2. SOLVED
-
-// A source of false positives (Bensalem has one of these):
-// t1 locks l1, l2, forks t2, releases l1 and l2
-// t2 locks l2, l1, exits
-// This will get signaled by the algorithm as a deadlock when in reality it isn't!
+// They also seem to be counting acquires twice, this makes the benchmarks seem more impressive than they are
 
 //3. 
 // Another source of false positives appears because it can't track control flow
@@ -47,18 +32,11 @@
 // Only looks at lock operations that use monitors(synchronized blocks)
 // And ignores explicit locking like using java.util.concurrent.locks.Lock;
 
-//6. SOLVED
-// we should have waitBefore and notifyAfter but they are tracked in reverse
-
-//7. SOLVED
-// How should reentrant locks be handled?
-
 //IMPORTANT: Generic formatter for iterators
 //TODO: ERR REPORT FILE FOR BAD TRACES
 //TODO: Rename the comparison operators as they are actually biased toward the first argument
 //TODO: How does this handle nested cycles?
 //TODO: Add automatic formatting for your code
-//TODO: Functions for stats and tests for graph construction (dependencies, locks, variables, events)
 //TODO: Create namespace for util
 //TODO: Think where to put your typedefs
 //TODO: Rethink the graph situation
@@ -107,7 +85,8 @@
 using namespace std::chrono_literals;
 namespace fs = std::filesystem;
 
-#include "../include/predictor.hpp"
+#include "../include/trace_parser.hpp"
+#include "../include/event_handler.hpp"
 #include "../include/logger.hpp"
 #include "../include/util.hpp"
 #include "../include/test_vectorclock.hpp"
@@ -115,121 +94,6 @@ namespace fs = std::filesystem;
 #include "../include/scc_enumerator.hpp"
 #include "../include/cycle_enumerator.hpp"
 #include "../include/deadlock_checker.hpp"
-
-// Maps for converting from std format
-size_t std_lock_id_counter = 0;
-std::unordered_map<std::string, int> std_lock_id_map = {};
-size_t std_thread_counter = 0;
-std::unordered_map<std::string, int> std_thread_map = {};
-size_t std_var_counter = 0;
-std::unordered_map<std::string, int> std_var_map = {};
-
-size_t std_evt_counter = 0;
-
-void reset_cnt_map() {
- std_lock_id_counter = 0;
- std_thread_counter = 0;
- std_var_counter = 0;
- std_evt_counter = 0;
-
- std_lock_id_map.clear();
- std_thread_map.clear();
- std_var_map.clear();
-}
-
-// Returns the corresponding id for std_id from std_id_map
-// Updates the map and counter if not found
-int get_id(std::unordered_map<std::string, int>& std_id_map, size_t& id_counter, const std::string& std_id){
-  auto map_entry = std_id_map.find(std_id);
-  int result_id;
-
-  if(map_entry == std_id_map.end()) {
-      std_id_map[std_id] = id_counter;
-      result_id = id_counter;
-      id_counter += 1;
-    } else {
-      result_id = map_entry->second;
-    }
-
-    return result_id;
-}
-
-// Map the std formated result to our custom result using the std_* maps
-// std format ex: T1|acq(l1)|25 might turn into 1, 1, 1 uisng the std_* maps
-EventInfo from_std(const std::vector<std::string>& current_result) {
-    EventInfo result = {};
-
-    // Set thread id
-    result.thread_id = get_id(std_thread_map, std_thread_counter, current_result[0]);
-
-    // Set event type
-    auto event_len = current_result[1].find("(");
-    auto event_type = std_event_map.find(current_result[1].substr(0, event_len));
-
-    // Event found
-    if(event_type != std_event_map.end()) {
-        result.event_type = event_type->second;
-        // The event target(the variable on which the event is happening)
-        auto target = current_result[1].substr(event_len + 1, current_result[1].length() - event_len - 2);
-
-        // Update maps depending on operation
-        if(result.event_type == EventsT::FORK || result.event_type == EventsT::JOIN) {
-          result.target = get_id(std_thread_map, std_thread_counter, target.contains('T') ? target : "T" + target);
-        } 
-        else if(result.event_type == EventsT::LK || result.event_type == EventsT::UK) {  
-          result.target = get_id(std_lock_id_map, std_lock_id_counter, target);
-        }      
-	    else{
-          result.target = get_id(std_var_map, std_var_counter, target);
-	    }
-      
-      // Set src code location
-      result.src_loc = std::stoi(current_result[2]);
-    } else { // Event not found
-      result.event_type = EventsT::NONE;
-    }
-
-    std_evt_counter += 1;
-
-    return result;
-}
-
-void parse_trace(Predictor& predictor, std::ifstream& file) {
-    std::string evt_str;
-    int line_index = 0;
-
-    while(std::getline(file, evt_str)) {
-        line_index++;
-        std::vector<std::string> evt_str_split = split(evt_str, trace_sep);
-
-        if(evt_str_split.size() != exp_split_trace_size) {
-            Logger::print(LogType::WARN, "Bad file format on line {}: {}", line_index, evt_str);
-            continue;
-        }
-        
-        // Convert the split std event with our mapping
-        EventInfo event = from_std(evt_str_split);
-        event.line = line_index;
-        
-        bool is_val_evt = predictor.handle_event(event);
-        // if (!is_val_evt)
-        //     Logger::print(LogType::WARN, "Invalid event on line {}: {}", line_index, evt_str);
-
-        // Logger::print(LogType::DBG, "{}", event);
-    }
-    predictor.build_neigh_list();
-}
-
-void print_parse_summary(std::FILE* log_file, const Predictor& pred){
-    Logger::print(log_file, "----Trace info----");
-    Logger::print(log_file, "num threads: {}", std_thread_counter);
-    Logger::print(log_file, "num events: {}", std_evt_counter);
-    Logger::print(log_file, "num locations: {}", std_var_counter);
-    Logger::print(log_file, "num locks: {}", std_lock_id_counter);
-    Logger::print(log_file, "num acq/req: {}", pred.acq_count);
-    Logger::print(log_file, "num deps: {}", pred.graph_view.graph.abs_deps_map.size());
-}
-
 
 int main(int argc, char *argv[]) {
     // const uint8_t exp_args = 4;
@@ -252,17 +116,17 @@ int main(int argc, char *argv[]) {
 
     auto start = std::chrono::system_clock::now();
 
-    std::string in_file_path = argv[1];
+    std::string trace_file_path = argv[1];
     std::string out_summ_path = argv[2];
     // std::string bad_trace_rep_path = argv[3];
 
-    Logger::print(LogType::DBG, "Input path: {}", in_file_path);
+    Logger::print(LogType::DBG, "Input path: {}", trace_file_path);
     Logger::print(LogType::DBG, "Out summary path: {}", out_summ_path);
     // Logger::print(LogType::DBG, "Err report path: {}", bad_trace_rep_path);
 
-    std::ifstream in_file(in_file_path);
-    if(!in_file.good()) {
-        Logger::print(LogType::ERR, "In file not found: {}", in_file_path);
+    std::ifstream trace_file(trace_file_path);
+    if(!trace_file.good()) {
+        Logger::print(LogType::ERR, "In file not found: {}", trace_file_path);
         return 1;
     }
 
@@ -282,29 +146,37 @@ int main(int argc, char *argv[]) {
     // TestVectorClock::test();
     // TestPredictor::test();
 
-    reset_cnt_map();
-    Predictor predictor;
+    TraceParser trace_parser(std::move(trace_file));
+    EventHandler event_handler;
 
-    // Trace parsing and grpah construction
-    parse_trace(predictor, in_file);
-    // auto help = std_thread_map;
-    print_parse_summary(log_file, predictor);
+    // Trace parsing -> graph and critical section construction
+    while (trace_parser.events_remaining()){
+        auto event_opt = trace_parser.get_next_event();
+        if (event_opt.has_value())
+            event_handler.handle_event(event_opt.value());
+    }
+    event_handler.build_neigh_list();
 
-    // predictor.print_abs_deps(extra_log_file);
+    // Print summaries
+    Logger::print(log_file, "----Trace info----");
+    trace_parser.print_summary(log_file);
+    event_handler.print_summary(log_file);
+   
+    // event_handler.print_abs_deps(extra_log_file);
     // Logger::print_dash_line(extra_log_file);
-    // predictor.print_neigh_list(extra_log_file);
+    // event_handler.print_neigh_list(extra_log_file);
 
     auto end = std::chrono::system_clock::now();
     auto millis_passed_parse_trace = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
-    CycleEnumerator cycle_enumerator(predictor.graph_view);
+    CycleEnumerator cycle_enumerator(event_handler.graph_view);
     cycle_enumerator.enum_cycles();
     Logger::print(log_file, "num cycles: {}", cycle_enumerator.res_cycles.size());
 
     end = std::chrono::system_clock::now();
     auto millis_passed_cycle_enum = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
-    DeadlockChecker dlk_checker(predictor.cs_hist);
+    DeadlockChecker dlk_checker(event_handler.cs_hist);
 
     std::vector<int> abs_dlk_cycles_ind;
     abs_dlk_cycles_ind.reserve(32);

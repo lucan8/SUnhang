@@ -6,7 +6,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/SUnhang.exe",
-            // "args": [".\\benchmarks\\extra\\data\\reentrant_ex.std", ".\\benchmarks\\extra\\output\\reentrant_ex\\SUnhang_no_1_lev_locks-no_dead_th_fp-no_1_th_ev-reen_locks\\log.txt"],
+            "args": [".\\benchmarks\\extra\\data\\dont_ignore_1_th.std", ".\\benchmarks\\extra\\output\\dont_ignore_1_th\\SUnhang_no_1_lev_locks-no_dead_th_fp-no_1_th_rw-reen_locks\\log.txt"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/",
             "environment": [],

@@ -2,16 +2,52 @@ from pathlib import Path
 import pandas as pd
 import itertools
 import os
+from copy import deepcopy
 
-root_path = "benchmarks/original/"
+root_path = "benchmarks/generated/"
 out_files_base = f"{root_path}/output"
 bench_in_path = f"{root_path}/data"
 
-predictors = ["SUnhang1", "SUnhang2", "SUnhang3", "SUnhang4"]
+predictors = ["SPD", "SUnhang1", "SUnhang2", "SUnhang3", "SUnhang4", "SUnhang5"]
 mini_columns = ["dep", "cyc", "abs", "dlk", "time"]
-ignored_bench = ["eclipse", "jigsaw"]
+# ignored_bench = set(["eclipse", "jigsaw"])
+# THIS SHOULD NOT BE IGNORED IN THE FUTURE!
+ignored_bench = set(["dead-th-fp", "cond-var-fn", "cond-var-fp", "cond-var-tn", "MyHashMap", "dead"])
 
-def from_log_file(file_path: Path) -> list:
+spd_benchs = []
+def from_log_file_SPD(file_path: Path) -> list:
+    file = open(file_path, 'r')
+    dic = {}
+    
+    line = file.readline()
+    if not line:
+        return [0] * 5
+    
+    # Skip first  lines
+    for i in range(6):
+        file.readline()
+
+    dic["deps"] = 0
+    # Next 3 lines are actually relevant
+    for i in range(2):
+        split_line = file.readline().strip().split(": ")
+        dic[split_line[0].split()[1][:3]] = int(split_line[1])
+    
+    # Skip until we see num_deadlocks
+    while True:
+        split_line = file.readline().strip().split(": ")
+        if split_line[0] == "num deadlocks":
+            dic["dlk"] = int(split_line[1])
+            break
+    
+    for line in file:
+        pass
+
+    dic["time"] = float(line.strip())
+    
+    return list(dic.values())
+
+def from_log_file_SUnhang(file_path: Path) -> list:
     file = open(file_path, 'r')
     dic = {}
     
@@ -35,7 +71,6 @@ def from_log_file(file_path: Path) -> list:
             dic["dlk"] = int(split_line[1])
             break
     
-    # Go until the last line where the is only a number
     agg_time = 0
     for i in range(4):
         line = file.readline()
@@ -45,6 +80,12 @@ def from_log_file(file_path: Path) -> list:
     
     return list(dic.values())
 
+def from_log_file(file_path: Path, is_spd_pred: bool) -> list:
+    if is_spd_pred:
+        return from_log_file_SPD(file_path)
+    
+    return from_log_file_SUnhang(file_path)
+
 def get_df_col():
     global predictors, mini_columns
 
@@ -53,14 +94,19 @@ def get_df_col():
     
     columns = pd.MultiIndex.from_tuples(tuples)
 
-    print("[INFO]: Compiled columns!")
+    print(f"[INFO]: Compiled {len(columns)} columns!")
     return columns
 
-def get_df_rows() -> list[list[int]]:
+def get_df_rows(is_spd_pred: bool) -> dict[str, list[int]]:
     global out_bench_path, out_files_base
 
-    rows = []
-    for out_bench_path in Path(out_files_base).iterdir():
+    if is_spd_pred:
+        out_files = out_files_base + "_SPD"
+    else:
+        out_files = out_files_base + "_SUnhang"
+
+    rows = {}
+    for out_bench_path in Path(out_files).iterdir():
         if out_bench_path.is_file():
             continue
         
@@ -68,15 +114,16 @@ def get_df_rows() -> list[list[int]]:
         if bench_name in ignored_bench:
             continue
 
-        row = [bench_name]
+        row = []
 
         for i, out_pred_path in enumerate(out_bench_path.iterdir()):
-            info = from_log_file(out_pred_path / "log.txt")
+            info = from_log_file(out_pred_path / "log.txt", is_spd_pred)
             row.extend(info)
         
-        rows.append(row)
+        rows[bench_name] = row
     
-    print("[INFO]: Compiled rows!")
+    print(f"[INFO]: Compiled {len(rows)} rows({"spd" if is_spd_pred else "SUnhang"})!")
+    
     return rows
 
 def format_df(df: pd.DataFrame):
@@ -127,8 +174,23 @@ def save_latex(df: pd.DataFrame):
     table_out_path.write_text(latex_table, encoding="utf-8")
     print(f"[INFO]: Saved table to {table_out_path}")
 
+def merge_rows(rows1: dict[str, list[int]], rows2: dict[str, list[int]]) -> list[list]:
+    merged_rows = []
+
+    for bench_name in rows1:
+        if bench_name not in rows2:
+            print(f"[WARN]: {bench_name} in rows1, but not in rows2!")
+        else:
+            merged_rows.append([bench_name] + rows1[bench_name] + rows2[bench_name])
+
+    return merged_rows
+    
 def main():
-    df = pd.DataFrame(get_df_rows(), columns=get_df_col())
+    spd_rows, sunhang_rows, cols = get_df_rows(True), get_df_rows(False), get_df_col()
+    rows = merge_rows(spd_rows, sunhang_rows)
+
+    df = pd.DataFrame(rows, columns=cols)
+    # print(df)
 
     # Aggregate results into a "Total" column
     total_row = ["Total"] + df.select_dtypes(include='number').sum().to_list()
