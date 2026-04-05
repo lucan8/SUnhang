@@ -19,9 +19,7 @@ bool DeadlockChecker::is_abs_dlk_pattern(const NodeChainT& cycle){
             return false;
         
         // Insert all locks of the node's lockset and check all of them were inserted
-        size_t init_acq_locks_size = acq_locks.size();
-        acq_locks.insert(node->first.lockset.begin(), node->first.lockset.end());
-        if (acq_locks.size() - init_acq_locks_size != node->first.lockset.size())
+        if (!insert_lockset(node->first.lockset, acq_locks))
             return false;
     }
 
