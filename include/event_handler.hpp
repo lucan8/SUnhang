@@ -23,18 +23,24 @@ struct EventHandler{
   // Statistical info
   uint32_t acq_count = 0;
 
-  // Calls handler  associated with evt.event_type
+  // Calls handler  associated with evt_info.event_type
   // Return true if event if valid, false otherwise
-  bool handle_event(const EventInfo& evt);
+  bool handle_event(const EventInfo& evt_info);
   
-  void read_event(const EventInfo& evt);
-  void write_event(const EventInfo& evt);
+  void read_event(const EventInfo& evt_info);
+  void write_event(const EventInfo& evt_info);
 
-  void acquire_event(const EventInfo& evt);
-  void release_event(const EventInfo& evt);
+  void acquire_event(const EventInfo& evt_info);
+  void release_event(const EventInfo& evt_info);
   
-  void fork_event(const EventInfo& evt);
-  void join_event(const EventInfo& evt);
+  void wait_event(const EventInfo& evt_info);
+  void notify_event(const EventInfo& evt_info);
+  
+  void fork_event(const EventInfo& evt_info);
+  void join_event(const EventInfo& evt_info);
+
+  // Helper function that creates (and adds) a new dependency to the graph
+  NodeConstItT create_dep(ThreadIdT tid, ResourceIdT desired_res, const LocksetT& lockset, const Event& evt);
 
   void build_neigh_list();
 

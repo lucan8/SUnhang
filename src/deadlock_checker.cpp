@@ -51,7 +51,7 @@ std::optional<std::vector<SimpleNode>> DeadlockChecker::get_sync_preserving_dlk(
             std::vector<SimpleNode> res;
             res.reserve(cycle_evt.size());
             for (int i = 0; i < cycle.size(); ++i){
-                res.emplace_back(cycle[i]->first.thread_id, cycle[i]->first.resource_id, (*cycle_evt[i].start_elem)->src_loc);
+                res.emplace_back(cycle[i]->first.thread_id, cycle[i]->first.resource_id, (cycle_evt[i].start_elem)->src_loc);
             }
             return res;
         }
@@ -101,8 +101,8 @@ void DeadlockChecker::_get_sync_pres_closure(VectorClock& vc){
 // Update vc using the first events of each abstract dependency
 bool DeadlockChecker::_check_sync_pres_closure(const std::vector<EventLazyQueue>& cycle_evt, const VectorClock& closure_vc) const {
     for (const auto& ev_lazy_q : cycle_evt){
-        const Event* ev = *ev_lazy_q.start_elem;
-        if (ev->vc <= closure_vc)
+        const Event& ev = *ev_lazy_q.start_elem;
+        if (ev.vc <= closure_vc)
             return false;
     }
     return true;
@@ -113,11 +113,11 @@ void DeadlockChecker::_update_vc_with_curr_cycle(const Cycle& cycle_evt, VectorC
     for (int i = 0; i < cycle_evt.size(); ++i){
         EventLazyQueue ev_lazy_q = cycle_evt.wrapped_events[i];
 
-        const Event* ev = *ev_lazy_q.start_elem;
+        const Event& ev = *ev_lazy_q.start_elem;
         ThreadIdT tid = cycle_evt.nodes[i]->first.thread_id;
         
         // Merge the event predecessor in the vc 
-        vc.th_pred_merge_into(ev->vc, tid);
+        vc.th_pred_merge_into(ev.vc, tid);
     }
 }
 
@@ -126,7 +126,7 @@ void DeadlockChecker::_update_vc_with_curr_cycle(const Cycle& cycle_evt, VectorC
 // False is early returned, meaning not all nodes were updated!
 bool DeadlockChecker::_update_abs_dep_start_ev(std::span<EventLazyQueue> cycle_evt, const VectorClock& vc) const{
     for (auto& ev_lazy_q : cycle_evt){
-        ev_lazy_q.pop_until(vc, EventPtrComp(), true);
+        ev_lazy_q.pop_until(vc, EventComp(), true);
 
         if (ev_lazy_q.empty())
             return false;

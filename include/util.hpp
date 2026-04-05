@@ -7,6 +7,7 @@
 #include <deque>
 #include <type_traits>
 #include <concepts>
+#include <array>
 #include "comm_types.hpp"
 
 // Splits str by sep
@@ -21,6 +22,12 @@ inline std::vector<std::string> split(const std::string& str, char sep){
     }
 
     return result;
+}
+
+// res_id should be the id of either a lock or a cond_var
+// for locks it returns the id of the associated cond var, for cond var the associated lock
+inline ResourceIdT get_ass_sync_obj(ResourceIdT res_id){
+    return -res_id;
 }
 
 // Returns true if ls1 and ls2 intersect, false otherwise
@@ -144,6 +151,82 @@ using OwnedLazyQueue = LazyQueue<ContainerT, false>;
 
 template <typename ContainerT>
 using ViewLazyQueue = LazyQueue<ContainerT, true>;
+
+template <typename ElemT, size_t Size>
+struct CircularArr{
+    std::array<ElemT, Size> _arr;
+    size_t _start;
+    size_t _size;
+
+    using iterator = typename std::array<ElemT, Size>::iterator;
+    using const_iterator = typename std::array<ElemT, Size>::const_iterator;
+
+    CircularArr(): _start(0), _size(0){}
+
+    void push(const ElemT& elem){
+        // If the array is full use begin as both the start and end
+        if (_size == Size){
+            _arr[_start] = elem;
+            _start = (_start + 1) % Size;
+        } else{ // Otherwise use begin + _size as the end
+            _arr[_start + _size] = elem;
+            _size += 1;
+        }
+    }
+
+    // Iterator to the first elements
+    const_iterator begin() const{
+        if (_size == 0)
+            return _arr.end();
+            
+        return _arr.begin() + _start;
+    }
+
+    // Iterator to the last element(not past it!)
+    // If the array is empty it is just begin
+    const_iterator last() const{
+        // Empty array, return begin
+        if (_size == 0)
+            return _arr.begin();
+
+        // Not full, use size as the end
+        if (_size < Size)
+            return _arr.begin() + _size - 1;
+        
+        // Full and at the start, last is the real last
+        if (_start == 0)
+            return _arr.end() - 1;
+        
+        return begin() - 1;
+    }
+
+    // Iterator to an invalid element outside of the array(should be used as an anchor)
+    const_iterator end() const{
+        return _arr.end();
+    }
+
+    // Returns the next iterator after curr. Returns end when the last element is reached
+    const_iterator next(const_iterator curr) const{
+        auto last_it = last();
+        // Finish when reaching last element
+        if (curr == last_it){
+            return end();
+        }
+
+        // Go to the next in a circular manner
+        const_iterator res = curr + 1;
+        if (res == end())
+            return _arr.begin();
+        
+        return res;
+    }
+
+    void merge_into(const CircularArr& other){
+        for (auto it = other.begin(); it != other.end(); it = other.next(it)){
+            this->push(*it);
+        }
+    }
+};
 
 // Generic struct used for pointer comparison
 // Note: Nullptr is treated as infinity

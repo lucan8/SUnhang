@@ -1,3 +1,22 @@
+//COND VAR OBSERVATIONS:
+// WAIT EXTRA BEHAVIOUR(OF RELEASING THE LOCK BEFORE SLEEP AND ACQUIRING IT UPON WAKING)
+//      ARE HANDLED in convert_2_std from their artifact
+// COND_VAR_ID = -LOCK_ID (the conversion is done here, not in the trace)
+// wait/join if it blocks should update their timestamps
+// to the current state of the system upon waking up
+// if t1 waits and let's say another 2 threads keep executing stuff, upon waking t1 should
+// be aware that the other 2 threads executed before it to avoid creating fake deadlocks
+
+// Currently inefficient because it removes and adds deps back due to new cond_vars appearing
+// We need to update fast, preferably without removing and have an order only at the end
+
+// STEPS:
+// 1. handle_wait: creates a new dep without changing the critical section
+// 2. handle_notify: adds the cond_var to the locksets of earlier deps
+// 3. cycle_check: is_valid_neigh should allow an intersection that contains only cond_vars
+
+// StdIdMap has counters starting at 1 because of the id and -id lock and cond_var hack
+// IMPORTANT: IS THE PREDECESSOR JUST thread_epoch - 1?
 // Benchmark conclusions
 
 // Generated
@@ -47,6 +66,7 @@
 //TODO: Template formater for vectors(YOU HAVE IT, USE IT)
 //TODO: Pack the comparison operators of VectorClock together in one
 //TODO: Timer function
+//TODO: Circular array range based for loop
 
 // TODO: Bensalem asserts!
 // Graph info for bensalem: 12 nodes, only 3 with outgoing neighbours, graph on the second to last page of your notebook
@@ -57,6 +77,10 @@
 // BIG QUESTION: Shouldn't the nodes(deps) be sorted based on when they appear in the trace?
 // As keeping them in a mere map does not guarantee that ordering.
 // ANSWER: NOP, dependencies can't really use the trace order, that's for events
+
+// OPTIMIZATION:
+// Currently the dep map and CSHist keep events but in most of the situations they refer to the same
+// thing, using shared_ptr would probably be the go here or a master vector of pointers
 
 //OPTIMIZATION:
 // Instead of recomputing the SCCs everytime on the subgraph, take only the SCC from which the node was removed
@@ -162,9 +186,9 @@ int main(int argc, char *argv[]) {
     trace_parser.print_summary(log_file);
     event_handler.print_summary(log_file);
    
-    // event_handler.print_abs_deps(extra_log_file);
-    // Logger::print_dash_line(extra_log_file);
-    // event_handler.print_neigh_list(extra_log_file);
+    event_handler.print_abs_deps();
+    Logger::print_dash_line();
+    event_handler.print_neigh_list();
 
     auto end = std::chrono::system_clock::now();
     auto millis_passed_parse_trace = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
