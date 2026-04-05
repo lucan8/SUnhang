@@ -4,7 +4,10 @@
 #include "../include/logger.hpp"
 
 const std::unordered_map<std::string, EventsT> TraceParser::std_event_map = {
-    {"r", EventsT::RD}, {"w", EventsT::WR}, {"fork", EventsT::FORK}, {"join", EventsT::JOIN}, {"acq", EventsT::LK}, {"rel", EventsT::UK}
+    {"r", EventsT::RD}, {"w", EventsT::WR},
+    {"fork", EventsT::FORK}, {"join", EventsT::JOIN},
+    {"acq", EventsT::LK}, {"rel", EventsT::UK},
+    {"wait", EventsT::WAIT}, {"notify", EventsT::NOTIFY}
 };
 
 const char TraceParser::trace_sep = '|';
@@ -19,10 +22,12 @@ bool TraceParser::events_remaining(){
 std::optional<EventInfo> TraceParser::from_std(const std::vector<std::string>& current_result) {
     // Set event type
     auto event_len = current_result[1].find("(");
-    auto event_type = std_event_map.find(current_result[1].substr(0, event_len));
+    std::string event_str = current_result[1].substr(0, event_len);
+    auto event_type = std_event_map.find(event_str);
 
     // Event not found
     if(event_type == std_event_map.end()) {
+        Logger::print(LogType::WARN, "Event not found: {}", event_str);
         return {};
     }
 
@@ -41,6 +46,9 @@ std::optional<EventInfo> TraceParser::from_std(const std::vector<std::string>& c
     }
     else if(result.event_type == EventsT::LK || result.event_type == EventsT::UK) {  
         result.target = lock_id_map.get(target);
+    }
+    else if(result.event_type == EventsT::WAIT || result.event_type == EventsT::NOTIFY) {  
+        result.target = get_ass_sync_obj(lock_id_map.get(target));
     }
     else{
         result.target = var_id_map.get(target);

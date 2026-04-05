@@ -14,7 +14,6 @@ mini_columns = ["dep", "cyc", "abs", "dlk", "time"]
 # THIS SHOULD NOT BE IGNORED IN THE FUTURE!
 ignored_bench = set(["dead-th-fp", "cond-var-fn", "cond-var-fp", "cond-var-tn", "MyHashMap", "dead"])
 
-spd_benchs = []
 def from_log_file_SPD(file_path: Path) -> list:
     file = open(file_path, 'r')
     dic = {}
@@ -40,6 +39,7 @@ def from_log_file_SPD(file_path: Path) -> list:
             dic["dlk"] = int(split_line[1])
             break
     
+    # Skip until end
     for line in file:
         pass
 
@@ -55,7 +55,7 @@ def from_log_file_SUnhang(file_path: Path) -> list:
     if not line:
         return [0] * 5
     
-    # Skip first  lines
+    # Skip first 5 lines
     for i in range(5):
         file.readline()
     
@@ -71,6 +71,7 @@ def from_log_file_SUnhang(file_path: Path) -> list:
             dic["dlk"] = int(split_line[1])
             break
     
+    # Aggregate the next 4 lines
     agg_time = 0
     for i in range(4):
         line = file.readline()

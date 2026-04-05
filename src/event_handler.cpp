@@ -1,110 +1,193 @@
 #include "../include/event_handler.hpp"
 #include "../include/logger.hpp"
 #include <algorithm>
+#include <memory>
 
 
-bool EventHandler::handle_event(const EventInfo& evt){
-    switch (evt.event_type){
-        case EventsT::LK:
-            acquire_event(evt);
-            break;
-        case EventsT::UK:
-            release_event(evt);
-            break;
+bool EventHandler::handle_event(const EventInfo& evt_info){
+    switch (evt_info.event_type){
         case EventsT::RD:
-            read_event(evt); 
+            read_event(evt_info); 
             break;
         case EventsT::WR:
-            write_event(evt);
+            write_event(evt_info);
+            break;
+        case EventsT::LK:
+            acquire_event(evt_info);
+            break;
+        case EventsT::UK:
+            release_event(evt_info);
+            break;
+         case EventsT::WAIT:
+            wait_event(evt_info);
+            break;
+        case EventsT::NOTIFY:
+            notify_event(evt_info);
             break;
         case EventsT::FORK:
-            fork_event(evt);
+            fork_event(evt_info);
             break;
         case EventsT::JOIN:
-            join_event(evt);
+            join_event(evt_info);
             break;
         default:
             return false;
     }
 
     // Time passes for this thread(and it can't be stopped...)
-    thread_map[evt.thread_id].vec_clock.increment(evt.thread_id);
+    thread_map[evt_info.thread_id].vec_clock.increment(evt_info.thread_id);
     return true;
 }
 
-void EventHandler::read_event(const EventInfo& evt) {
+void EventHandler::read_event(const EventInfo& evt_info) {
     // Logger::print(LogType::DBG, "Read event");
 
     if (thread_map.size() <= 1)
         return;
 
-    thread_map[evt.thread_id].vec_clock.merge_into(last_write[evt.target]);
+    thread_map[evt_info.thread_id].vec_clock.merge_into(last_write[evt_info.target]);
 }
 
-void EventHandler::write_event(const EventInfo& evt) {
+void EventHandler::write_event(const EventInfo& evt_info) {
     // Logger::print(LogType::DBG, "Write event");
 
     if (thread_map.size() <= 1)
         return;
 
-    last_write[evt.target] = thread_map[evt.thread_id].vec_clock;
+    last_write[evt_info.target] = thread_map[evt_info.thread_id].vec_clock;
 }
 
-void EventHandler::acquire_event(const EventInfo& evt) {
+void EventHandler::wait_event(const EventInfo& evt_info) {
+    // Logger::print(LogType::DBG, "Wait event");
+    
+    ThreadInfo& th_info = thread_map[evt_info.thread_id];
+
+    // TODO: CALLING WAIT AS A SINGLE THREAD IS PLAIN STUPID, PROBABLY SHOULD PRINT AN ERROR
+    // TODO: CALLING WAIT WITH AN EMPTY LOCKSET IS EVEN WORSE, SHOULD PROBABLY PRINT AN ERROR
+    if (th_info.u_reen_lockset.empty() || thread_map.size() <= 1)
+        return;
+    
+    // If lockset only has associated lock for cond_var add it to the recent statuses
+    if (th_info.u_reen_lockset.contains_only(get_ass_sync_obj(evt_info.target))){
+        th_info.recent_sync_status_arr.push(evt_info.target);
+    }
+    else{ // Else create a new dep and add it as a recent status
+        Event evt = Event(th_info.vec_clock, evt_info.line, evt_info.src_loc);
+        NodeConstItT dep = create_dep(evt_info.thread_id, evt_info.target, th_info.u_reen_lockset.to_lockset(), evt);
+        th_info.recent_sync_status_arr.push(dep);
+    }
+}
+
+void EventHandler::notify_event(const EventInfo& evt_info) {
+    // Logger::print(LogType::DBG, "Write event");
+
+    ThreadInfo& th_info = thread_map[evt_info.thread_id];
+
+    // TODO: CALLING NOTIFY AS A SINGLE THREAD IS PLAIN STUPID, PROBABLY SHOULD PRINT AN ERROR
+    // TODO: CALLING NOTIFY WITH AN EMPTY LOCKSET IS EVEN WORSE, SHOULD PROBABLY PRINT AN ERROR
+    if (th_info.u_reen_lockset.empty() || thread_map.size() <= 1)
+        return;
+    
+    RecentSyncStatusArrT new_arr;
+    RecentSyncStatusArrT& curr_arr = th_info.recent_sync_status_arr;
+
+    for (auto it = curr_arr.begin(); it != curr_arr.end(); it = curr_arr.next(it)){
+        auto sync_status = *it;
+        if (std::holds_alternative<ResourceIdT>(sync_status)) {
+            Event evt = Event(th_info.vec_clock, evt_info.line, evt_info.src_loc);
+
+            ResourceIdT res_id = std::get<ResourceIdT>(sync_status);
+            LocksetT lockset;
+            NodeConstItT new_dep;
+            
+            // Create dep from lock to cond var if it is not the associated lock(if so it is ignored)
+            if (res_id != get_ass_sync_obj(evt_info.target)){
+                lockset.insert(evt_info.target);
+                NodeConstItT new_dep = create_dep(evt_info.thread_id, res_id, lockset, evt);
+            }
+            
+            // Add the new dependency to the new recent statuses array
+            // QUESTION: WHY NOT JUST SET INSTEAD OF PUSH
+            new_arr.push(new_dep);
+        } else if (std::holds_alternative<NodeConstItT>(sync_status)) {
+            // Get old dep
+            NodeConstItT ptr = std::get<NodeConstItT>(sync_status);
+            auto node_handle = graph_view.graph.abs_deps_map.extract(ptr);
+            
+            // Add the cond_var to the lockset and re-insert
+            node_handle.key().lockset.insert(evt_info.target);
+            auto new_dep = graph_view.graph.abs_deps_map.insert(std::move(node_handle));
+
+            // Update the status with the new dep
+            sync_status = new_dep.position;
+        }
+    }
+
+    curr_arr.merge_into(new_arr);
+}
+
+void EventHandler::acquire_event(const EventInfo& evt_info) {
     // Logger::print(LogType::DBG, "Acquire event");
     acq_count++;
     
-    ThreadInfo& th_info = thread_map[evt.thread_id];
+    ThreadInfo& th_info = thread_map[evt_info.thread_id];
+    Event evt = Event(th_info.vec_clock, evt_info.line, evt_info.src_loc);
 
-    // Add lock vc to critical section history and add lock to lockset
-    CSInfo& cs_info = cs_hist.add_lock_ev(evt.target, evt.thread_id, Event(th_info.vec_clock, evt.line, evt.src_loc));
-
-    // Don't create deps for first level lock acquisitions
-    // Ignore deps created when only one thread executes
-    if (!th_info.u_reen_lockset.empty() && thread_map.size() > 1){
-        // The dependency only cares about the locks, not their counters
-        LocksetT lockset = th_info.u_reen_lockset.to_lockset();
-
-        // Create abstract dependency and add it's instance's vc to the vector(as a ref to cs_hist's entry)
-        AbsDependency dep(evt.thread_id, evt.target, lockset);
-        auto [it, inserted] = graph_view.graph.abs_deps_map.try_emplace(std::move(dep), std::vector<const Event*>{});
-        it->second.push_back(&cs_info.lock_ev);
-
-        // Locks from lockset should point to this dependency
-        if (inserted)
-            for (const auto lock : lockset)
-                lock_dep_map[lock].push_back(it);
+    // Single threaded or first level lock -> no dep, only status
+    if (th_info.u_reen_lockset.empty() || thread_map.size() <= 1){
+        th_info.recent_sync_status_arr.push(evt_info.target);
+    }
+    else{ // otherwise both
+        NodeConstItT dep = create_dep(evt_info.thread_id, evt_info.target, th_info.u_reen_lockset.to_lockset(), evt);
+        th_info.recent_sync_status_arr.push(dep);
     }
 
-    th_info.u_reen_lockset.acquire(evt.target);
+    // Add ev to critical section history and add lock to lockset
+    CSInfo& cs_info = cs_hist.add_lock_ev(evt_info.target, evt_info.thread_id, evt);
+    th_info.u_reen_lockset.acquire(evt_info.target);
 }
 
-void EventHandler::release_event(const EventInfo& evt) {
+void EventHandler::release_event(const EventInfo& evt_info) {
     // Logger::print(LogType::DBG, "Release event");
         
-    ThreadInfo& th_info = thread_map[evt.thread_id];
+    ThreadInfo& th_info = thread_map[evt_info.thread_id];
     
     // TODO: This could use a safe mode that checks the release was spurious
     // Check it using the u_reen_lockset, cs_hist is not very reliable
-    th_info.u_reen_lockset.release(evt.target);
+    th_info.u_reen_lockset.release(evt_info.target);
     
-    cs_hist.add_unlock_ev(evt.target, evt.thread_id, std::move(Event(th_info.vec_clock, evt.line, evt.src_loc)));
+    cs_hist.add_unlock_ev(evt_info.target, evt_info.thread_id, std::move(Event(th_info.vec_clock, evt_info.line, evt_info.src_loc)));
 }
 
-void EventHandler::fork_event(const EventInfo& evt) {
+void EventHandler::fork_event(const EventInfo& evt_info) {
     // Logger::print(LogType::DBG, "Fork event");
-    ThreadInfo& th_info = thread_map[evt.thread_id];
-    ThreadInfo& target_info = thread_map.emplace(evt.target, ThreadInfo()).first->second;
+    ThreadInfo& th_info = thread_map[evt_info.thread_id];
+    ThreadInfo& target_info = thread_map.emplace(evt_info.target, ThreadInfo()).first->second;
 
     target_info.vec_clock.merge_into(th_info.vec_clock);
 }
 
-void EventHandler::join_event(const EventInfo& evt) {
+void EventHandler::join_event(const EventInfo& evt_info) {
     // Logger::print(LogType::DBG, "Join event");
-    ThreadInfo& th_info = thread_map[evt.thread_id];
-    ThreadInfo& target_info = thread_map.extract(evt.target).mapped();
+    ThreadInfo& th_info = thread_map[evt_info.thread_id];
+    ThreadInfo& target_info = thread_map.extract(evt_info.target).mapped();
 
     th_info.vec_clock.merge_into(target_info.vec_clock);
+}
+
+NodeConstItT EventHandler::create_dep(ThreadIdT tid, ResourceIdT desired_res, const LocksetT& lockset,
+                               const Event& evt){
+    // Create abstract dependency and add it's instance to the vector
+    AbsDependency dep(tid, desired_res, lockset);
+    auto [it, inserted] = graph_view.graph.abs_deps_map.try_emplace(std::move(dep), std::vector<Event>{});
+    it->second.push_back(evt);
+
+    // Locks from lockset should point to this dependency
+    if (inserted)
+        for (const auto lock : lockset)
+            lock_dep_map[lock].push_back(it);
+    
+    return it;
 }
 
 void EventHandler::build_neigh_list() {
