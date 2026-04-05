@@ -67,6 +67,9 @@
 //TODO: Pack the comparison operators of VectorClock together in one
 //TODO: Timer function
 //TODO: Circular array range based for loop
+//TODO: Resources would benefit from a enum
+//TODO: Differentiating between the locksets that contains cond_vars and locks and those that only locks
+// would be useful
 
 // TODO: Bensalem asserts!
 // Graph info for bensalem: 12 nodes, only 3 with outgoing neighbours, graph on the second to last page of your notebook
@@ -196,6 +199,7 @@ int main(int argc, char *argv[]) {
     CycleEnumerator cycle_enumerator(event_handler.graph_view);
     cycle_enumerator.enum_cycles();
     Logger::print(log_file, "num cycles: {}", cycle_enumerator.res_cycles.size());
+    Logger::print(LogType::INFO, "num cycles: {}", cycle_enumerator.res_cycles.size());
 
     end = std::chrono::system_clock::now();
     auto millis_passed_cycle_enum = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
@@ -211,6 +215,7 @@ int main(int argc, char *argv[]) {
     }
 
     Logger::print(log_file, "num abstract: {}", abs_dlk_cycles_ind.size());
+    Logger::print(LogType::INFO, "num abstract: {}", abs_dlk_cycles_ind.size());
     Logger::print(log_file, "num concrete: -1\n"); // Just to match the format
     
     end = std::chrono::system_clock::now();
@@ -230,6 +235,7 @@ int main(int argc, char *argv[]) {
     auto millis_passed_sync_pres_check = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
     
     Logger::print(log_file, "\nnum deadlocks: {}", real_dlk_count);
+    Logger::print(LogType::INFO, "num deadlocks: {}", real_dlk_count);
 
     Logger::print(log_file, "Time for parsing and graph construction = {} milliseconds", millis_passed_parse_trace);
     Logger::print(log_file, "Time for cycle enumeration = {} milliseconds", millis_passed_cycle_enum - millis_passed_parse_trace);

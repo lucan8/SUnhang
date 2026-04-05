@@ -170,7 +170,7 @@ void EventHandler::fork_event(const EventInfo& evt_info) {
 void EventHandler::join_event(const EventInfo& evt_info) {
     // Logger::print(LogType::DBG, "Join event");
     ThreadInfo& th_info = thread_map[evt_info.thread_id];
-    ThreadInfo& target_info = thread_map.extract(evt_info.target).mapped();
+    ThreadInfo target_info = thread_map.extract(evt_info.target).mapped();
 
     th_info.vec_clock.merge_into(target_info.vec_clock);
 }
@@ -199,7 +199,7 @@ void EventHandler::build_neigh_list() {
         
         // Add valid candidates to the neigbour list of dep
         for (auto cand : lock_dep_it->second)
-            if (node_it->first.is_valid_neigh_cand(cand->first))
+            if (node_it->first.is_valid_neigh_cand_soft(cand->first))
                 graph_view.graph.neigh_list[node_it].push_back(cand);
     }
 

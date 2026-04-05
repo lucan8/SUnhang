@@ -297,6 +297,11 @@ struct AbsDependency{
     return thread_id != other.thread_id && resource_id != other.resource_id && !lockset_intersection(lockset, other.lockset);
   }
   
+  // return true if thread_ids and resource_ids differ and locksets don't softly intersect, false otherwise
+  bool is_valid_neigh_cand_soft(const AbsDependency& other) const{
+    return thread_id != other.thread_id && resource_id != other.resource_id && !lockset_intersection_soft(lockset, other.lockset);
+  }
+  
   // return true if thread_ids differ and locksets don't intersect, false otherwise
   bool is_valid_neigh_cand_opt(const AbsDependency& other) const{
     return thread_id != other.thread_id && !lockset_intersection(lockset, other.lockset);

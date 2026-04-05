@@ -30,6 +30,10 @@ inline ResourceIdT get_ass_sync_obj(ResourceIdT res_id){
     return -res_id;
 }
 
+inline bool is_cond_var(ResourceIdT res_id){
+    return res_id < 0;
+}
+
 // Returns true if ls1 and ls2 intersect, false otherwise
 // Currently iterates of ls2 and checks if all elements are in ls1
 inline bool lockset_intersection(const LocksetT& ls1, const LocksetT& ls2){
@@ -37,6 +41,32 @@ inline bool lockset_intersection(const LocksetT& ls1, const LocksetT& ls2){
         if (ls1.find(lock) != ls1.end())
             return true;
     return false;
+}
+
+// Returns true if ls1 and ls2 intersect, false otherwise
+// Doesn't count cond vars for intersection
+inline bool lockset_intersection_soft(const LocksetT& ls1, const LocksetT& ls2){
+    for (const auto lock : ls2){
+        auto found_elem = ls1.find(lock);
+        if (found_elem != ls1.end() && !is_cond_var(*found_elem))
+            return true;
+    }
+    return false;
+}
+
+// Insert the elements of src in dst ignoring cond vars
+// Returns true if no duplicates were found false otherwise, stopping at the first found element
+inline bool insert_lockset(const LocksetT& src, ULocksetT& dst){
+    for (const auto& res_id : src){
+        if (!is_cond_var(res_id)){ // Ignore cond vars
+            auto [it, inserted] = dst.insert(res_id);
+            if (!inserted){
+                return false;
+            }
+        }
+    }
+
+    return true;
 }
 
 // Define constraint for LazyQueue that enforces the container to be either a vector or deque
