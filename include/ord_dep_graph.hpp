@@ -7,10 +7,11 @@
 #include "predictor_types.hpp"
 
 typedef std::vector<NodeConstItT> NodeChainT;
+typedef std::unordered_set<NodeConstItT, IteratorHasher> NodeUSetT;
 typedef std::vector<NodeConstItT>::const_iterator NodeChainConstItT;
 typedef std::ranges::subrange<NodeChainConstItT> NodeChainRangeT;
 
-typedef std::unordered_set<NodeConstItT, IteratorHasher, IteratorHasher> NodeSetT;
+// typedef std::unordered_set<NodeConstItT, IteratorHasher, IteratorHasher> NodeSetT;
 
 typedef std::unordered_map<NodeConstItT, NodeChainT, IteratorHasher, IteratorHasher> NeighListT;
 

@@ -4,12 +4,13 @@ import optparse
 import subprocess
 from pathlib import Path
 
-out_files_base = "benchmarks/original/output_SUnhang"
-bench_in_path = "benchmarks/original/data"
+out_files_base = "benchmarks/generated/output_SUnhang"
+bench_in_path = "benchmarks/generated/data"
 predictor1 = "SUnhang_no_1_lev_locks-no_dead_th_fp"
 predictor2 = "SUnhang_no_1_lev_locks-no_dead_th_fp-no_1_th_ev"
 predictor3 = "SUnhang_no_1_lev_locks-no_dead_th_fp-no_1_th_rw-reen_locks"
-predictor = predictor3
+predictor4 = "SUnhang_cond_var"
+predictor = predictor4
 
 # cmd: [exe, exe_arg1, exe_arg2...]
 def execute_cmd(cmd: list[str]):

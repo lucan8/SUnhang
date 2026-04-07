@@ -9,6 +9,7 @@
 #include <concepts>
 #include <array>
 #include "comm_types.hpp"
+#include "logger.hpp"
 
 // Splits str by sep
 inline std::vector<std::string> split(const std::string& str, char sep){
@@ -182,6 +183,8 @@ using OwnedLazyQueue = LazyQueue<ContainerT, false>;
 template <typename ContainerT>
 using ViewLazyQueue = LazyQueue<ContainerT, true>;
 
+// Note: All those functions have the weird template to take into consideration both iterator and const_iterator
+// TODO: Could use a fixed size vector instead of array to be more compact
 template <typename ElemT, size_t Size>
 struct CircularArr{
     std::array<ElemT, Size> _arr;
@@ -193,62 +196,108 @@ struct CircularArr{
 
     CircularArr(): _start(0), _size(0){}
 
-    void push(const ElemT& elem){
+    // Push elem into _arr and returns the overwritten element(if any)
+    std::optional<ElemT> push(const ElemT& elem){
         // If the array is full use begin as both the start and end
         if (_size == Size){
-            _arr[_start] = elem;
+            ElemT ret = unsafe_set(_start, elem);
             _start = (_start + 1) % Size;
-        } else{ // Otherwise use begin + _size as the end
-            _arr[_start + _size] = elem;
-            _size += 1;
+            return ret;
         }
+
+        // Otherwise use begin + _size as the end
+        _arr[_start + _size] = elem;
+        _size += 1;
+        return {};
     }
 
-    // Iterator to the first elements
-    const_iterator begin() const{
-        if (_size == 0)
-            return _arr.end();
-            
-        return _arr.begin() + _start;
-    }
-
-    // Iterator to the last element(not past it!)
-    // If the array is empty it is just begin
-    const_iterator last() const{
-        // Empty array, return begin
-        if (_size == 0)
-            return _arr.begin();
-
-        // Not full, use size as the end
-        if (_size < Size)
-            return _arr.begin() + _size - 1;
+    // Assumes pos is valid
+    ElemT unsafe_set(size_t pos, const ElemT& elem) {
+        ElemT old_value = std::move(_arr[pos]);
+        _arr[pos] = elem;
         
-        // Full and at the start, last is the real last
-        if (_start == 0)
-            return _arr.end() - 1;
-        
-        return begin() - 1;
+        return old_value;
     }
 
-    // Iterator to an invalid element outside of the array(should be used as an anchor)
-    const_iterator end() const{
-        return _arr.end();
+    // Assumes pos is valid
+    ElemT unsafe_set(const_iterator pos, const ElemT& elem) {
+        size_t index = std::distance(_arr.cbegin(), pos);
+        ElemT old_value = std::move(_arr[index]);
+
+        _arr[index] = elem;
+        
+        return old_value;
+    }
+
+    bool is_valid_iter(const_iterator pos) const{
+        return pos >= _arr.cbegin() && pos < end();
+    }
+
+    std::optional<ElemT> set(const_iterator pos, const ElemT& elem) {
+        if (!is_valid_iter(pos)){
+            return {};
+        }
+
+        return unsafe_set(pos, elem);
     }
 
     // Returns the next iterator after curr. Returns end when the last element is reached
-    const_iterator next(const_iterator curr) const{
-        auto last_it = last();
+    template <typename Self>
+    auto next(this Self&& self, decltype(self.begin()) curr) {
+        auto last_it = self.last();
+        
         // Finish when reaching last element
-        if (curr == last_it){
-            return end();
+        if (curr == last_it) {
+            return self.end();
         }
 
-        // Go to the next in a circular manner
-        const_iterator res = curr + 1;
-        if (res == end())
-            return _arr.begin();
+        // Go to the next in a circular manner.
+        auto res = curr + 1; 
+        
+        if (res == self.end())
+            return self._arr.begin();
         
         return res;
+    }
+
+    template <typename Self>
+    auto begin(this Self&& self) {
+        if (self._size == 0)
+            return self.end();
+            
+        return self._arr.begin() + self._start;
+    }
+
+    
+    template <typename Self>
+    auto last(this Self&& self) {
+        // Empty? return begin
+        if (self._size == 0)
+            return self._arr.begin();
+
+        // Not full? use size to determine the last element
+        if (self._size < Size)
+            return self._arr.begin() + self._size - 1;
+        
+        // Full and _start it "at the real start"? Return the "real last element"
+        if (self._start == 0)
+            return self._arr.end() - 1;
+            
+        return self.begin() - 1;
+    }
+
+    template <typename Self>
+    auto end(this Self&& self) {
+        return self._arr.begin() + self._size;
+    }
+
+    bool contains(const ElemT& elem) const{
+        for (auto it = begin(); it != end(); it = next(it)){
+            if (*it == elem){
+                return true;
+            }
+        }
+        return false;
     }
 
     void merge_into(const CircularArr& other){

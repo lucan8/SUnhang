@@ -27,7 +27,7 @@ std::optional<EventInfo> TraceParser::from_std(const std::vector<std::string>& c
 
     // Event not found
     if(event_type == std_event_map.end()) {
-        Logger::print(LogType::WARN, "Event not found: {}", event_str);
+        // Logger::print(LogType::WARN, "Event not found: {}", event_str);
         return {};
     }
 

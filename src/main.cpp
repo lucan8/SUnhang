@@ -1,4 +1,19 @@
 //COND VAR OBSERVATIONS:
+
+// AUTHOR IMPLEMENTATION QUESTIONS:
+
+//1.
+// RECENT STATUS MIGHT CONTAIN A COND VAR AND THEN THE SAME THREAD MIGHT CALL SIGNAL ON IT
+// THAT MIGHT CREATE THE DEPENDENCY COND_VAR -> COND_VAR WHICH IS PLAIN STUPID
+
+//2. 
+// THE DEPENDENCY ASSOC_LOCK -> COND_VAR ALSO EXISTS AND DOESN'T MAKE MUCH SENSE
+
+// QUESTION: Can't we use dinamically allocated AbsDeps and use their pointers as keys
+// And so use an actual unordered_map instead of a map
+// BUGS:
+// hedc does not seem to stop
+
 // WAIT EXTRA BEHAVIOUR(OF RELEASING THE LOCK BEFORE SLEEP AND ACQUIRING IT UPON WAKING)
 //      ARE HANDLED in convert_2_std from their artifact
 // COND_VAR_ID = -LOCK_ID (the conversion is done here, not in the trace)
@@ -188,18 +203,21 @@ int main(int argc, char *argv[]) {
     Logger::print(log_file, "----Trace info----");
     trace_parser.print_summary(log_file);
     event_handler.print_summary(log_file);
+    // fflush(log_file);
    
-    event_handler.print_abs_deps();
-    Logger::print_dash_line();
-    event_handler.print_neigh_list();
+    // event_handler.print_abs_deps();
+    // Logger::print_dash_line();
+    // event_handler.print_neigh_list();
 
     auto end = std::chrono::system_clock::now();
     auto millis_passed_parse_trace = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
     CycleEnumerator cycle_enumerator(event_handler.graph_view);
     cycle_enumerator.enum_cycles();
+    // cycle_enumerator.print_info();
     Logger::print(log_file, "num cycles: {}", cycle_enumerator.res_cycles.size());
-    Logger::print(LogType::INFO, "num cycles: {}", cycle_enumerator.res_cycles.size());
+    // Logger::print(LogType::INFO, "num cycles: {}", cycle_enumerator.res_cycles.size());
+    // fflush(log_file);
 
     end = std::chrono::system_clock::now();
     auto millis_passed_cycle_enum = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
@@ -215,8 +233,9 @@ int main(int argc, char *argv[]) {
     }
 
     Logger::print(log_file, "num abstract: {}", abs_dlk_cycles_ind.size());
-    Logger::print(LogType::INFO, "num abstract: {}", abs_dlk_cycles_ind.size());
+    // Logger::print(LogType::INFO, "num abstract: {}", abs_dlk_cycles_ind.size());
     Logger::print(log_file, "num concrete: -1\n"); // Just to match the format
+    // fflush(log_file);
     
     end = std::chrono::system_clock::now();
     auto millis_passed_abs_dlk_check = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
@@ -228,6 +247,7 @@ int main(int argc, char *argv[]) {
             real_dlk_count += 1;
             auto dlk_info = dlk_info_opt.value();
             Logger::print(log_file, "Deadlock found on cycle: {}", dlk_info);
+            // fflush(log_file);
         }
     }
 
@@ -235,7 +255,7 @@ int main(int argc, char *argv[]) {
     auto millis_passed_sync_pres_check = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
     
     Logger::print(log_file, "\nnum deadlocks: {}", real_dlk_count);
-    Logger::print(LogType::INFO, "num deadlocks: {}", real_dlk_count);
+    // Logger::print(LogType::INFO, "num deadlocks: {}", real_dlk_count);
 
     Logger::print(log_file, "Time for parsing and graph construction = {} milliseconds", millis_passed_parse_trace);
     Logger::print(log_file, "Time for cycle enumeration = {} milliseconds", millis_passed_cycle_enum - millis_passed_parse_trace);
