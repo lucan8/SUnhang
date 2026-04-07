@@ -12,7 +12,7 @@ struct CycleEnumerator{
     
     // Helper structures for the actual cycle algorithm
     std::unordered_set<NodeConstItT, IteratorHasher, IteratorHasher> blocked_nodes;
-    std::unordered_map<NodeConstItT, NodeSetT, IteratorHasher, IteratorHasher> rec_block_map;
+    std::unordered_map<NodeConstItT, NodeUSetT, IteratorHasher, IteratorHasher> rec_block_map;
     NodeChainT stack;
     MinSCC curr_min_scc;
     

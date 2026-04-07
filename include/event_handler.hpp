@@ -18,7 +18,8 @@ struct EventHandler{
   std::unordered_map<ResourceIdT, VectorClock> last_write;
 
   // Intermediary step that helps to build the neighbour list of the graph
-  std::unordered_map<ResourceIdT, NodeChainT> lock_dep_map;
+  // std::unordered_map<ResourceIdT, NodeChainT> lock_dep_map;
+   std::unordered_map<ResourceIdT, NodeUSetT> lock_dep_map;
 
   // Statistical info
   uint32_t acq_count = 0;
@@ -41,6 +42,7 @@ struct EventHandler{
 
   // Helper function that creates (and adds) a new dependency to the graph
   NodeConstItT create_dep(ThreadIdT tid, ResourceIdT desired_res, const LocksetT& lockset, const Event& evt);
+  NodeConstItT update_dep(NodeConstItT old_dep, ResourceIdT new_res);
 
   void build_neigh_list();
 

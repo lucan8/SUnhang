@@ -20,7 +20,7 @@ struct AbsDepInfo{
 
 // Contains the strongly connected component as an unordered_set of nodes(subgraph) and a pointer to the minimum node 
 struct MinSCC{
-    NodeSetT nodes;
+    NodeUSetT nodes;
     NodeConstItT min_node;
     NodeConstItT sentinel_node;
 

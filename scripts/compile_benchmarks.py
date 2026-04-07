@@ -8,7 +8,7 @@ root_path = "benchmarks/generated/"
 out_files_base = f"{root_path}/output"
 bench_in_path = f"{root_path}/data"
 
-predictors = ["SPD", "SUnhang1", "SUnhang2", "SUnhang3", "SUnhang4", "SUnhang5"]
+predictors = ["SPD", "SUnhang1", "SUnhang2", "SUnhang3"]
 mini_columns = ["dep", "cyc", "abs", "dlk", "time"]
 # ignored_bench = set(["eclipse", "jigsaw"])
 # THIS SHOULD NOT BE IGNORED IN THE FUTURE!
@@ -114,7 +114,7 @@ def get_df_rows(is_spd_pred: bool) -> dict[str, list[int]]:
         bench_name = out_bench_path.stem.split("_")[0]
         if bench_name in ignored_bench:
             continue
-
+        
         row = []
 
         for i, out_pred_path in enumerate(out_bench_path.iterdir()):
@@ -170,7 +170,7 @@ def save_latex(df: pd.DataFrame):
     )
     latex_table = "\\resizebox{\\textwidth}{!}{\n" + latex_table + "}\n"
     
-    table_out_path = Path(root_path) / "tables" / "optimization.tex"
+    table_out_path = Path(root_path) / "tables" / "main.tex"
     os.makedirs(table_out_path.parent, exist_ok=True)
     table_out_path.write_text(latex_table, encoding="utf-8")
     print(f"[INFO]: Saved table to {table_out_path}")

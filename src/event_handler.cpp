@@ -63,18 +63,17 @@ void EventHandler::wait_event(const EventInfo& evt_info) {
     ThreadInfo& th_info = thread_map[evt_info.thread_id];
 
     // TODO: CALLING WAIT AS A SINGLE THREAD IS PLAIN STUPID, PROBABLY SHOULD PRINT AN ERROR
-    // TODO: CALLING WAIT WITH AN EMPTY LOCKSET IS EVEN WORSE, SHOULD PROBABLY PRINT AN ERROR
-    if (th_info.u_reen_lockset.empty() || thread_map.size() <= 1)
+    if (thread_map.size() <= 1)
         return;
     
-    // If lockset only has associated lock for cond_var add it to the recent statuses
-    if (th_info.u_reen_lockset.contains_only(get_ass_sync_obj(evt_info.target))){
-        th_info.recent_sync_status_arr.push(evt_info.target);
+    // If lockset is empty add it to the recent statuses
+    if (th_info.u_reen_lockset.empty()){
+        th_info.recent_sync_status_cont.push(evt_info.target);
     }
     else{ // Else create a new dep and add it as a recent status
         Event evt = Event(th_info.vec_clock, evt_info.line, evt_info.src_loc);
         NodeConstItT dep = create_dep(evt_info.thread_id, evt_info.target, th_info.u_reen_lockset.to_lockset(), evt);
-        th_info.recent_sync_status_arr.push(dep);
+        th_info.recent_sync_status_cont.push(dep);
     }
 }
 
@@ -89,41 +88,40 @@ void EventHandler::notify_event(const EventInfo& evt_info) {
         return;
     
     RecentSyncStatusArrT new_arr;
-    RecentSyncStatusArrT& curr_arr = th_info.recent_sync_status_arr;
+    RecentSyncStatusContT& curr_cont = th_info.recent_sync_status_cont;
+    const RecentSyncStatusArrT& curr_arr = curr_cont._circ_arr_statuses;
 
     for (auto it = curr_arr.begin(); it != curr_arr.end(); it = curr_arr.next(it)){
-        auto sync_status = *it;
-        if (std::holds_alternative<ResourceIdT>(sync_status)) {
-            Event evt = Event(th_info.vec_clock, evt_info.line, evt_info.src_loc);
+        auto& sync_status = *it;
 
+        // Sync status is just a resource(first level locks/cond_vars)
+        if (std::holds_alternative<ResourceIdT>(sync_status)) {
             ResourceIdT res_id = std::get<ResourceIdT>(sync_status);
-            LocksetT lockset;
-            NodeConstItT new_dep;
             
-            // Create dep from lock to cond var if it is not the associated lock(if so it is ignored)
-            if (res_id != get_ass_sync_obj(evt_info.target)){
-                lockset.insert(evt_info.target);
-                NodeConstItT new_dep = create_dep(evt_info.thread_id, res_id, lockset, evt);
+            // Ignore assoicated lock
+            if (res_id == get_ass_sync_obj(evt_info.target)){
+                continue;
             }
+            
+            // Set event and lockset containing the cond vaar
+            Event evt = Event(th_info.vec_clock, evt_info.line, evt_info.src_loc);
+            LocksetT lockset;
+            lockset.insert(evt_info.target);
             
             // Add the new dependency to the new recent statuses array
             // QUESTION: WHY NOT JUST SET INSTEAD OF PUSH
+            NodeConstItT new_dep = create_dep(evt_info.thread_id, res_id, lockset, evt);
             new_arr.push(new_dep);
-        } else if (std::holds_alternative<NodeConstItT>(sync_status)) {
-            // Get old dep
-            NodeConstItT ptr = std::get<NodeConstItT>(sync_status);
-            auto node_handle = graph_view.graph.abs_deps_map.extract(ptr);
-            
-            // Add the cond_var to the lockset and re-insert
-            node_handle.key().lockset.insert(evt_info.target);
-            auto new_dep = graph_view.graph.abs_deps_map.insert(std::move(node_handle));
+        } else if (std::holds_alternative<NodeConstItT>(sync_status)) { // Sync status is a dep
+            NodeConstItT old_dep_it = std::get<NodeConstItT>(sync_status);
+            NodeConstItT new_dep_it = update_dep(old_dep_it, evt_info.target);
 
             // Update the status with the new dep
-            sync_status = new_dep.position;
+            curr_cont.unsafe_set(it, new_dep_it);
         }
     }
 
-    curr_arr.merge_into(new_arr);
+    curr_cont.merge_into(new_arr);
 }
 
 void EventHandler::acquire_event(const EventInfo& evt_info) {
@@ -135,11 +133,12 @@ void EventHandler::acquire_event(const EventInfo& evt_info) {
 
     // Single threaded or first level lock -> no dep, only status
     if (th_info.u_reen_lockset.empty() || thread_map.size() <= 1){
-        th_info.recent_sync_status_arr.push(evt_info.target);
+        th_info.recent_sync_status_cont.push(evt_info.target);
     }
     else{ // otherwise both
         NodeConstItT dep = create_dep(evt_info.thread_id, evt_info.target, th_info.u_reen_lockset.to_lockset(), evt);
-        th_info.recent_sync_status_arr.push(dep);
+        // Logger::print(LogType::NONE, "{}", dep->first);
+        th_info.recent_sync_status_cont.push(dep);
     }
 
     // Add ev to critical section history and add lock to lockset
@@ -175,6 +174,28 @@ void EventHandler::join_event(const EventInfo& evt_info) {
     th_info.vec_clock.merge_into(target_info.vec_clock);
 }
 
+NodeConstItT EventHandler::update_dep(NodeConstItT old_dep, ResourceIdT new_res){ 
+    // Get old dep
+    auto node_handle = graph_view.graph.abs_deps_map.extract(old_dep);
+    
+    // Add the new resource to the lockset and re-insert
+    node_handle.key().lockset.insert(new_res);
+    auto new_dep = graph_view.graph.abs_deps_map.insert(std::move(node_handle));
+
+    auto new_dep_it = new_dep.position;
+
+    // Update with lock_dep_map with the new iterator
+    for (auto res : old_dep->first.lockset){
+        lock_dep_map[res].erase(old_dep);
+        lock_dep_map[res].insert(new_dep_it);
+    }
+
+    // Add new_res to the lock_dep_map
+    lock_dep_map[new_res].insert(new_dep_it);
+
+    return new_dep_it;
+}
+
 NodeConstItT EventHandler::create_dep(ThreadIdT tid, ResourceIdT desired_res, const LocksetT& lockset,
                                const Event& evt){
     // Create abstract dependency and add it's instance to the vector
@@ -185,7 +206,7 @@ NodeConstItT EventHandler::create_dep(ThreadIdT tid, ResourceIdT desired_res, co
     // Locks from lockset should point to this dependency
     if (inserted)
         for (const auto lock : lockset)
-            lock_dep_map[lock].push_back(it);
+            lock_dep_map[lock].insert(it);
     
     return it;
 }

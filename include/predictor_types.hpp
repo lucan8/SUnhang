@@ -233,6 +233,8 @@ struct StdIdMap{
 
 };
 
+// TODO: Clear it from time to time
+// TODO: Should probaly put checks to not go below 0!
 struct UReentrantLocksetT{
   std::unordered_map<ResourceIdT, int> _u_lock_map;
   int global_cnt;
@@ -252,15 +254,26 @@ struct UReentrantLocksetT{
   }
 
   bool contains(ResourceIdT lock_id) const{
-    return _u_lock_map.find(lock_id) != _u_lock_map.end();
+    auto it = _u_lock_map.find(lock_id);
+    return _contains(it);
   }
 
   bool contains_only(ResourceIdT lock_id) const{
-    return size() == 1 && contains(lock_id);
+    auto it = _u_lock_map.find(lock_id);
+    if (!_contains(it)){
+      return false;
+    }
+
+    return global_cnt == it->second;
   }
 
+  // Returns the number of locks with a count > 0
   size_t size() const{
-    return _u_lock_map.size();
+    size_t res = 0;
+    for (const auto& [lock, cnt] : _u_lock_map){
+      res += cnt > 0;
+    }
+    return res;
   }
 
   bool empty() const{
@@ -279,6 +292,10 @@ struct UReentrantLocksetT{
     return result;
   }
 
+  // Check that the iterator is valid and has a counter > 0
+  bool _contains(std::unordered_map<ResourceIdT, int>:: const_iterator it) const{
+    return it != _u_lock_map.end() && it->second > 0;
+  }
 };
 
 struct AbsDependency{
@@ -322,8 +339,62 @@ struct std::formatter<AbsDependency> : std::formatter<std::string> {
 using SyncStatusT = std::variant<NodeConstItT, ResourceIdT>;
 using RecentSyncStatusArrT = CircularArr<SyncStatusT, 8>;
 
+// Custom hasher for SyncStatus
+//TODO: Can't this have collisions?
+struct SyncStatusHash {
+  std::size_t operator()(const SyncStatusT& sync_status) const {
+    if (std::holds_alternative<ResourceIdT>(sync_status)) {
+        return std::hash<ResourceIdT>{}(std::get<ResourceIdT>(sync_status));
+    }
+
+    return IteratorHasher()(std::get<NodeConstItT>(sync_status));
+  }
+};
+
+struct RecentSyncStatusContT{
+  RecentSyncStatusArrT _circ_arr_statuses;
+  std::unordered_set<SyncStatusT, SyncStatusHash> _u_set_statuses;
+
+  void push(const SyncStatusT& sync_status){
+    // Don't push already existing sync statuses
+    if (_u_set_statuses.find(sync_status) != _u_set_statuses.end()){
+      return;
+    }
+
+    auto erased_elem_opt = _circ_arr_statuses.push(sync_status);
+    update_u_map(erased_elem_opt, sync_status);
+  }
+
+  // Use only when you are sure circ_arr_pos is valid(usually when iterating)
+  void unsafe_set(RecentSyncStatusArrT::const_iterator circ_arr_pos, const SyncStatusT& sync_status){
+    auto erased_elem_opt = _circ_arr_statuses.unsafe_set(circ_arr_pos, sync_status);
+    update_u_map(erased_elem_opt, sync_status);
+  }
+
+  void set(RecentSyncStatusArrT::const_iterator circ_arr_pos, const SyncStatusT& sync_status){
+    auto erased_elem_opt = _circ_arr_statuses.set(circ_arr_pos, sync_status);
+    update_u_map(erased_elem_opt, sync_status);
+  }
+
+  void update_u_map(std::optional<SyncStatusT> erased_elem_opt, const SyncStatusT& inserted_elem){
+    _u_set_statuses.insert(inserted_elem);
+    
+    if (erased_elem_opt.has_value()){
+      _u_set_statuses.erase(erased_elem_opt.value());
+    }
+  }
+
+  // Merges new_recent_statuses into _circ_arr_statuses
+  void merge_into(const RecentSyncStatusArrT& new_recent_statuses){
+    for (auto it = new_recent_statuses.begin(); it != new_recent_statuses.end(); it = new_recent_statuses.next(it)){
+        this->push(*it);
+    }
+  }
+};
+
+
 struct ThreadInfo{
   UReentrantLocksetT u_reen_lockset;
-  RecentSyncStatusArrT recent_sync_status_arr;
+  RecentSyncStatusContT recent_sync_status_cont;
   VectorClock vec_clock;
 };
