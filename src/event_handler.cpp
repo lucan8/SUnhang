@@ -175,23 +175,37 @@ void EventHandler::join_event(const EventInfo& evt_info) {
 }
 
 NodeConstItT EventHandler::update_dep(NodeConstItT old_dep, ResourceIdT new_res){ 
+    // Nothing to update here
+    if (old_dep->first.lockset.find(new_res) != old_dep->first.lockset.end()){
+        return old_dep;
+    }
+
     // Get old dep
     auto node_handle = graph_view.graph.abs_deps_map.extract(old_dep);
     
     // Add the new resource to the lockset and re-insert
     node_handle.key().lockset.insert(new_res);
     auto new_dep = graph_view.graph.abs_deps_map.insert(std::move(node_handle));
-
     auto new_dep_it = new_dep.position;
+    node_handle = std::move(new_dep.node);
 
-    // Update with lock_dep_map with the new iterator
-    for (auto res : old_dep->first.lockset){
-        lock_dep_map[res].erase(old_dep);
-        lock_dep_map[res].insert(new_dep_it);
+    // Dependency already exists? Add the new events to the list
+    if (!new_dep.inserted){
+        new_dep.position->second.append_range(node_handle.mapped());
+        // Remove the old_dep mappings
+        for (auto res : old_dep->first.lockset){
+            lock_dep_map[res].erase(old_dep);
+        }
     }
-
-    // Add new_res to the lock_dep_map
-    lock_dep_map[new_res].insert(new_dep_it);
+    else{
+        // Update with lock_dep_map with the new iterator only if there is a new iterator
+        for (auto res : old_dep->first.lockset){
+            lock_dep_map[res].erase(old_dep);
+            lock_dep_map[res].insert(new_dep_it);
+        }
+        // Add new_res to the lock_dep_map
+        lock_dep_map[new_res].insert(new_dep_it);
+    }
 
     return new_dep_it;
 }

@@ -268,7 +268,6 @@ struct CircularArr{
         return self._arr.begin() + self._start;
     }
 
-    
     template <typename Self>
     auto last(this Self&& self) {
         // Empty? return begin

@@ -4,15 +4,15 @@ import itertools
 import os
 from copy import deepcopy
 
-root_path = "benchmarks/generated/"
+root_path = "benchmarks/cond_var/"
 out_files_base = f"{root_path}/output"
 bench_in_path = f"{root_path}/data"
 
-predictors = ["SPD", "SUnhang1", "SUnhang2", "SUnhang3"]
+predictors = ["SPD", "SUnhang"]
 mini_columns = ["dep", "cyc", "abs", "dlk", "time"]
 # ignored_bench = set(["eclipse", "jigsaw"])
 # THIS SHOULD NOT BE IGNORED IN THE FUTURE!
-ignored_bench = set(["dead-th-fp", "cond-var-fn", "cond-var-fp", "cond-var-tn", "MyHashMap", "dead"])
+ignored_bench = set([])
 
 def from_log_file_SPD(file_path: Path) -> list:
     file = open(file_path, 'r')
@@ -111,7 +111,7 @@ def get_df_rows(is_spd_pred: bool) -> dict[str, list[int]]:
         if out_bench_path.is_file():
             continue
         
-        bench_name = out_bench_path.stem.split("_")[0]
+        bench_name = out_bench_path.stem
         if bench_name in ignored_bench:
             continue
         

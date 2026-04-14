@@ -353,11 +353,13 @@ struct SyncStatusHash {
 
 struct RecentSyncStatusContT{
   RecentSyncStatusArrT _circ_arr_statuses;
+  // maps a sync status to an index in _circ_arr_statuses for later easier removal
   std::unordered_set<SyncStatusT, SyncStatusHash> _u_set_statuses;
 
   void push(const SyncStatusT& sync_status){
     // Don't push already existing sync statuses
-    if (_u_set_statuses.find(sync_status) != _u_set_statuses.end()){
+    auto old_status = _u_set_statuses.find(sync_status);
+    if (old_status != _u_set_statuses.end()){
       return;
     }
 

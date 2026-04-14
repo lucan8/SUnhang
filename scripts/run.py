@@ -4,8 +4,8 @@ import optparse
 import subprocess
 from pathlib import Path
 
-out_files_base = "benchmarks/generated/output_SUnhang"
-bench_in_path = "benchmarks/generated/data"
+out_files_base = "benchmarks/cond_var/output_SUnhang"
+bench_in_path = "benchmarks/cond_var/data"
 predictor1 = "SUnhang_no_1_lev_locks-no_dead_th_fp"
 predictor2 = "SUnhang_no_1_lev_locks-no_dead_th_fp-no_1_th_ev"
 predictor3 = "SUnhang_no_1_lev_locks-no_dead_th_fp-no_1_th_rw-reen_locks"
