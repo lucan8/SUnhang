@@ -4,8 +4,9 @@
 from pathlib import Path
 import os
 import shutil
+import sys
 
-bench_in_path = "benchmarks/generated/data"
+bench_in_path = "benchmarks/extra/data"
 bench_out_path = "benchmarks/generated/output_SUnhang"
 
 def print_summary(trace_file_path: Path):
@@ -46,3 +47,15 @@ def cleanup_old_predictors():
             if predictor not in keep:
                 print(f"    Removing {predictor}...")
                 shutil.rmtree(predictor_dir)
+
+def main():
+    opt = sys.argv[1]
+    match opt:
+        case "cv_summ":
+            print_summary_for_wait_notify_benchmarks()
+        case "clean_old_pred":
+            cleanup_old_predictors()
+        case _:
+            print("Invalid option")
+
+main()
