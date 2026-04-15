@@ -1,3 +1,7 @@
+//COND VAR PROBLEMS:
+
+// 1. Double dependency in recent status due to unsafe_set 
+
 //COND VAR OBSERVATIONS:
 
 // AUTHOR IMPLEMENTATION QUESTIONS:
@@ -9,11 +13,6 @@
 //2. 
 // THE DEPENDENCY ASSOC_LOCK -> COND_VAR ALSO EXISTS AND DOESN'T MAKE MUCH SENSE
 
-// QUESTION: Can't we use dinamically allocated AbsDeps and use their pointers as keys
-// And so use an actual unordered_map instead of a map
-// BUGS:
-// hedc does not seem to stop
-
 // WAIT EXTRA BEHAVIOUR(OF RELEASING THE LOCK BEFORE SLEEP AND ACQUIRING IT UPON WAKING)
 //      ARE HANDLED in convert_2_std from their artifact
 // COND_VAR_ID = -LOCK_ID (the conversion is done here, not in the trace)
@@ -24,11 +23,6 @@
 
 // Currently inefficient because it removes and adds deps back due to new cond_vars appearing
 // We need to update fast, preferably without removing and have an order only at the end
-
-// STEPS:
-// 1. handle_wait: creates a new dep without changing the critical section
-// 2. handle_notify: adds the cond_var to the locksets of earlier deps
-// 3. cycle_check: is_valid_neigh should allow an intersection that contains only cond_vars
 
 // StdIdMap has counters starting at 1 because of the id and -id lock and cond_var hack
 // IMPORTANT: IS THE PREDECESSOR JUST thread_epoch - 1?
