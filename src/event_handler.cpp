@@ -87,8 +87,9 @@ void EventHandler::notify_event(const EventInfo& evt_info) {
     if (th_info.u_reen_lockset.empty() || thread_map.size() <= 1)
         return;
     
-    auto rec_sync_status_cont = th_info.recent_sync_status_cont;
-    auto container = rec_sync_status_cont.container;
+    auto& rec_sync_status_cont = th_info.recent_sync_status_cont;
+    auto& container = rec_sync_status_cont.container;
+    RecentSyncStatusContT new_rec_sync_status_cont;
 
     for (auto it = container.begin(); it != container.end(); ++it){
         auto& sync_status = it->data.value();
@@ -109,15 +110,16 @@ void EventHandler::notify_event(const EventInfo& evt_info) {
             
             // Add the new dependency to the new recent statuses array
             NodeConstItT new_dep = create_dep(evt_info.thread_id, res_id, lockset, evt);
-            rec_sync_status_cont.unsafe_set(it, new_dep);
+            new_rec_sync_status_cont.push(new_dep);
         } else if (std::holds_alternative<NodeConstItT>(sync_status)) { // Sync status is a dep
-            NodeConstItT old_dep_it = std::get<NodeConstItT>(sync_status);
-            NodeConstItT new_dep_it = update_dep(old_dep_it, evt_info.target);
+            NodeConstItT old_dep = std::get<NodeConstItT>(sync_status);
+            NodeConstItT new_dep = update_dep(old_dep, evt_info.target);
 
-            // Update the status with the new dep
-            rec_sync_status_cont.unsafe_set(it, new_dep_it);
+            new_rec_sync_status_cont.push(new_dep);
         }
     }
+
+    th_info.recent_sync_status_cont = std::move(new_rec_sync_status_cont);
 }
 
 void EventHandler::acquire_event(const EventInfo& evt_info) {

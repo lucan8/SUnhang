@@ -328,8 +328,9 @@ struct CircularList {
     }
 
     // Makes the element at target_idx be the newest
-    // Assumes target_idx is valid and that there are at least 2 elements in the container
+    // Assumes target_idx is valid
     void unsafe_update(int target_idx){
+        // Updating the last element doesn't do anything
         if (target_idx == tail){
             return;
         }
@@ -357,17 +358,20 @@ struct CircularList {
 
     template <typename Self>
     auto begin(this Self&& self) {
-        return IteratorBase<std::is_const_v<Self>>(self.nodes.data(), self.head); 
+        constexpr bool is_const = std::is_const_v<std::remove_reference_t<Self>>;
+        return IteratorBase<is_const>(self.nodes.data(), self.head); 
     }
 
     template <typename Self>
     auto end(this Self&& self) {
-        return IteratorBase<std::is_const_v<Self>>(self.nodes.data(), nullptr); 
+        constexpr bool is_const = std::is_const_v<std::remove_reference_t<Self>>;
+        return IteratorBase<is_const>(self.nodes.data(), nullptr); 
     }
 
     template <typename Self>
     auto last(this Self&& self) {
-        return IteratorBase<std::is_const_v<Self>>(self.nodes.data(), self.tail); 
+        constexpr bool is_const = std::is_const_v<std::remove_reference_t<Self>>;
+        return IteratorBase<is_const>(self.nodes.data(), self.tail); 
     }
 
     bool full() const{
@@ -427,7 +431,6 @@ struct CircularLRU{
         idx_umap.erase(old_value);
         idx_umap.insert({new_value, target_idx}); 
     }
-    
 };
 
 // Generic struct used for pointer comparison
