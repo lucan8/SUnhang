@@ -87,12 +87,11 @@ void EventHandler::notify_event(const EventInfo& evt_info) {
     if (th_info.u_reen_lockset.empty() || thread_map.size() <= 1)
         return;
     
-    RecentSyncStatusArrT new_arr;
-    RecentSyncStatusContT& curr_cont = th_info.recent_sync_status_cont;
-    const RecentSyncStatusArrT& curr_arr = curr_cont._circ_arr_statuses;
+    auto rec_sync_status_cont = th_info.recent_sync_status_cont;
+    auto container = rec_sync_status_cont.container;
 
-    for (auto it = curr_arr.begin(); it != curr_arr.end(); it = curr_arr.next(it)){
-        auto& sync_status = *it;
+    for (auto it = container.begin(); it != container.end(); ++it){
+        auto& sync_status = it->data.value();
 
         // Sync status is just a resource(first level locks/cond_vars)
         if (std::holds_alternative<ResourceIdT>(sync_status)) {
@@ -103,25 +102,22 @@ void EventHandler::notify_event(const EventInfo& evt_info) {
                 continue;
             }
             
-            // Set event and lockset containing the cond vaar
+            // Set event and lockset containing the cond var
             Event evt = Event(th_info.vec_clock, evt_info.line, evt_info.src_loc);
             LocksetT lockset;
             lockset.insert(evt_info.target);
             
             // Add the new dependency to the new recent statuses array
-            // QUESTION: WHY NOT JUST SET INSTEAD OF PUSH
             NodeConstItT new_dep = create_dep(evt_info.thread_id, res_id, lockset, evt);
-            new_arr.push(new_dep);
+            rec_sync_status_cont.unsafe_set(it, new_dep);
         } else if (std::holds_alternative<NodeConstItT>(sync_status)) { // Sync status is a dep
             NodeConstItT old_dep_it = std::get<NodeConstItT>(sync_status);
             NodeConstItT new_dep_it = update_dep(old_dep_it, evt_info.target);
 
             // Update the status with the new dep
-            curr_cont.unsafe_set(it, new_dep_it);
+            rec_sync_status_cont.unsafe_set(it, new_dep_it);
         }
     }
-
-    curr_cont.merge_into(new_arr);
 }
 
 void EventHandler::acquire_event(const EventInfo& evt_info) {

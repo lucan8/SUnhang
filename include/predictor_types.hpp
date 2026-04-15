@@ -84,8 +84,8 @@ struct Event{
   TracePosT tr_pos;
   SrcLocT src_loc;
   
-  Event(VectorClock vc, TracePosT tr_pos, SrcLocT src_loc) 
-    : vc(std::move(vc)), tr_pos(tr_pos), src_loc(src_loc) {}
+  Event(const VectorClock& vc, TracePosT tr_pos, SrcLocT src_loc) 
+    : vc(vc), tr_pos(tr_pos), src_loc(src_loc) {}
   
   Event(){}
 
@@ -337,7 +337,6 @@ struct std::formatter<AbsDependency> : std::formatter<std::string> {
 };
 
 using SyncStatusT = std::variant<NodeConstItT, ResourceIdT>;
-using RecentSyncStatusArrT = CircularArr<SyncStatusT, 8>;
 
 // Custom hasher for SyncStatus
 //TODO: Can't this have collisions?
@@ -351,49 +350,7 @@ struct SyncStatusHash {
   }
 };
 
-struct RecentSyncStatusContT{
-  RecentSyncStatusArrT _circ_arr_statuses;
-  // maps a sync status to an index in _circ_arr_statuses for later easier removal
-  std::unordered_set<SyncStatusT, SyncStatusHash> _u_set_statuses;
-
-  void push(const SyncStatusT& sync_status){
-    // Don't push already existing sync statuses
-    auto old_status = _u_set_statuses.find(sync_status);
-    if (old_status != _u_set_statuses.end()){
-      return;
-    }
-
-    auto erased_elem_opt = _circ_arr_statuses.push(sync_status);
-    update_u_map(erased_elem_opt, sync_status);
-  }
-
-  // Use only when you are sure circ_arr_pos is valid(usually when iterating)
-  void unsafe_set(RecentSyncStatusArrT::const_iterator circ_arr_pos, const SyncStatusT& sync_status){
-    auto erased_elem_opt = _circ_arr_statuses.unsafe_set(circ_arr_pos, sync_status);
-    update_u_map(erased_elem_opt, sync_status);
-  }
-
-  void set(RecentSyncStatusArrT::const_iterator circ_arr_pos, const SyncStatusT& sync_status){
-    auto erased_elem_opt = _circ_arr_statuses.set(circ_arr_pos, sync_status);
-    update_u_map(erased_elem_opt, sync_status);
-  }
-
-  void update_u_map(std::optional<SyncStatusT> erased_elem_opt, const SyncStatusT& inserted_elem){
-    _u_set_statuses.insert(inserted_elem);
-    
-    if (erased_elem_opt.has_value()){
-      _u_set_statuses.erase(erased_elem_opt.value());
-    }
-  }
-
-  // Merges new_recent_statuses into _circ_arr_statuses
-  void merge_into(const RecentSyncStatusArrT& new_recent_statuses){
-    for (auto it = new_recent_statuses.begin(); it != new_recent_statuses.end(); it = new_recent_statuses.next(it)){
-        this->push(*it);
-    }
-  }
-};
-
+using RecentSyncStatusContT = CircularLRU<SyncStatusT, 8, SyncStatusHash>;
 
 struct ThreadInfo{
   UReentrantLocksetT u_reen_lockset;
