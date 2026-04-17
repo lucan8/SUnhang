@@ -7,7 +7,7 @@ const std::unordered_map<std::string, EventsT> TraceParser::std_event_map = {
     {"r", EventsT::RD}, {"w", EventsT::WR},
     {"fork", EventsT::FORK}, {"join", EventsT::JOIN},
     {"acq", EventsT::LK}, {"rel", EventsT::UK},
-    {"wait", EventsT::WAIT}, {"notify", EventsT::NOTIFY}
+    {"wait", EventsT::WAIT}, {"notify", EventsT::NOTIFY}, {"notifyAll", EventsT::NOTIFYALL}
 };
 
 const char TraceParser::trace_sep = '|';
@@ -47,7 +47,7 @@ std::optional<EventInfo> TraceParser::from_std(const std::vector<std::string>& c
     else if(result.event_type == EventsT::LK || result.event_type == EventsT::UK) {  
         result.target = lock_id_map.get(target);
     }
-    else if(result.event_type == EventsT::WAIT || result.event_type == EventsT::NOTIFY) {  
+    else if(result.event_type == EventsT::WAIT || result.event_type == EventsT::NOTIFY || result.event_type == EventsT::NOTIFYALL) {  
         result.target = get_ass_sync_obj(lock_id_map.get(target));
     }
     else{

@@ -24,6 +24,9 @@ bool EventHandler::handle_event(const EventInfo& evt_info){
         case EventsT::NOTIFY:
             notify_event(evt_info);
             break;
+        case EventsT::NOTIFYALL:
+            notify_all_event(evt_info);
+            break;
         case EventsT::FORK:
             fork_event(evt_info);
             break;
@@ -120,6 +123,10 @@ void EventHandler::notify_event(const EventInfo& evt_info) {
     }
 
     th_info.recent_sync_status_cont = std::move(new_rec_sync_status_cont);
+}
+
+void EventHandler::notify_all_event(const EventInfo& evt_info){
+    notify_event(evt_info);
 }
 
 void EventHandler::acquire_event(const EventInfo& evt_info) {
@@ -294,6 +301,22 @@ void EventHandler::print_abs_deps(std::FILE* out_file) const{
 
     Logger::print(out_file, "Num deps: {}", graph_view.graph.abs_deps_map.size());
     Logger::print(out_file, "------------------------------------");
+}
+
+void EventHandler::print_comm_abs_deps() const{
+    Logger::print(LogType::DBG, "COMMUNICATION ABSTRACT DEPENDENCIES");
+    Logger::print(LogType::DBG, "------------------------------------");
+
+    size_t count = 0;
+    for (const auto& [dep, timestamps] : graph_view.graph.abs_deps_map){
+        if (is_cond_var(dep.resource_id)){
+            Logger::print(LogType::DBG, "{}: {}", dep, timestamps.size());
+            count += 1;
+       }
+    }
+
+    Logger::print(LogType::DBG, "Num deps: {}", count);
+    Logger::print(LogType::DBG, "------------------------------------");
 }
 
 void EventHandler::print_neigh_list(std::FILE* out_file) const{

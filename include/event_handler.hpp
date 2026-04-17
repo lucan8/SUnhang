@@ -24,7 +24,7 @@ struct EventHandler{
   // Statistical info
   uint32_t acq_count = 0;
 
-  // Calls handler  associated with evt_info.event_type
+  // Calls handler associated with evt_info.event_type
   // Return true if event if valid, false otherwise
   bool handle_event(const EventInfo& evt_info);
   
@@ -36,6 +36,7 @@ struct EventHandler{
   
   void wait_event(const EventInfo& evt_info);
   void notify_event(const EventInfo& evt_info);
+  void notify_all_event(const EventInfo& evt_info);
   
   void fork_event(const EventInfo& evt_info);
   void join_event(const EventInfo& evt_info);
@@ -47,6 +48,7 @@ struct EventHandler{
   void build_neigh_list();
 
   void print_abs_deps() const;
+  void print_comm_abs_deps() const;
   void print_lock_deps_map() const;
   void print_neigh_list() const;
 

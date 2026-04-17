@@ -1,9 +1,7 @@
 import rr.annotations.Abbrev;
 import rr.event.AccessEvent;
 import rr.event.AcquireEvent;
-import rr.event.AllocateEvent;
 import rr.event.JoinEvent;
-import rr.event.MethodEvent;
 import rr.event.NotifyEvent;
 import rr.event.ReleaseEvent;
 import rr.event.StartEvent;
@@ -12,12 +10,12 @@ import rr.tool.Tool;
 import acme.util.option.CommandLine;
 
 @Abbrev("STD")
-public class StdTraceTool extends Tool {
+public class StdInstrumentor extends Tool {
 
     // Synchronization lock to ensure console output doesn't interleave
     private static final Object printLock = new Object();
 
-    public StdTraceTool(String name, Tool next, CommandLine commandLine) {
+    public StdInstrumentor(String name, Tool next, CommandLine commandLine) {
         super(name, next, commandLine);
     }
 
@@ -28,7 +26,7 @@ public class StdTraceTool extends Tool {
             int lockId = System.identityHashCode(e.getLock().getLock());
             int iid = e.getInfo() != null ? e.getInfo().getId() : 0;
             
-            System.out.println(tid + "|acq(" + lockId + ")|" + iid);
+            System.out.println("T" + tid + "|acq(" + lockId + ")|" + iid);
         }
         super.acquire(e);
     }
@@ -40,7 +38,7 @@ public class StdTraceTool extends Tool {
             int lockId = System.identityHashCode(e.getLock().getLock());
             int iid = e.getInfo() != null ? e.getInfo().getId() : 0;
             
-            System.out.println(tid + "|rel(" + lockId + ")|" + iid);
+            System.out.println("T" + tid + "|rel(" + lockId + ")|" + iid);
         }
         super.release(e);
     }
@@ -53,14 +51,13 @@ public class StdTraceTool extends Tool {
             int iid = e.getAccessInfo() != null ? e.getAccessInfo().getId() : 0;
             
             if (e.isWrite()) {
-                System.out.println(tid + "|write(" + objId + ")|" + iid);
+                System.out.println("T" + tid + "|w(" + objId + ")|" + iid);
             } else {
-                System.out.println(tid + "|read(" + objId + ")|" + iid);
+                System.out.println("T" + tid + "|r(" + objId + ")|" + iid);
             }
         }
         super.access(e);
     }
-
 
     @Override
     public void preStart(StartEvent e) {
@@ -69,7 +66,7 @@ public class StdTraceTool extends Tool {
             int childTid = e.getNewThread().getTid();
             int iid = e.getInfo() != null ? e.getInfo().getId() : 0;
             
-            System.out.println(parentTid + "|fork(" + childTid + ")|" + iid);
+            System.out.println("T" + parentTid + "|fork(" + childTid + ")|" + iid);
         }
         super.preStart(e);
     }
@@ -81,7 +78,7 @@ public class StdTraceTool extends Tool {
             int childTid = e.getJoiningThread().getTid();
             int iid = e.getInfo() != null ? e.getInfo().getId() : 0;
             
-            System.out.println(parentTid + "|join(" + childTid + ")|" + iid);
+            System.out.println("T" + parentTid + "|join(" + childTid + ")|" + iid);
         }
         super.postJoin(e);
     }
@@ -94,8 +91,8 @@ public class StdTraceTool extends Tool {
             int iid = e.getInfo() != null ? e.getInfo().getId() : 0;
             
             // Release the lock, then wait
-            System.out.println(tid + "|rel(" + lockId + ")|" + iid);
-            System.out.println(tid + "|wait(" + lockId + ")|" + iid);
+            System.out.println("T" + tid + "|rel(" + lockId + ")|" + iid);
+            System.out.println("T" + tid + "|wait(" + lockId + ")|" + iid);
         }
         super.preWait(e);
     }
@@ -108,7 +105,7 @@ public class StdTraceTool extends Tool {
             int iid = e.getInfo() != null ? e.getInfo().getId() : 0;
             
             // Re-acquire the lock upon waking up
-            System.out.println(tid + "|acq(" + lockId + ")|" + iid);
+            System.out.println("T" + tid + "|acq(" + lockId + ")|" + iid);
         }
         super.postWait(e);
     }
@@ -118,12 +115,12 @@ public class StdTraceTool extends Tool {
         synchronized (printLock) {
             int tid = e.getThread().getTid();
             int lockId = System.identityHashCode(e.getLock().getLock());
-            int iid = e.getInfo() != null ? e.getInfo().getId() : 0;
+            int iid = 0;
             
             if (e.isNotifyAll()) {
-                System.out.println(tid + "|notifyAll(" + lockId + ")|" + iid);
+                System.out.println("T" + tid + "|notifyAll(" + lockId + ")|" + iid);
             } else {
-                System.out.println(tid + "|notify(" + lockId + ")|" + iid);
+                System.out.println("T" + tid + "|notify(" + lockId + ")|" + iid);
             }
         }
         super.preNotify(e);

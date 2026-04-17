@@ -35,7 +35,8 @@ enum class EventsT {
   LK = 5,
   UK = 6,
   WAIT = 7,
-  NOTIFY = 8
+  NOTIFY = 8,
+  NOTIFYALL = 9
 };
 
 // Formats EventsT
@@ -53,6 +54,7 @@ struct std::formatter<EventsT> : std::formatter<std::string> {
             case EventsT::UK: name = "rel"; break;
             case EventsT::WAIT: name = "wait"; break;
             case EventsT::NOTIFY: name = "notify"; break;
+            case EventsT::NOTIFYALL: name = "notifyAll"; break;
             default: name = "UNKNOWN"; break;
         }
         return formatter<std::string>::format(name, ctx);

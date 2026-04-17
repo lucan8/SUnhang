@@ -1,0 +1,13 @@
+services:
+  trace-gen:
+    build:
+      context: .
+    image: trace-gen
+    container_name: trace-gen
+    volumes:
+      - ./../traces:/app/traces
+      - ./../benchmarks_new:/app/benchmarks
+      - ./../trace_generator:/app/trace_generator
+    stdin_open: true
+    tty: true
+    command: bash

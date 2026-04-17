@@ -7,3 +7,5 @@ test.cpp
 .vscode/
 ideeas/
 *.tex
+vendor/
+*classes/
