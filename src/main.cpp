@@ -1,6 +1,8 @@
-//COND VAR PROBLEMS:
-
-// 1. Double dependency in recent status due to unsafe_set 
+//TODO:
+// TEST WITH TIMEOUT 60 OR MORE, ADD MEMORY ACCESSES BACK, CHECK PROGRAM EXITS AS WELL
+// WEIRD LUCENE BEHAVIOUR
+//1. IF WE RUN WITHOUT MEMORY ACCESSES WE FIND CYCLES, PATTERNS AND EVEN DEADLOCK
+//2. OTHERWISE NOTHING IS FOUND! THAT'S WRONG
 
 //COND VAR OBSERVATIONS:
 
@@ -44,21 +46,15 @@
 // SUnahng4: DBCP1 +1 dlk, JDBC-MYSQL4 +1 dlk
 
 // OBSERVATIONS/IMPROVEMENTS
-//1. SOLVED (MENTION IT IN THE PAPER)
-// Small mistake on their side, fork/join actually create fake thread entries in the maps
-// For example fork(18) will create an entry 18 : id, and T18 will create another one which is wrong!
-// They also seem to be counting acquires twice, this makes the benchmarks seem more impressive than they are
 
 //3. 
 // Another source of false positives appears because it can't track control flow
 
-//4.
-
-// Every lock will also have a read operation which is redundant
-
 //5.
 // Only looks at lock operations that use monitors(synchronized blocks)
 // And ignores explicit locking like using java.util.concurrent.locks.Lock;
+
+//7. Should proably do some form of garbage collection upon thread exits
 
 //IMPORTANT: Generic formatter for iterators
 //TODO: ERR REPORT FILE FOR BAD TRACES

@@ -50,7 +50,7 @@ bool CycleEnumerator::_enum_cycles(NodeConstItT node){
             }
         }
 
-        // Unblock node if cycle found, otherwise at it to the recursive block list of each neighbour
+        // Unblock node if cycle found, otherwise add it to the recursive block list of each neighbour
         if (cycle_on_curr_path){
             _unblock(node);
         }
@@ -65,8 +65,14 @@ bool CycleEnumerator::_enum_cycles(NodeConstItT node){
 }
 
 void CycleEnumerator::_unblock(NodeConstItT node){
+    // Nothing to unblock here
+    auto blocked_node_it = blocked_nodes.find(node);
+    if (blocked_node_it == blocked_nodes.end()){
+        return;
+    }
+
     // Unblock node
-    blocked_nodes.erase(node);
+    blocked_nodes.erase(blocked_node_it);
     auto block_neigh_list = rec_block_map.find(node);
 
     if (block_neigh_list == rec_block_map.end())

@@ -6,7 +6,7 @@ import os
 import shutil
 import sys
 
-bench_in_path = "benchmarks/extra/data"
+bench_in_path = "traces/vendor/jacontebe"
 bench_out_path = "benchmarks/generated/output_SUnhang"
 
 def print_summary(trace_file_path: Path):
@@ -14,18 +14,49 @@ def print_summary(trace_file_path: Path):
     wait_count = 0
     notify_count = 0
     broadcast_count = 0
+
+    wait_vars = set()
+    notif_vars = set()
+
     for line in open(trace_file_path, "r"):
-        if "wait" in line:
+        op = line.split("|")[1]
+        var = op[op.find("(") + 1:-1]
+        if "wait" in op:
             wait_count += 1
-        elif "notify" in line:
-            notify_count += 1
-        elif "broadcast" in line:
+            wait_vars.add(var)
+        elif "notifyAll" in op:
             broadcast_count += 1
+            notif_vars.add(var)
+        elif "notify" in op:
+            notify_count += 1
+            notif_vars.add(var)
 
         ev_count += 1
     
     if wait_count or notify_count or broadcast_count:
-        print(f"{trace_file_path.stem}: {wait_count} waits, {notify_count} notifies, {broadcast_count} broadcasts, {ev_count} events")
+        print(f"{trace_file_path.stem}:")
+        print(f"    {wait_count} waits, {notify_count} notifies, {broadcast_count} broadcasts, {ev_count} events")
+        print(f"    wait_vars: {wait_vars}, notif_vars: {notif_vars}")
+
+def print_th_last_op(trace_file_path: Path):
+    dic = {}
+    for line in open(trace_file_path, "r"):
+        tid = line.split("|")[0]
+        dic[tid] = line
+    
+    for tid, line in dic.items():
+        print(f"{tid}: {line}")
+
+def print_thread_op(tid: str, trace_file_path: Path, trace_out_path: Path):
+    out_file = open(trace_out_path, 'w')
+    last_line = ""
+    for line in open(trace_file_path, "r"):
+        if line.split("|")[0] == tid:
+            out_file.write(f"{line}")
+            last_line = line
+
+    print(f"Last line: {last_line}")
+    print(f"Saved to {trace_out_path}")
 
 def print_summary_for_wait_notify_benchmarks():
     global bench_in_path
@@ -55,6 +86,13 @@ def main():
             print_summary_for_wait_notify_benchmarks()
         case "clean_old_pred":
             cleanup_old_predictors()
+        case "print_tr_op":
+            tid = sys.argv[2]
+            in_trace_path = Path(bench_in_path) / f"{sys.argv[3]}.std"
+            out_trace_path = Path(bench_in_path) / f"{sys.argv[3]}_{tid}.std"
+            print_thread_op(tid, in_trace_path, out_trace_path)
+        case "print_last_op":
+            print_th_last_op(Path(bench_in_path) / f"{sys.argv[2]}.std")
         case _:
             print("Invalid option")
 
