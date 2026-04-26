@@ -4,8 +4,11 @@
 build/
 resources/
 test.cpp
+test.py
 .vscode/
 ideeas/
 *.tex
-vendor/
 *classes/
+bin/
+*.data
+benchmarks/vendor

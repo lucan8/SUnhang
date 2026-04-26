@@ -28,6 +28,15 @@ struct EventHandler{
   // Return true if event if valid, false otherwise
   bool handle_event(const EventInfo& evt_info);
   
+  void print_th_exit_with_locks(){
+    for (const auto& [tid, th_info] : thread_map){
+      LocksetT lockset = th_info.u_reen_lockset.to_lockset();
+      if (!lockset.empty()){
+        Logger::print(LogType::WARN, "Thread {} exited holding locks {}", tid, lockset);
+      }
+    }
+  }
+
   void read_event(const EventInfo& evt_info);
   void write_event(const EventInfo& evt_info);
 

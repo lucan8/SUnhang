@@ -4,16 +4,21 @@ import itertools
 import os
 from copy import deepcopy
 
-root_path = "benchmarks/cond_var/"
-out_files_base = f"{root_path}/output"
-bench_in_path = f"{root_path}/data"
+root_dir = Path(os.path.dirname(os.path.dirname(__file__))) / "benchmarks"
+bench_suite = "generated"
+bench_root_path = root_dir / bench_suite
 
-predictors = ["SPD", "SUnhang"]
+out_files_base = bench_root_path / "output"
+bench_in_path = bench_root_path / "data"
+
+spdoffline_name, sunhang_name = "SPDOffline", "SUnhang"
+predictors = [spdoffline_name, sunhang_name]
 mini_columns = ["dep", "cyc", "abs", "dlk", "time"]
+
 # ignored_bench = set(["eclipse", "jigsaw"])
 # THIS SHOULD NOT BE IGNORED IN THE FUTURE!
 ignored_bench = set([])
-
+    
 def from_log_file_SPD(file_path: Path) -> list:
     file = open(file_path, 'r')
     dic = {}
@@ -22,7 +27,7 @@ def from_log_file_SPD(file_path: Path) -> list:
     if not line:
         return [0] * 5
     
-    # Skip first  lines
+    # Skip first lines
     for i in range(6):
         file.readline()
 
@@ -70,22 +75,18 @@ def from_log_file_SUnhang(file_path: Path) -> list:
         if split_line[0] == "num deadlocks":
             dic["dlk"] = int(split_line[1])
             break
-    
-    # Aggregate the next 4 lines
-    agg_time = 0
-    for i in range(4):
-        line = file.readline()
-        agg_time += int(line.split(" = ")[1].split()[0])
 
-    dic["time"] = agg_time / 1000 # Convert to seconds
+    # Skip until end
+    for line in file:
+        pass
+
+    dic["time"] = float(line.strip())
     
     return list(dic.values())
 
-def from_log_file(file_path: Path, is_spd_pred: bool) -> list:
-    if is_spd_pred:
-        return from_log_file_SPD(file_path)
-    
-    return from_log_file_SUnhang(file_path)
+log_conv_func = {spdoffline_name : from_log_file_SPD, sunhang_name: from_log_file_SUnhang}
+def from_log_file(file_path: Path, pred: str) -> list:
+    return log_conv_func[pred](file_path)
 
 def get_df_col():
     global predictors, mini_columns
@@ -98,13 +99,10 @@ def get_df_col():
     print(f"[INFO]: Compiled {len(columns)} columns!")
     return columns
 
-def get_df_rows(is_spd_pred: bool) -> dict[str, list[int]]:
+def get_df_rows(pred: str) -> dict[str, list[int]]:
     global out_bench_path, out_files_base
 
-    if is_spd_pred:
-        out_files = out_files_base + "_SPD"
-    else:
-        out_files = out_files_base + "_SUnhang"
+    out_files = out_files_base
 
     rows = {}
     for out_bench_path in Path(out_files).iterdir():
@@ -117,13 +115,12 @@ def get_df_rows(is_spd_pred: bool) -> dict[str, list[int]]:
         
         row = []
 
-        for i, out_pred_path in enumerate(out_bench_path.iterdir()):
-            info = from_log_file(out_pred_path / "log.txt", is_spd_pred)
-            row.extend(info)
+        info = from_log_file(out_bench_path / pred / "log.txt", pred)
+        row.extend(info)
         
         rows[bench_name] = row
     
-    print(f"[INFO]: Compiled {len(rows)} rows({"spd" if is_spd_pred else "SUnhang"})!")
+    print(f"[INFO]: Compiled {len(rows)} rows({pred})!")
     
     return rows
 
@@ -156,7 +153,7 @@ def format_df(df: pd.DataFrame):
     return res_df
 
 def save_latex(df: pd.DataFrame):
-    global root_path
+    global bench_root_path
 
     num_columns = len(df.columns)
     column_format = "l|" + "c|" * (num_columns - 1)
@@ -170,7 +167,7 @@ def save_latex(df: pd.DataFrame):
     )
     latex_table = "\\resizebox{\\textwidth}{!}{\n" + latex_table + "}\n"
     
-    table_out_path = Path(root_path) / "tables" / "main.tex"
+    table_out_path = Path(bench_root_path) / "tables" / "main.tex"
     os.makedirs(table_out_path.parent, exist_ok=True)
     table_out_path.write_text(latex_table, encoding="utf-8")
     print(f"[INFO]: Saved table to {table_out_path}")
@@ -187,7 +184,7 @@ def merge_rows(rows1: dict[str, list[int]], rows2: dict[str, list[int]]) -> list
     return merged_rows
     
 def main():
-    spd_rows, sunhang_rows, cols = get_df_rows(True), get_df_rows(False), get_df_col()
+    spd_rows, sunhang_rows, cols = get_df_rows(spdoffline_name), get_df_rows(sunhang_name), get_df_col()
     rows = merge_rows(spd_rows, sunhang_rows)
 
     df = pd.DataFrame(rows, columns=cols)
