@@ -11,13 +11,18 @@ bench_root_path = root_dir / bench_suite
 out_files_base = bench_root_path / "output"
 bench_in_path = bench_root_path / "data"
 
-spdoffline_name, sunhang_name = "SPDOffline", "SUnhang"
-predictors = [spdoffline_name, sunhang_name]
+sunhang_pred_extra_title = "-1-lvl-locks-as-deps"
+
+sunhang_base_name = "SUnhang"
+spdoffline_name, sunhang_name = "SPDOffline", sunhang_base_name + sunhang_pred_extra_title
+
+predictors = [spdoffline_name, sunhang_base_name, sunhang_name]
 mini_columns = ["dep", "cyc", "abs", "dlk", "time"]
 
 # ignored_bench = set(["eclipse", "jigsaw"])
 # THIS SHOULD NOT BE IGNORED IN THE FUTURE!
 ignored_bench = set([])
+ignored_pred = set([])
     
 def from_log_file_SPD(file_path: Path) -> list:
     file = open(file_path, 'r')
@@ -84,7 +89,7 @@ def from_log_file_SUnhang(file_path: Path) -> list:
     
     return list(dic.values())
 
-log_conv_func = {spdoffline_name : from_log_file_SPD, sunhang_name: from_log_file_SUnhang}
+log_conv_func = {spdoffline_name : from_log_file_SPD, sunhang_name: from_log_file_SUnhang, sunhang_base_name: from_log_file_SUnhang}
 def from_log_file(file_path: Path, pred: str) -> list:
     return log_conv_func[pred](file_path)
 
@@ -165,6 +170,8 @@ def save_latex(df: pd.DataFrame):
         column_format=column_format,
         multicolumn_format="c|"
     )
+
+    latex_table = latex_table.replace("_", r"\_")
     latex_table = "\\resizebox{\\textwidth}{!}{\n" + latex_table + "}\n"
     
     table_out_path = Path(bench_root_path) / "tables" / "main.tex"
@@ -172,20 +179,33 @@ def save_latex(df: pd.DataFrame):
     table_out_path.write_text(latex_table, encoding="utf-8")
     print(f"[INFO]: Saved table to {table_out_path}")
 
-def merge_rows(rows1: dict[str, list[int]], rows2: dict[str, list[int]]) -> list[list]:
-    merged_rows = []
+def merge_rows(rows1: dict[str, list[int]], rows2: dict[str, list[int]]) -> dict[str, list[int]]:
+    merged_rows = {}
 
     for bench_name in rows1:
         if bench_name not in rows2:
             print(f"[WARN]: {bench_name} in rows1, but not in rows2!")
         else:
-            merged_rows.append([bench_name] + rows1[bench_name] + rows2[bench_name])
+            merged_rows[bench_name] = rows1[bench_name] + rows2[bench_name]
 
     return merged_rows
+
+def merge_rows_list(row_list: list[dict[str, list[int]]]) -> dict[str, list[int]]:
+    rows = merge_rows(row_list[0], row_list[1])
     
+    for i in range(2, len(row_list)):
+        rows = merge_rows(rows, row_list[i])
+    
+    return rows
+
+def from_row_dict_to_row_list(row_dic: dict[str, list[int]]) -> list[list]:
+    return [[bench_name] + r for bench_name, r in row_dic.items()]
+
 def main():
-    spd_rows, sunhang_rows, cols = get_df_rows(spdoffline_name), get_df_rows(sunhang_name), get_df_col()
-    rows = merge_rows(spd_rows, sunhang_rows)
+    cols = get_df_col()
+
+    rows = [get_df_rows(pred) for pred in predictors]
+    rows = from_row_dict_to_row_list(merge_rows_list(rows))
 
     df = pd.DataFrame(rows, columns=cols)
     # print(df)

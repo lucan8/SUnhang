@@ -5,12 +5,15 @@ import subprocess
 from pathlib import Path
 import time
 
-root_dir = os.path.dirname(os.path.dirname(__file__))
+root_dir = Path(os.path.dirname(os.path.dirname(__file__)))
 bench_suite = "generated"
-out_files_base = f"{root_dir}/benchmarks/{bench_suite}/output"
-trace_path = f"{root_dir}/benchmarks/{bench_suite}/traces"
-bin_dir = Path(root_dir) / "bin"
-
+out_files_base = root_dir / "benchmarks" / bench_suite/ "output"
+trace_path = root_dir / "benchmarks" / bench_suite/ "traces"
+bin_dir = root_dir / "bin"
+spdoffline_dir = root_dir / "vendor" / "spdoffline"
+sunhang_pred_extra_title = "-1-lvl-locks-as-deps"
+sunhang_base_name = "SUnhang"
+spdoffline_name, sunhang_name = "SPDOffline", sunhang_base_name + sunhang_pred_extra_title
 
 # cmd: [exe, exe_arg1, exe_arg2...]
 def execute_cmd(cmd: list[str]|str, stdout: str|None=None, timeout: str|None=None):
@@ -39,7 +42,7 @@ def get_paths(bench_name: str, predictor: str):
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     
     input_path = Path(trace_path) / "std" / (bench_name + ".std")
-    if predictor == "SPDOffline":
+    if predictor == spdoffline_name:
         input_path = std_to_bin_trace(input_path)
 
     return input_path, out_path
@@ -49,12 +52,12 @@ def run_sunhang(bench_name: str):
 
     print(f"Running benchmark: {bench_name}...\n")
 
-    input_path, out_path = get_paths(bench_name, "SUnhang")
+    input_path, out_path = get_paths(bench_name, sunhang_name)
 
     print("Input path: ", input_path)
     print("Output path: ", out_path)
     
-    pred_path = bin_dir / "SUnhang"
+    pred_path = bin_dir / sunhang_base_name
     cmd = [pred_path, input_path, out_path]
 
     execution_time = execute_cmd(cmd)
@@ -64,12 +67,12 @@ def run_sunhang(bench_name: str):
 def run_spd_offline(bench_name: str):
     print(f"Running benchmark: {bench_name}...\n")
 
-    input_path, out_path = get_paths(bench_name, "SPDOffline")
+    input_path, out_path = get_paths(bench_name, spdoffline_name)
 
     print("Input path: ", input_path)
     print("Output path: ", out_path)
 
-    pred_path = bin_dir / "fat_spdoffline.jar"
+    pred_path = spdoffline_dir / "fat_spdoffline.jar"
     cmd = f"java -jar {pred_path} -p={input_path}"
 
     execution_time = execute_cmd(cmd, out_path)
@@ -80,7 +83,7 @@ def run_spd_offline(bench_name: str):
 def std_to_bin_trace(input_path: Path):
     output_path = input_path.parent.parent / "bin" / (input_path.stem + ".data")
    
-    jar_path = bin_dir / "fat_convert.jar"
+    jar_path = spdoffline_dir / "fat_convert.jar"
     cmd = f'java -jar {jar_path} -p={input_path} -f=std -q={output_path}'
     execute_cmd(cmd)
 
@@ -105,6 +108,6 @@ def main():
 
     for bench in benchmarks:
         run_sunhang(bench)
-        run_spd_offline(bench)
+        # run_spd_offline(bench)
 
 main()
