@@ -69,15 +69,15 @@ void EventHandler::wait_event(const EventInfo& evt_info) {
     if (thread_map.size() <= 1)
         return;
     
-    // If lockset is empty add it to the recent statuses
-    if (th_info.u_reen_lockset.empty()){
-        th_info.recent_sync_status_cont.push(evt_info.target);
-    }
-    else{ // Else create a new dep and add it as a recent status
-        Event evt = Event(th_info.vec_clock, evt_info.line, evt_info.src_loc);
-        NodeConstItT dep = create_dep(evt_info.thread_id, evt_info.target, th_info.u_reen_lockset.to_lockset(), evt);
-        th_info.recent_sync_status_cont.push(dep);
-    }
+    // // If lockset is empty add it to the recent statuses
+    // if (th_info.u_reen_lockset.empty()){
+    //     th_info.recent_sync_status_cont.push(evt_info.target);
+    // }
+    // else{ // Else create a new dep and add it as a recent status
+    Event evt = Event(th_info.vec_clock, evt_info.line, evt_info.src_loc);
+    NodeConstItT dep = create_dep(evt_info.thread_id, evt_info.target, th_info.u_reen_lockset.to_lockset(), evt);
+    th_info.recent_sync_status_cont.push(dep);
+    // }
 }
 
 void EventHandler::notify_event(const EventInfo& evt_info) {
@@ -137,14 +137,13 @@ void EventHandler::acquire_event(const EventInfo& evt_info) {
     Event evt = Event(th_info.vec_clock, evt_info.line, evt_info.src_loc);
 
     // Single threaded or first level lock -> no dep, only status
-    if (th_info.u_reen_lockset.empty() || thread_map.size() <= 1){
-        th_info.recent_sync_status_cont.push(evt_info.target);
-    }
-    else{ // otherwise both
-        NodeConstItT dep = create_dep(evt_info.thread_id, evt_info.target, th_info.u_reen_lockset.to_lockset(), evt);
-        // Logger::print(LogType::NONE, "{}", dep->first);
-        th_info.recent_sync_status_cont.push(dep);
-    }
+    // if (th_info.u_reen_lockset.empty() || thread_map.size() <= 1){
+    //     th_info.recent_sync_status_cont.push(evt_info.target);
+    // }
+    // else{ // otherwise both
+    NodeConstItT dep = create_dep(evt_info.thread_id, evt_info.target, th_info.u_reen_lockset.to_lockset(), evt);
+    th_info.recent_sync_status_cont.push(dep);
+    //}
 
     // Add ev to critical section history and add lock to lockset
     CSInfo& cs_info = cs_hist.add_lock_ev(evt_info.target, evt_info.thread_id, evt);
