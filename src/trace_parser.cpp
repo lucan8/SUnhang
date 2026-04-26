@@ -7,7 +7,8 @@ const std::unordered_map<std::string, EventsT> TraceParser::std_event_map = {
     {"r", EventsT::RD}, {"w", EventsT::WR},
     {"fork", EventsT::FORK}, {"join", EventsT::JOIN},
     {"acq", EventsT::LK}, {"rel", EventsT::UK},
-    {"wait", EventsT::WAIT}, {"notify", EventsT::NOTIFY}, {"notifyAll", EventsT::NOTIFYALL}
+    {"wait", EventsT::WAIT}, {"notify", EventsT::NOTIFY}, 
+    {"notifyAll", EventsT::NOTIFYALL}, {"broadcast", EventsT::NOTIFYALL}
 };
 
 const char TraceParser::trace_sep = '|';

@@ -1,11 +1,10 @@
 services:
-  trace-gen:
+  trace-gen-1:
     build:
       context: .
-    image: trace-gen
-    container_name: trace-gen
+    image: trace-gen-1
+    container_name: trace-gen-1
     volumes:
-      - ./../traces:/app/traces
       - ./../benchmarks_new:/app/benchmarks
       - ./../trace_generator:/app/trace_generator
     stdin_open: true

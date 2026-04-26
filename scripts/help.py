@@ -6,7 +6,7 @@ import os
 import shutil
 import sys
 
-bench_in_path = "traces/vendor/jacontebe"
+bench_in_path = "benchmarks/generated/traces/std"
 bench_out_path = "benchmarks/generated/output_SUnhang"
 
 def print_summary(trace_file_path: Path):
@@ -24,7 +24,7 @@ def print_summary(trace_file_path: Path):
         if "wait" in op:
             wait_count += 1
             wait_vars.add(var)
-        elif "notifyAll" in op:
+        elif "notifyAll" in op or "broadcast" in op:
             broadcast_count += 1
             notif_vars.add(var)
         elif "notify" in op:
@@ -36,7 +36,7 @@ def print_summary(trace_file_path: Path):
     if wait_count or notify_count or broadcast_count:
         print(f"{trace_file_path.stem}:")
         print(f"    {wait_count} waits, {notify_count} notifies, {broadcast_count} broadcasts, {ev_count} events")
-        print(f"    wait_vars: {wait_vars}, notif_vars: {notif_vars}")
+        # print(f"    wait_vars: {wait_vars}, notif_vars: {notif_vars}")
 
 def print_th_last_op(trace_file_path: Path):
     dic = {}
@@ -86,7 +86,7 @@ def main():
             print_summary_for_wait_notify_benchmarks()
         case "clean_old_pred":
             cleanup_old_predictors()
-        case "print_tr_op":
+        case "print_th_op":
             tid = sys.argv[2]
             in_trace_path = Path(bench_in_path) / f"{sys.argv[3]}.std"
             out_trace_path = Path(bench_in_path) / f"{sys.argv[3]}_{tid}.std"
@@ -95,5 +95,6 @@ def main():
             print_th_last_op(Path(bench_in_path) / f"{sys.argv[2]}.std")
         case _:
             print("Invalid option")
+
 
 main()

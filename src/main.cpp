@@ -1,3 +1,8 @@
+
+//TODO:
+// HEDC seems to be hanging
+// Sor failed for instrumentation
+
 //TODO:
 // TEST WITH TIMEOUT 60 OR MORE, ADD MEMORY ACCESSES BACK, CHECK PROGRAM EXITS AS WELL
 // WEIRD LUCENE BEHAVIOUR
@@ -193,6 +198,9 @@ int main(int argc, char *argv[]) {
     Logger::print(log_file, "----Trace info----");
     trace_parser.print_summary(log_file);
     event_handler.print_summary(log_file);
+    // event_handler.print_comm_abs_deps();
+    // event_handler.print_th_exit_with_locks();
+
     // fflush(log_file);
    
     // event_handler.print_abs_deps();
@@ -231,12 +239,14 @@ int main(int argc, char *argv[]) {
     auto millis_passed_abs_dlk_check = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
     
     uint32_t real_dlk_count = 0;
+    std::vector<int> real_dlk_ind;
     for (int i : abs_dlk_cycles_ind){
         auto dlk_info_opt = dlk_checker.get_sync_preserving_dlk(cycle_enumerator.res_cycles[i]);
         if (dlk_info_opt.has_value()){
             real_dlk_count += 1;
             auto dlk_info = dlk_info_opt.value();
             Logger::print(log_file, "Deadlock found on cycle: {}", dlk_info);
+            real_dlk_ind.push_back(i);
             // fflush(log_file);
         }
     }
@@ -251,6 +261,5 @@ int main(int argc, char *argv[]) {
     Logger::print(log_file, "Time for cycle enumeration = {} milliseconds", millis_passed_cycle_enum - millis_passed_parse_trace);
     Logger::print(log_file, "Time for abs deadlock checks = {} milliseconds", millis_passed_abs_dlk_check - millis_passed_cycle_enum);
     Logger::print(log_file, "Time for sync pres check = {} milliseconds", millis_passed_sync_pres_check - millis_passed_abs_dlk_check);
-    Logger::print(log_file, "{}", millis_passed_sync_pres_check);
     return 0;
 }
