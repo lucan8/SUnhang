@@ -22,10 +22,10 @@ bool EventHandler::handle_event(const EventInfo& evt_info){
             wait_event(evt_info);
             break;
         case EventsT::NOTIFY:
-            notify_event(evt_info);
+            notify_event(evt_info, false);
             break;
         case EventsT::NOTIFYALL:
-            notify_all_event(evt_info);
+            notify_event(evt_info, true);
             break;
         case EventsT::FORK:
             fork_event(evt_info);
@@ -77,10 +77,12 @@ void EventHandler::wait_event(const EventInfo& evt_info) {
     Event evt = Event(th_info.vec_clock, evt_info.line, evt_info.src_loc);
     NodeConstItT dep = create_dep(evt_info.thread_id, evt_info.target, th_info.u_reen_lockset.to_lockset(), evt);
     th_info.recent_sync_status_cont.push(dep);
+    th_info.is_asleep = true;
+    cv_map[evt_info.target].sleep_thread();
     // }
 }
 
-void EventHandler::notify_event(const EventInfo& evt_info) {
+void EventHandler::notify_event(const EventInfo& evt_info, bool notify_all) {
     // Logger::print(LogType::DBG, "Write event");
 
     ThreadInfo& th_info = thread_map[evt_info.thread_id];
@@ -123,27 +125,37 @@ void EventHandler::notify_event(const EventInfo& evt_info) {
     }
 
     th_info.recent_sync_status_cont = std::move(new_rec_sync_status_cont);
+    cv_map[evt_info.target].notify_thread(th_info.vec_clock, notify_all);
 }
 
-void EventHandler::notify_all_event(const EventInfo& evt_info){
-    notify_event(evt_info);
+void EventHandler::handle_sleepness(ThreadInfo& th_info, ResourceIdT ass_lock_id){
+    if (th_info.is_asleep){
+        // Get the cv of this associated lock and it's info
+        ResourceIdT cv_id = get_ass_sync_obj(ass_lock_id);
+        auto cv_info_it = cv_map.find(cv_id);
+        assert(cv_info_it != cv_map.end()); //REMOVE THIS
+        
+        // Acknowledge the event as happening before this
+        CVInfo& cv_info = cv_info_it->second;
+        th_info.vec_clock.merge_into(cv_info.notif_queue.front());
+
+        // Wake-up
+        th_info.is_asleep = false;
+        cv_info.wake_thread();
+    }
 }
 
 void EventHandler::acquire_event(const EventInfo& evt_info) {
     // Logger::print(LogType::DBG, "Acquire event");
-    acq_count++;
-    
+    acq_count++;    
     ThreadInfo& th_info = thread_map[evt_info.thread_id];
+
+    // Maybe we just woke up, acknowledge the notify's vector clock
+    handle_sleepness(th_info, evt_info.target);
     Event evt = Event(th_info.vec_clock, evt_info.line, evt_info.src_loc);
 
-    // Single threaded or first level lock -> no dep, only status
-    // if (th_info.u_reen_lockset.empty() || thread_map.size() <= 1){
-    //     th_info.recent_sync_status_cont.push(evt_info.target);
-    // }
-    // else{ // otherwise both
     NodeConstItT dep = create_dep(evt_info.thread_id, evt_info.target, th_info.u_reen_lockset.to_lockset(), evt);
     th_info.recent_sync_status_cont.push(dep);
-    //}
 
     // Add ev to critical section history and add lock to lockset
     CSInfo& cs_info = cs_hist.add_lock_ev(evt_info.target, evt_info.thread_id, evt);

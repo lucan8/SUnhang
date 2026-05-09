@@ -3,12 +3,16 @@
 #include <unordered_map>
 #include <string>
 #include <format>
+#include <queue>
 #include "comm_types.hpp"
+
+struct VectorClock;
 
 using VCValueT = int;
 
 using ThEpochConstIt = std::unordered_map<ThreadIdT, VCValueT>::const_iterator;
 using ThEpoch = std::unordered_map<ThreadIdT, VCValueT>::value_type;
+using VCQueue = std::queue<VectorClock>;
 
 struct VectorClock {
     std::unordered_map<ThreadIdT, VCValueT> _vector_clock;
