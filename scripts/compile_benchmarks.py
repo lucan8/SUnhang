@@ -5,7 +5,7 @@ import os
 from copy import deepcopy
 
 root_dir = Path(os.path.dirname(os.path.dirname(__file__))) / "benchmarks"
-bench_suite = "generated"
+bench_suite = "cond_var"
 bench_root_path = root_dir / bench_suite
 
 out_files_base = bench_root_path / "output"

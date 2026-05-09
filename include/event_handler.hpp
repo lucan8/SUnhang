@@ -8,6 +8,37 @@
 #include "ord_dep_graph.hpp"
 #include "vectorclock.hpp"
 
+struct CVInfo{
+  VCQueue notif_queue;
+  size_t asleep_count = 0; // The actual sleeping threads 
+  size_t to_notify_count = 0; // The number of threads that still need to be notified
+
+  void sleep_thread(){
+    asleep_count += 1;
+    to_notify_count += 1;
+  }
+
+  void notify_thread(const VectorClock& notif_vc, bool notif_all){
+    if (to_notify_count == 0){
+      return;
+    }
+
+    to_notify_count = notif_all ? 0 : to_notify_count - 1;
+    notif_queue.push(notif_vc);
+  }
+
+  void wake_thread(){
+    if (asleep_count == 0){
+      return;
+    }
+
+    asleep_count -= 1;
+    if (asleep_count == to_notify_count){
+      notif_queue.pop();
+    }
+  }
+};
+
 struct EventHandler{
   // RESULTS
   OrdDepGraphView graph_view;
@@ -16,10 +47,10 @@ struct EventHandler{
   // INTERNAL STUFF
   std::unordered_map<ThreadIdT, ThreadInfo> thread_map;
   std::unordered_map<ResourceIdT, VectorClock> last_write;
+  std::unordered_map<ResourceIdT, CVInfo> cv_map;
 
   // Intermediary step that helps to build the neighbour list of the graph
-  // std::unordered_map<ResourceIdT, NodeChainT> lock_dep_map;
-   std::unordered_map<ResourceIdT, NodeUSetT> lock_dep_map;
+  std::unordered_map<ResourceIdT, NodeUSetT> lock_dep_map;
 
   // Statistical info
   uint32_t acq_count = 0;
@@ -44,8 +75,7 @@ struct EventHandler{
   void release_event(const EventInfo& evt_info);
   
   void wait_event(const EventInfo& evt_info);
-  void notify_event(const EventInfo& evt_info);
-  void notify_all_event(const EventInfo& evt_info);
+  void notify_event(const EventInfo& evt_info, bool notify_all);
   
   void fork_event(const EventInfo& evt_info);
   void join_event(const EventInfo& evt_info);
@@ -55,6 +85,7 @@ struct EventHandler{
   NodeConstItT update_dep(NodeConstItT old_dep, ResourceIdT new_res);
 
   void build_neigh_list();
+  void handle_sleepness(ThreadInfo& th_info, ResourceIdT ass_lock_id);
 
   void print_abs_deps() const;
   void print_comm_abs_deps() const;

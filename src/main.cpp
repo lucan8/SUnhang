@@ -1,9 +1,13 @@
+// IMPORTANT: handle notify to update the vc of the waking thread
+// PARTIALLY SOLVED, BUT THE QUEUE APPROACH IS THE CORRECT ONE, SEE HOW TO FIT notifyAll events and you're set
+// POSSIBLE SOURCE OF FALSE POSITIVES: 
+// t1: wait(cv1), signal(cv2)
+// t2: wait(cv2), signal(cv1)
+// t3: signal(cv1)
+// Solution: Make notify update the timestamp of the wait event itself, not just it's successor
+// IT DOESN'T WORK FOR MEMCACHED EXAMPLE
 
-//TODO:
-// HEDC seems to be hanging
-// Sor failed for instrumentation
-
-//TODO:
+//TODO JACONTEBE:
 // TEST WITH TIMEOUT 60 OR MORE, ADD MEMORY ACCESSES BACK, CHECK PROGRAM EXITS AS WELL
 // WEIRD LUCENE BEHAVIOUR
 //1. IF WE RUN WITHOUT MEMORY ACCESSES WE FIND CYCLES, PATTERNS AND EVEN DEADLOCK

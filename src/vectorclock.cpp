@@ -116,7 +116,7 @@ bool operator<=(const VectorClock& vc1, const VectorClock& vc2) {
 }
 
 bool operator<(const VectorClock& vc1, const VectorClock& vc2) {
-    bool one_greater = true;
+    bool one_strictly_less = true;
     for(const auto &[thread_id, value]: vc1._vector_clock) {
         VCValueT other_vc_val = vc2.find(thread_id);
 
@@ -124,10 +124,10 @@ bool operator<(const VectorClock& vc1, const VectorClock& vc2) {
             return false;
         }
         else if (value < other_vc_val)
-            one_greater = true;
+            one_strictly_less = true;
     }
 
-    return one_greater;
+    return one_strictly_less;
 }
 
 bool operator>(const VectorClock& vc1, const VectorClock& vc2) {

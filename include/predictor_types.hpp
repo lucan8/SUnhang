@@ -358,4 +358,5 @@ struct ThreadInfo{
   UReentrantLocksetT u_reen_lockset;
   RecentSyncStatusContT recent_sync_status_cont;
   VectorClock vec_clock;
+  bool is_asleep = false;
 };
