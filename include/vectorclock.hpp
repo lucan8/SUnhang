@@ -12,10 +12,13 @@ using VCValueT = int;
 
 using ThEpochConstIt = std::unordered_map<ThreadIdT, VCValueT>::const_iterator;
 using ThEpoch = std::unordered_map<ThreadIdT, VCValueT>::value_type;
-using VCQueue = std::queue<VectorClock>;
+
+// Contains: Timestamp of notify event and the number of threads that should receive the notif
+using NotifQueue = std::queue<std::pair<VectorClock, uint32_t>>;
 
 struct VectorClock {
-    std::unordered_map<ThreadIdT, VCValueT> _vector_clock;
+    // std::unordered_map<ThreadIdT, VCValueT> _vector_clock;
+    std::vector<VCValueT> _vector_clock;
     VectorClock();
     VectorClock(ThreadIdT increment_thread_id);
 
@@ -55,12 +58,12 @@ struct VectorClock {
     bool empty() const;
 };
 
-template <>
-struct std::formatter<VectorClock> : std::formatter<std::string> {
-    auto format(const VectorClock& vc, format_context& ctx) const {
-        auto out = ctx.out();
-        for (const auto& [tid, vc_val] : vc._vector_clock)
-          std::format_to(out, "{}:{}, ", tid, vc_val);
-        return out;
-    }
-};
+// template <>
+// struct std::formatter<VectorClock> : std::formatter<std::string> {
+//     auto format(const VectorClock& vc, format_context& ctx) const {
+//         auto out = ctx.out();
+//         for (const auto& [tid, vc_val] : vc._vector_clock)
+//           std::format_to(out, "{}:{}, ", tid, vc_val);
+//         return out;
+//     }
+// };

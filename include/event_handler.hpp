@@ -8,13 +8,12 @@
 #include "ord_dep_graph.hpp"
 #include "vectorclock.hpp"
 
+
 struct CVInfo{
-  VCQueue notif_queue;
-  size_t asleep_count = 0; // The actual sleeping threads 
+  NotifQueue notif_queue;
   size_t to_notify_count = 0; // The number of threads that still need to be notified
 
   void sleep_thread(){
-    asleep_count += 1;
     to_notify_count += 1;
   }
 
@@ -23,17 +22,18 @@ struct CVInfo{
       return;
     }
 
-    to_notify_count = notif_all ? 0 : to_notify_count - 1;
-    notif_queue.push(notif_vc);
+    size_t notified_th_count = notif_all ? to_notify_count : 1;
+    notif_queue.emplace(notif_vc, notified_th_count);
+    to_notify_count -= notified_th_count;
   }
 
   void wake_thread(){
-    if (asleep_count == 0){
+    if (notif_queue.empty()){
       return;
     }
 
-    asleep_count -= 1;
-    if (asleep_count == to_notify_count){
+    notif_queue.front().second -= 1;
+    if (notif_queue.front().second == 0){
       notif_queue.pop();
     }
   }
@@ -96,4 +96,7 @@ struct EventHandler{
   void print_neigh_list(std::FILE* out_file) const;
 
   void print_summary(std::FILE* log_file) const;
+  void print_summary() const;
+
+  void print_th_vc_info() const;
 };

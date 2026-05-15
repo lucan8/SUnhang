@@ -1,13 +1,13 @@
-// IMPORTANT: handle notify to update the vc of the waking thread
-// PARTIALLY SOLVED, BUT THE QUEUE APPROACH IS THE CORRECT ONE, SEE HOW TO FIT notifyAll events and you're set
-// POSSIBLE SOURCE OF FALSE POSITIVES: 
-// t1: wait(cv1), signal(cv2)
-// t2: wait(cv2), signal(cv1)
-// t3: signal(cv1)
-// Solution: Make notify update the timestamp of the wait event itself, not just it's successor
-// IT DOESN'T WORK FOR MEMCACHED EXAMPLE
+// COMPARE:
+// NOTIFY AND NOTIFYALL MERGE THEIR TS INTO ALL SLEEPING THREADS (AS ANYONE COULD WAKE UP)
+// THE QUEUE APROACH
 
-//TODO JACONTEBE:
+// ECLIPSE PRODUCES BAD TRACE
+// THREADS WAKEUP WITHOUT THERE EVER BEING A NOTIFY
+// THIS IS PROBABLY A LIMITATION COMING FROM THE INSTRUMENTOR
+// BUT IN RARE CASES THE WAKE-UP CAN COME FROM THE OS(WTF???)
+
+// TODO JACONTEBE:
 // TEST WITH TIMEOUT 60 OR MORE, ADD MEMORY ACCESSES BACK, CHECK PROGRAM EXITS AS WELL
 // WEIRD LUCENE BEHAVIOUR
 //1. IF WE RUN WITHOUT MEMORY ACCESSES WE FIND CYCLES, PATTERNS AND EVEN DEADLOCK
@@ -66,6 +66,7 @@
 //7. Should proably do some form of garbage collection upon thread exits
 
 //IMPORTANT: Generic formatter for iterators
+//TODO: COMPARE THE RUNTIME OF THE SECOND RELEASE WHEN USING VECTOR CLOCKS TO THE UNORDERED_MAP VERSION
 //TODO: ERR REPORT FILE FOR BAD TRACES
 //TODO: Rename the comparison operators as they are actually biased toward the first argument
 //TODO: How does this handle nested cycles?
@@ -191,10 +192,19 @@ int main(int argc, char *argv[]) {
     EventHandler event_handler;
 
     // Trace parsing -> graph and critical section construction
+    // uint64_t ev_count = 0;
+    // Logger::print(LogType::INFO, "Parsing trace...");
     while (trace_parser.events_remaining()){
         auto event_opt = trace_parser.get_next_event();
         if (event_opt.has_value())
             event_handler.handle_event(event_opt.value());
+        
+        // ev_count += 1;
+        // if (ev_count % 100000 == 0){
+        //     Logger::print(LogType::DBG, "PARSED {} events!", ev_count);
+        //     event_handler.print_summary();
+        //     event_handler.print_th_vc_info();
+        // }
     }
     event_handler.build_neigh_list();
 

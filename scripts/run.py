@@ -6,7 +6,7 @@ from pathlib import Path
 import time
 
 root_dir = Path(os.path.dirname(os.path.dirname(__file__)))
-bench_suite = "cond_var"
+bench_suite = "generated"
 out_files_base = root_dir / "benchmarks" / bench_suite/ "output"
 trace_path = root_dir / "benchmarks" / bench_suite/ "traces"
 bin_dir = root_dir / "bin"
@@ -50,7 +50,7 @@ def get_paths(bench_name: str, predictor: str):
 def run_sunhang(bench_name: str):
     global out_files_base, trace_path
 
-    print(f"Running benchmark: {bench_name}...\n")
+    print(f"SUnhang: Running benchmark: {bench_name}...\n")
 
     input_path, out_path = get_paths(bench_name, sunhang_name)
 
@@ -65,7 +65,7 @@ def run_sunhang(bench_name: str):
     print()
     
 def run_spd_offline(bench_name: str):
-    print(f"Running benchmark: {bench_name}...\n")
+    print(f"SPDOffline: Running benchmark: {bench_name}...\n")
 
     input_path, out_path = get_paths(bench_name, spdoffline_name)
 
