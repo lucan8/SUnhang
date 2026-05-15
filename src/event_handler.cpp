@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <memory>
 
-
 bool EventHandler::handle_event(const EventInfo& evt_info){
     switch (evt_info.event_type){
         case EventsT::RD:
@@ -18,7 +17,7 @@ bool EventHandler::handle_event(const EventInfo& evt_info){
         case EventsT::UK:
             release_event(evt_info);
             break;
-         case EventsT::WAIT:
+        case EventsT::WAIT:
             wait_event(evt_info);
             break;
         case EventsT::NOTIFY:
@@ -88,8 +87,7 @@ void EventHandler::notify_event(const EventInfo& evt_info, bool notify_all) {
     ThreadInfo& th_info = thread_map[evt_info.thread_id];
 
     // TODO: CALLING NOTIFY AS A SINGLE THREAD IS PLAIN STUPID, PROBABLY SHOULD PRINT AN ERROR
-    // TODO: CALLING NOTIFY WITH AN EMPTY LOCKSET IS EVEN WORSE, SHOULD PROBABLY PRINT AN ERROR
-    if (th_info.u_reen_lockset.empty() || thread_map.size() <= 1)
+    if (thread_map.size() <= 1)
         return;
     
     auto& rec_sync_status_cont = th_info.recent_sync_status_cont;
@@ -137,7 +135,10 @@ void EventHandler::handle_sleepness(ThreadInfo& th_info, ResourceIdT ass_lock_id
         
         // Acknowledge the event as happening before this
         CVInfo& cv_info = cv_info_it->second;
-        th_info.vec_clock.merge_into(cv_info.notif_queue.front());
+        //TODO: How do we even get in this situation?
+        if (!cv_info.notif_queue.empty()){
+            th_info.vec_clock.merge_into(cv_info.notif_queue.front().first);
+        }
 
         // Wake-up
         th_info.is_asleep = false;
@@ -347,4 +348,20 @@ void EventHandler::print_neigh_list(std::FILE* out_file) const{
 void EventHandler::print_summary(std::FILE* log_file) const{
     Logger::print(log_file, "num acq/req: {}", acq_count);
     Logger::print(log_file, "num deps: {}", graph_view.graph.abs_deps_map.size());
+}
+
+void EventHandler::print_summary() const{
+    Logger::print(LogType::DBG, "num acq/req: {}", acq_count);
+
+    auto [lock_dep_count, cond_dep_count] = graph_view.graph.get_split_dep_counts();
+    Logger::print(LogType::DBG, "num lock deps: {}", lock_dep_count);
+    Logger::print(LogType::DBG, "num cond deps: {}", cond_dep_count);
+}
+
+void EventHandler::print_th_vc_info() const{
+    uint64_t sum = 0;
+    for (const auto& [tid, th_info] : thread_map){
+        sum += th_info.vec_clock._vector_clock.size();
+    }
+    Logger::print(LogType::DBG, "mean={}, count={}", sum / thread_map.size(), thread_map.size());
 }

@@ -1,6 +1,6 @@
 #pragma once
 
-// TODO: For CSHist, look into adding making the functions return const references as well
+// TODO: For CSHist, look into making the functions return const references as well
 #include <string>
 #include <vector>
 #include <format>
@@ -325,6 +325,12 @@ struct AbsDependency{
   bool is_valid_neigh_cand_opt(const AbsDependency& other) const{
     return thread_id != other.thread_id && !lockset_intersection(lockset, other.lockset);
   }
+
+  // TODO: Change this when separating locks and cond var
+  bool is_lock_dep() const{
+    return resource_id >= 0;
+  }
+
 };
 
 typedef std::map<AbsDependency, std::vector<Event>> NodeContainerT;
