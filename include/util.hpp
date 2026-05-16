@@ -8,8 +8,27 @@
 #include <type_traits>
 #include <concepts>
 #include <array>
+#include <fstream>
 #include "comm_types.hpp"
 #include "logger.hpp"
+
+// TODO: Load lock depth too
+struct meta{
+    static size_t THREAD_COUNT;
+    static size_t VAR_COUNT;
+    static size_t LOCK_COUNT;
+    static size_t LOCK_DEPTH;
+
+    static void init(std::ifstream trace_meta_file){
+        trace_meta_file >> THREAD_COUNT >> VAR_COUNT >> LOCK_COUNT;
+        // Logger::print(LogType::DBG, "th_count: {}, var_count: {}, lock_count: {}", THREAD_COUNT, VAR_COUNT, LOCK_COUNT);
+    }
+};
+
+inline size_t meta::THREAD_COUNT = 401;
+inline size_t meta::VAR_COUNT = 401;
+inline size_t meta::LOCK_COUNT = 1800;
+inline size_t meta::LOCK_DEPTH = 8;
 
 // Splits str by sep
 inline std::vector<std::string> split(const std::string& str, char sep){

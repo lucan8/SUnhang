@@ -1,6 +1,7 @@
 *.txt
 *.std
 *.exe
+*.meta
 build/
 resources/
 test.cpp

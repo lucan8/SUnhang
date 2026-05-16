@@ -16,7 +16,7 @@ void TestPredictor::test(){
 }
 
 void TestPredictor::_test_read_event(){
-    EventHandler pred, dummy_pred;
+    EventHandler pred(meta::THREAD_COUNT, meta::VAR_COUNT), dummy_pred(meta::THREAD_COUNT, meta::VAR_COUNT);
     EventInfo ev(1, EventsT::RD, 1, 1, 1);
 
     // Test time always moves forward
@@ -27,7 +27,7 @@ void TestPredictor::_test_read_event(){
 }
 
 void TestPredictor::_test_write_event(){
-    EventHandler pred, dummy_pred;
+    EventHandler pred(meta::THREAD_COUNT, meta::VAR_COUNT), dummy_pred(meta::THREAD_COUNT, meta::VAR_COUNT);
     EventInfo ev(1, EventsT::WR, 1, 1, 1);
 
     // Test time always moves forward
@@ -45,7 +45,7 @@ void TestPredictor::_test_write_event(){
 }
 
 void TestPredictor::_test_acquire_event(){
-    EventHandler pred, dummy_pred;
+    EventHandler pred(meta::THREAD_COUNT, meta::VAR_COUNT), dummy_pred(meta::THREAD_COUNT, meta::VAR_COUNT);
     EventInfo ev(1, EventsT::LK, 1, 1, 1);
 
     // Test time always moves forward
@@ -115,7 +115,7 @@ void TestPredictor::_test_acquire_event(){
 }
 
 void TestPredictor::_test_release_event(){
-    EventHandler pred, dummy_pred;
+    EventHandler pred(meta::THREAD_COUNT, meta::VAR_COUNT), dummy_pred(meta::THREAD_COUNT, meta::VAR_COUNT);
     EventInfo ev(1, EventsT::LK, 1, 1, 1);
 
     // Firs add lock then remove it

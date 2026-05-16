@@ -209,10 +209,10 @@ struct StdIdMap{
   size_t id_counter;
   std::unordered_map<std::string, int> _map;
 
-  StdIdMap() : id_counter(1){}
+  StdIdMap() : id_counter(0){}
 
   void reset(){
-    id_counter = 1;
+    id_counter = 0;
     _map.clear();
   }
 
@@ -235,69 +235,63 @@ struct StdIdMap{
 
 };
 
-// TODO: Clear it from time to time
-// TODO: Should probaly put checks to not go below 0!
 struct UReentrantLocksetT{
-  std::unordered_map<ResourceIdT, int> _u_lock_map;
-  int global_cnt;
+    std::vector<int> _u_lock_map;
+    std::vector<ResourceIdT> _active_locks; 
+    int global_cnt;
 
-  UReentrantLocksetT(): global_cnt(0){}
-
-  void acquire(ResourceIdT lock_id){
-    global_cnt += 1;
-
-    _u_lock_map[lock_id] += 1;
-  }
-  
-  void release(ResourceIdT lock_id){
-    global_cnt -= 1;
-
-    _u_lock_map[lock_id] -= 1;
-  }
-
-  bool contains(ResourceIdT lock_id) const{
-    auto it = _u_lock_map.find(lock_id);
-    return _contains(it);
-  }
-
-  bool contains_only(ResourceIdT lock_id) const{
-    auto it = _u_lock_map.find(lock_id);
-    if (!_contains(it)){
-      return false;
+    UReentrantLocksetT(): global_cnt(0), _u_lock_map(meta::LOCK_COUNT) {
+        _active_locks.reserve(meta::LOCK_DEPTH); 
     }
 
-    return global_cnt == it->second;
-  }
+    void acquire(ResourceIdT lock_id){
+        global_cnt += 1;
 
-  // Returns the number of locks with a count > 0
-  size_t size() const{
-    size_t res = 0;
-    for (const auto& [lock, cnt] : _u_lock_map){
-      res += cnt > 0;
-    }
-    return res;
-  }
-
-  bool empty() const{
-    return global_cnt <= 0;
-  }
-  
-  LocksetT to_lockset() const{
-    LocksetT result;
-    
-    for (const auto& [lock_id, cnt] : this->_u_lock_map){
-      if (cnt > 0){
-        result.insert(lock_id);
-      }
+        if (_u_lock_map[lock_id] == 0) {
+            // Insert in sorted order
+            auto it = std::lower_bound(_active_locks.begin(), _active_locks.end(), lock_id);
+            _active_locks.insert(it, lock_id);
+        }
+        
+        _u_lock_map[lock_id] += 1;
     }
     
-    return result;
-  }
+    void release(ResourceIdT lock_id){
+        global_cnt -= 1;
+        _u_lock_map[lock_id] -= 1;
 
-  // Check that the iterator is valid and has a counter > 0
-  bool _contains(std::unordered_map<ResourceIdT, int>:: const_iterator it) const{
-    return it != _u_lock_map.end() && it->second > 0;
-  }
+        if (_u_lock_map[lock_id] == 0) {
+            // Find using binary search and remove
+            auto it = std::lower_bound(_active_locks.begin(), _active_locks.end(), lock_id);
+            if (it != _active_locks.end() && *it == lock_id) {
+                _active_locks.erase(it);
+            }
+        }
+    }
+
+    bool contains(ResourceIdT lock_id) const{
+        return _u_lock_map[lock_id] > 0;
+    }
+
+    bool contains_only(ResourceIdT lock_id) const{
+        int count = _u_lock_map[lock_id];
+        if (count <= 0){
+            return false;
+        }
+        return global_cnt == count;
+    }
+
+    size_t size() const{
+        return _active_locks.size(); 
+    }
+
+    LocksetT to_lockset() const{
+        return LocksetT(_active_locks.begin(), _active_locks.end());
+    }
+
+    bool empty() const{
+        return global_cnt <= 0;
+    }
 };
 
 struct AbsDependency{
