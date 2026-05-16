@@ -1,40 +1,32 @@
 #include "../include/vectorclock.hpp"
+#include <algorithm>
 
-VectorClock::VectorClock() {}
-VectorClock::VectorClock(ThreadIdT increment_thread_id) {
+const size_t MAX_THREADS = 401;
+
+VectorClock::VectorClock() : _vector_clock(MAX_THREADS, 0) {}
+
+VectorClock::VectorClock(ThreadIdT increment_thread_id) : _vector_clock(MAX_THREADS, 0) {
     this->set(increment_thread_id, 1);
 }
 
 VCValueT VectorClock::find(ThreadIdT thread_id) const {
-    auto vc = this->_vector_clock.find(thread_id);
-
-    if(vc == this->_vector_clock.end()) {
-        return 0;
-    } else {
-        return vc->second;
+    if (thread_id < MAX_THREADS) {
+        return this->_vector_clock[thread_id];
     }
+    return 0;
 }
 
 void VectorClock::set(ThreadIdT thread_id, VCValueT value) {
-    this->_vector_clock[thread_id] = value;
+    if (thread_id < MAX_THREADS) {
+        this->_vector_clock[thread_id] = value;
+    }
 }
 
-
-// Loop through all the keys of each vc, compare epoch with the other, take maximum.
-VectorClock VectorClock::merge(const VectorClock& other) const{
+VectorClock VectorClock::merge(const VectorClock& other) const {
     VectorClock result;
 
-    // Initialize result to this vector clock 
-    for(const auto &[thread_id, timestamp] : this->_vector_clock) {
-        result.set(thread_id, timestamp);
-    }
-
-    // Iterate over the other vector clock and for each thread pick the maximum timestamp
-    for(const auto &[thread_id, timestamp] : other._vector_clock) {
-        VCValueT curr_timestamp = result.find(thread_id);
-        if(curr_timestamp < timestamp) {
-            result.set(thread_id, timestamp);
-        }
+    for (size_t i = 0; i < MAX_THREADS; ++i) {
+        result._vector_clock[i] = std::max(this->_vector_clock[i], other._vector_clock[i]);
     }
 
     return result;
@@ -43,91 +35,91 @@ VectorClock VectorClock::merge(const VectorClock& other) const{
 bool VectorClock::merge_into(const VectorClock& other) {
     bool changed = false;
     
-    for(const auto &epoch: other._vector_clock) {
-        changed = merge_into_epoch(epoch) || changed;
-    }
-
-    return changed;
-}
-
-// merge_into but get the predecessor for thread with the given tid
-bool VectorClock::th_pred_merge_into(const VectorClock& other, ThreadIdT tid){
-    bool changed = false;
-    
-    for(const auto &epoch: other._vector_clock) {
-        if (epoch.first == tid)
-            changed = merge_into_epoch(ThEpoch(tid, epoch.second - 1)) || changed;
-        else
-            changed = merge_into_epoch(epoch) || changed;
-    }
-
-    return changed;
-}
-
-bool VectorClock::pred_merge_into_epoch(const VectorClock& other, ThreadIdT tid){
-    // Find thread epoch
-    auto epoch_it = other._vector_clock.find(tid);
-    if (epoch_it == other._vector_clock.end())
-        return false;
-    
-    // Get predecesor
-    ThEpoch epoch = *epoch_it;
-    epoch.second -= 1;
-    
-    return merge_into_epoch(epoch);
-}
-
-// Merges epoch in this vector clock
-bool VectorClock::merge_into_epoch(const ThEpoch& epoch){
-    auto vc = this->_vector_clock.find(epoch.first);
-    bool changed = false;
-
-    if(vc == this->_vector_clock.end()) {
-        this->_vector_clock[epoch.first] = epoch.second;
-        changed = true;
-    } else if(vc->second < epoch.second) {
-        vc->second = epoch.second;
-        changed = true;
-    }
-
-    return changed;
-}
-
-void VectorClock::increment(ThreadIdT thread_id) {
-    this->_vector_clock[thread_id]++;
-}
-
-
-void VectorClock::decrement(ThreadIdT thread_id) {
-    VCValueT& curr_ts =  this->_vector_clock[thread_id];
-    curr_ts = std::max(0, curr_ts - 1);
-}
-
-bool operator<=(const VectorClock& vc1, const VectorClock& vc2) {
-  for(const auto &[thread_id, value]: vc1._vector_clock) {
-        VCValueT other_vc_val = vc2.find(thread_id);
-
-        if(value > other_vc_val) {
-            return false;
+    for (size_t i = 0; i < MAX_THREADS; ++i) {
+        if (other._vector_clock[i] > 0) {
+            if (this->_vector_clock[i] < other._vector_clock[i]) {
+                this->_vector_clock[i] = other._vector_clock[i];
+                changed = true;
+            }
         }
     }
 
+    return changed;
+}
+
+bool VectorClock::th_pred_merge_into(const VectorClock& other, ThreadIdT tid) {
+    bool changed = false;
+    
+    for (size_t i = 0; i < MAX_THREADS; ++i) {
+        VCValueT val = other._vector_clock[i];
+        if (val == 0) continue;
+
+        if (i == tid) {
+            changed = merge_into_epoch(ThEpoch(tid, std::max(0, val - 1))) || changed;
+        } else {
+            changed = merge_into_epoch(ThEpoch(i, val)) || changed;
+        }
+    }
+
+    return changed;
+}
+
+bool VectorClock::pred_merge_into_epoch(const VectorClock& other, ThreadIdT tid) {
+    if (tid >= MAX_THREADS) return false;
+    
+    VCValueT val = other._vector_clock[tid];
+    if (val == 0) return false;
+    
+    ThEpoch epoch(tid, val - 1);
+    return merge_into_epoch(epoch);
+}
+
+bool VectorClock::merge_into_epoch(const ThEpoch& epoch) {
+    if (epoch.first >= MAX_THREADS) return false;
+
+    if (this->_vector_clock[epoch.first] < epoch.second) {
+        this->_vector_clock[epoch.first] = epoch.second;
+        return true;
+    }
+
+    return false;
+}
+
+void VectorClock::increment(ThreadIdT thread_id) {
+    if (thread_id < MAX_THREADS) {
+        this->_vector_clock[thread_id]++;
+    }
+}
+
+void VectorClock::decrement(ThreadIdT thread_id) {
+    if (thread_id < MAX_THREADS) {
+        this->_vector_clock[thread_id] = std::max(0, this->_vector_clock[thread_id] - 1);
+    }
+}
+
+bool operator<=(const VectorClock& vc1, const VectorClock& vc2) {
+    for (size_t i = 0; i < MAX_THREADS; ++i) {
+        if (vc1._vector_clock[i] > 0 && vc1._vector_clock[i] > vc2._vector_clock[i]) {
+            return false;
+        }
+    }
     return true;
 }
 
 bool operator<(const VectorClock& vc1, const VectorClock& vc2) {
-    bool one_greater = true;
-    for(const auto &[thread_id, value]: vc1._vector_clock) {
-        VCValueT other_vc_val = vc2.find(thread_id);
-
-        if(value > other_vc_val) {
-            return false;
+    bool one_strictly_less = false; 
+    
+    for (size_t i = 0; i < MAX_THREADS; ++i) {
+        if (vc1._vector_clock[i] > 0 || vc2._vector_clock[i] > 0) {
+            if (vc1._vector_clock[i] > vc2._vector_clock[i]) {
+                return false;
+            } else if (vc1._vector_clock[i] < vc2._vector_clock[i]) {
+                one_strictly_less = true;
+            }
         }
-        else if (value < other_vc_val)
-            one_greater = true;
     }
 
-    return one_greater;
+    return one_strictly_less;
 }
 
 bool operator>(const VectorClock& vc1, const VectorClock& vc2) {
@@ -138,6 +130,11 @@ bool operator==(const VectorClock& vc1, const VectorClock& vc2){
     return vc1 <= vc2 && vc2 <= vc1;
 }
 
-bool VectorClock::empty() const{
-    return _vector_clock.empty();
+bool VectorClock::empty() const {
+    for (size_t i = 0; i < MAX_THREADS; ++i) {
+        if (this->_vector_clock[i] > 0) {
+            return false;
+        }
+    }
+    return true;
 }

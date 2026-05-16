@@ -1,6 +1,6 @@
 #pragma once
 
-// TODO: For CSHist, look into adding making the functions return const references as well
+// TODO: For CSHist, look into making the functions return const references as well
 #include <string>
 #include <vector>
 #include <format>
@@ -8,6 +8,8 @@
 #include <unordered_set>
 #include <optional>
 #include <cassert>
+#include <variant>
+#include <map>
 #include "vectorclock.hpp"
 #include "comm_types.hpp"
 #include "util.hpp"
@@ -24,111 +26,6 @@ struct std::formatter<LocksetT> : std::formatter<std::string> {
     }
 };
 
-struct StdIdMap{
-  size_t id_counter;
-  std::unordered_map<std::string, int> _map;
-
-  StdIdMap() : id_counter(0){}
-
-  void reset(){
-    id_counter = 0;
-    _map.clear();
-  }
-
-  // Returns the corresponding id for std_id from _map
-  // Updates the _map and counter if not found
-  int get(const std::string& std_id){
-    auto map_entry = _map.find(std_id);
-    int result_id;
-
-    if(map_entry == _map.end()) {
-        _map[std_id] = id_counter;
-        result_id = id_counter;
-        id_counter += 1;
-      } else {
-        result_id = map_entry->second;
-      }
-
-      return result_id;
-  }
-
-};
-
-struct UReentrantLocksetT{
-  std::unordered_map<ResourceIdT, int> _u_lock_map;
-  int global_cnt;
-
-  UReentrantLocksetT(): global_cnt(0){}
-
-  void acquire(ResourceIdT lock_id){
-    global_cnt += 1;
-
-    _u_lock_map[lock_id] += 1;
-  }
-  
-  void release(ResourceIdT lock_id){
-    global_cnt -= 1;
-
-    _u_lock_map[lock_id] -= 1;
-  }
-
-  bool contains(ResourceIdT lock_id) const{
-    return _u_lock_map.find(lock_id) != _u_lock_map.end();
-  }
-
-  bool empty() const{
-    return global_cnt <= 0;
-  }
-  
-  LocksetT to_lockset(){
-    LocksetT result;
-    
-    for (const auto& [lock_id, cnt] : this->_u_lock_map){
-      if (cnt > 0){
-        result.insert(lock_id);
-      }
-    }
-    
-    return result;
-  }
-
-};
-
-struct ThreadInfo{
-  UReentrantLocksetT u_reen_lockset;
-  VectorClock vec_clock;
-};
-
-struct AbsDependency{
-  ThreadIdT thread_id;
-  ResourceIdT resource_id;
-  LocksetT lockset;
-
-  AbsDependency(ThreadIdT thread_id, ResourceIdT resource_id, const LocksetT& lockset)
-    : thread_id(thread_id), resource_id(resource_id), lockset(lockset){}
-
-  // Implements all comparison operators in the default way(first compare by thread, then resource, then lockset)
-  auto operator<=>(const AbsDependency&) const = default;
-
-  // return true if thread_ids and resource_ids differ and locksets don't intersect, false otherwise
-  bool is_valid_neigh_cand(const AbsDependency& other) const{
-    return thread_id != other.thread_id && resource_id != other.resource_id && !lockset_intersection(lockset, other.lockset);
-  }
-  
-  // return true if thread_ids differ and locksets don't intersect, false otherwise
-  bool is_valid_neigh_cand_opt(const AbsDependency& other) const{
-    return thread_id != other.thread_id && !lockset_intersection(lockset, other.lockset);
-  }
-};
-
-// Format for AbsDependency
-template <>
-struct std::formatter<AbsDependency> : std::formatter<std::string> {
-    auto format(const AbsDependency& dep, format_context& ctx) const {
-        return std::format_to(ctx.out(), "{}, {}, ({})", dep.thread_id, dep.resource_id, dep.lockset);
-    }
-};
-
 // Event stuff
 enum class EventsT {
   RD = 1,
@@ -137,6 +34,9 @@ enum class EventsT {
   JOIN = 4,
   LK = 5,
   UK = 6,
+  WAIT = 7,
+  NOTIFY = 8,
+  NOTIFYALL = 9
 };
 
 // Formats EventsT
@@ -152,6 +52,9 @@ struct std::formatter<EventsT> : std::formatter<std::string> {
             case EventsT::JOIN: name = "join"; break;
             case EventsT::LK: name = "acq"; break;
             case EventsT::UK: name = "rel"; break;
+            case EventsT::WAIT: name = "wait"; break;
+            case EventsT::NOTIFY: name = "notify"; break;
+            case EventsT::NOTIFYALL: name = "notifyAll"; break;
             default: name = "UNKNOWN"; break;
         }
         return formatter<std::string>::format(name, ctx);
@@ -183,8 +86,8 @@ struct Event{
   TracePosT tr_pos;
   SrcLocT src_loc;
   
-  Event(VectorClock vc, TracePosT tr_pos, SrcLocT src_loc) 
-    : vc(std::move(vc)), tr_pos(tr_pos), src_loc(src_loc) {}
+  Event(const VectorClock& vc, TracePosT tr_pos, SrcLocT src_loc) 
+    : vc(vc), tr_pos(tr_pos), src_loc(src_loc) {}
   
   Event(){}
 
@@ -192,6 +95,18 @@ struct Event{
   bool operator<=(const Event& other) const{
     return vc <= other.vc && tr_pos <= other.tr_pos;
   }
+};
+
+// Comparator between Event and VectorClock
+// The order matters! Always put vc to the right as it usually is the sync preserving closure
+struct EventComp{
+    bool operator()(const Event& ev, const VectorClock& vc) const {
+        return ev.vc < vc;
+    }
+
+    bool operator()(const VectorClock& vc, const Event& ev) const {
+        return ev.vc > vc;
+    }
 };
 
 // Comparator between Event pointer and VectorClock
@@ -206,7 +121,7 @@ struct EventPtrComp{
     }
 };
 
-using EventLazyQueue = ViewLazyQueue<std::vector<const Event*>>;
+using EventLazyQueue = ViewLazyQueue<std::vector<Event>>;
 
 // Critical section stuff
 
@@ -288,4 +203,166 @@ struct CSHist{
     
     return &vec_it->second.back();
   }
+};
+
+struct StdIdMap{
+  size_t id_counter;
+  std::unordered_map<std::string, int> _map;
+
+  StdIdMap() : id_counter(1){}
+
+  void reset(){
+    id_counter = 1;
+    _map.clear();
+  }
+
+  // Returns the corresponding id for std_id from _map
+  // Updates the _map and counter if not found
+  int get(const std::string& std_id){
+    auto map_entry = _map.find(std_id);
+    int result_id;
+
+    if(map_entry == _map.end()) {
+        _map[std_id] = id_counter;
+        result_id = id_counter;
+        id_counter += 1;
+      } else {
+        result_id = map_entry->second;
+      }
+
+      return result_id;
+  }
+
+};
+
+// TODO: Clear it from time to time
+// TODO: Should probaly put checks to not go below 0!
+struct UReentrantLocksetT{
+  std::unordered_map<ResourceIdT, int> _u_lock_map;
+  int global_cnt;
+
+  UReentrantLocksetT(): global_cnt(0){}
+
+  void acquire(ResourceIdT lock_id){
+    global_cnt += 1;
+
+    _u_lock_map[lock_id] += 1;
+  }
+  
+  void release(ResourceIdT lock_id){
+    global_cnt -= 1;
+
+    _u_lock_map[lock_id] -= 1;
+  }
+
+  bool contains(ResourceIdT lock_id) const{
+    auto it = _u_lock_map.find(lock_id);
+    return _contains(it);
+  }
+
+  bool contains_only(ResourceIdT lock_id) const{
+    auto it = _u_lock_map.find(lock_id);
+    if (!_contains(it)){
+      return false;
+    }
+
+    return global_cnt == it->second;
+  }
+
+  // Returns the number of locks with a count > 0
+  size_t size() const{
+    size_t res = 0;
+    for (const auto& [lock, cnt] : _u_lock_map){
+      res += cnt > 0;
+    }
+    return res;
+  }
+
+  bool empty() const{
+    return global_cnt <= 0;
+  }
+  
+  LocksetT to_lockset() const{
+    LocksetT result;
+    
+    for (const auto& [lock_id, cnt] : this->_u_lock_map){
+      if (cnt > 0){
+        result.insert(lock_id);
+      }
+    }
+    
+    return result;
+  }
+
+  // Check that the iterator is valid and has a counter > 0
+  bool _contains(std::unordered_map<ResourceIdT, int>:: const_iterator it) const{
+    return it != _u_lock_map.end() && it->second > 0;
+  }
+};
+
+struct AbsDependency{
+  ThreadIdT thread_id;
+  ResourceIdT resource_id;
+  LocksetT lockset;
+
+  AbsDependency(ThreadIdT thread_id, ResourceIdT resource_id, const LocksetT& lockset)
+    : thread_id(thread_id), resource_id(resource_id), lockset(lockset){}
+
+  // Implements all comparison operators in the default way(first compare by thread, then resource, then lockset)
+  auto operator<=>(const AbsDependency&) const = default;
+
+  // return true if thread_ids and resource_ids differ and locksets don't intersect, false otherwise
+  bool is_valid_neigh_cand(const AbsDependency& other) const{
+    return thread_id != other.thread_id && resource_id != other.resource_id && !lockset_intersection(lockset, other.lockset);
+  }
+  
+  // return true if thread_ids and resource_ids differ and locksets don't softly intersect, false otherwise
+  bool is_valid_neigh_cand_soft(const AbsDependency& other) const{
+    return thread_id != other.thread_id && resource_id != other.resource_id && !lockset_intersection_soft(lockset, other.lockset);
+  }
+  
+  // return true if thread_ids differ and locksets don't intersect, false otherwise
+  bool is_valid_neigh_cand_opt(const AbsDependency& other) const{
+    return thread_id != other.thread_id && !lockset_intersection(lockset, other.lockset);
+  }
+
+  // TODO: Change this when separating locks and cond var
+  bool is_lock_dep() const{
+    return resource_id >= 0;
+  }
+
+};
+
+typedef std::map<AbsDependency, std::vector<Event>> NodeContainerT;
+typedef std::map<AbsDependency, std::vector<Event>>::const_iterator NodeConstItT;
+
+// Format for AbsDependency
+template <>
+struct std::formatter<AbsDependency> : std::formatter<std::string> {
+    auto format(const AbsDependency& dep, format_context& ctx) const {
+        return std::format_to(ctx.out(), "{}, {}, ({})", dep.thread_id, dep.resource_id, dep.lockset);
+    }
+};
+
+using SyncStatusT = std::variant<NodeConstItT, ResourceIdT>;
+
+// Custom hasher for SyncStatus
+//TODO: Can't this have collisions?
+struct SyncStatusHash {
+  std::size_t operator()(const SyncStatusT& sync_status) const {
+    if (std::holds_alternative<ResourceIdT>(sync_status)) {
+        return std::hash<ResourceIdT>{}(std::get<ResourceIdT>(sync_status));
+    }
+
+    return IteratorHasher()(std::get<NodeConstItT>(sync_status));
+  }
+};
+
+using RecentSyncStatusContT = CircularLRU<SyncStatusT, 8, SyncStatusHash>;
+
+struct ThreadInfo{
+  UReentrantLocksetT u_reen_lockset;
+  RecentSyncStatusContT recent_sync_status_cont;
+  VectorClock vec_clock;
+  bool is_asleep = false;
 };

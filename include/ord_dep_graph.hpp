@@ -6,16 +6,11 @@
 
 #include "predictor_types.hpp"
 
-
-typedef std::map<AbsDependency, std::vector<const Event*>> NodeContainerT;
-typedef std::map<AbsDependency, std::vector<const Event*>>::const_iterator NodeConstItT;
-
 typedef std::vector<NodeConstItT> NodeChainT;
+typedef std::unordered_set<NodeConstItT, IteratorHasher> NodeUSetT;
 typedef std::vector<NodeConstItT>::const_iterator NodeChainConstItT;
 typedef std::ranges::subrange<NodeChainConstItT> NodeChainRangeT;
-
-typedef std::unordered_set<NodeConstItT, IteratorHasher, IteratorHasher> NodeSetT;
-
+// typedef std::unordered_set<NodeConstItT, IteratorHasher, IteratorHasher> NodeSetT;
 typedef std::unordered_map<NodeConstItT, NodeChainT, IteratorHasher, IteratorHasher> NeighListT;
 
 // Format for NodeChainT
@@ -56,6 +51,28 @@ struct OrdDepGraph{
 
     // The vector in neigh list is ordered
     NeighListT neigh_list;
+
+    size_t get_dep_count() const{
+        return abs_deps_map.size();
+    }
+
+    size_t get_lock_dep_count() const{
+        size_t lock_dep_count = 0;
+
+        for (const auto& [dep, ev] : abs_deps_map){
+            if (dep.is_lock_dep()){
+                lock_dep_count += 1;
+            }
+        }
+        
+        return lock_dep_count;
+    }
+
+    std::pair<size_t, size_t> get_split_dep_counts() const{
+        size_t lock_dep_count = get_lock_dep_count();
+        size_t cond_dep_count = get_dep_count() - lock_dep_count;
+        return {lock_dep_count, cond_dep_count};
+    }
 };
 
 // Struct that exposes a view on a graph by keeping pointers to the first valid node of the graph
