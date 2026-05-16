@@ -6,9 +6,9 @@ from pathlib import Path
 import time
 
 root_dir = Path(os.path.dirname(os.path.dirname(__file__)))
-bench_suite = "generated"
-out_files_base = root_dir / "benchmarks" / bench_suite/ "output"
-trace_path = root_dir / "benchmarks" / bench_suite/ "traces"
+bench_suite = "cond_var"
+out_files_base = root_dir / "benchmarks" / bench_suite / "output"
+trace_path = root_dir / "benchmarks" / bench_suite / "traces"
 bin_dir = root_dir / "bin"
 spdoffline_dir = root_dir / "vendor" / "spdoffline"
 sunhang_pred_extra_title = "-1-lvl-locks-as-deps"
@@ -45,20 +45,23 @@ def get_paths(bench_name: str, predictor: str):
     if predictor == spdoffline_name:
         input_path = std_to_bin_trace(input_path)
 
-    return input_path, out_path
+    meta_path = Path(trace_path) / "meta" / (bench_name + ".meta")
+
+    return input_path, out_path, meta_path
     
 def run_sunhang(bench_name: str):
     global out_files_base, trace_path
 
     print(f"SUnhang: Running benchmark: {bench_name}...\n")
 
-    input_path, out_path = get_paths(bench_name, sunhang_name)
+    input_path, out_path, meta_path = get_paths(bench_name, sunhang_name)
 
     print("Input path: ", input_path)
     print("Output path: ", out_path)
-    
+    print("Meta path: ", meta_path)
+
     pred_path = bin_dir / sunhang_base_name
-    cmd = [pred_path, input_path, out_path]
+    cmd = [pred_path, input_path, out_path, meta_path]
 
     execution_time = execute_cmd(cmd)
     open(out_path, 'a').write(f"\n{execution_time:.2f}")
@@ -67,7 +70,7 @@ def run_sunhang(bench_name: str):
 def run_spd_offline(bench_name: str):
     print(f"SPDOffline: Running benchmark: {bench_name}...\n")
 
-    input_path, out_path = get_paths(bench_name, spdoffline_name)
+    input_path, out_path, _ = get_paths(bench_name, spdoffline_name)
 
     print("Input path: ", input_path)
     print("Output path: ", out_path)

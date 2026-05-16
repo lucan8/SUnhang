@@ -45,8 +45,10 @@ struct EventHandler{
   CSHist cs_hist;
 
   // INTERNAL STUFF
-  std::unordered_map<ThreadIdT, ThreadInfo> thread_map;
-  std::unordered_map<ResourceIdT, VectorClock> last_write;
+
+  // These the id of the thread/var as index in the respective vectors
+  std::vector<ThreadInfo> thread_map;
+  std::vector<VectorClock> last_write;
   std::unordered_map<ResourceIdT, CVInfo> cv_map;
 
   // Intermediary step that helps to build the neighbour list of the graph
@@ -55,18 +57,10 @@ struct EventHandler{
   // Statistical info
   uint32_t acq_count = 0;
 
+  EventHandler(size_t thread_count, size_t var_count);
   // Calls handler associated with evt_info.event_type
   // Return true if event if valid, false otherwise
   bool handle_event(const EventInfo& evt_info);
-  
-  void print_th_exit_with_locks(){
-    for (const auto& [tid, th_info] : thread_map){
-      LocksetT lockset = th_info.u_reen_lockset.to_lockset();
-      if (!lockset.empty()){
-        Logger::print(LogType::WARN, "Thread {} exited holding locks {}", tid, lockset);
-      }
-    }
-  }
 
   void read_event(const EventInfo& evt_info);
   void write_event(const EventInfo& evt_info);
@@ -98,5 +92,7 @@ struct EventHandler{
   void print_summary(std::FILE* log_file) const;
   void print_summary() const;
 
+  void print_th_exit_with_locks() const;
   void print_th_vc_info() const;
+  void print_th_lockset_info() const;
 };

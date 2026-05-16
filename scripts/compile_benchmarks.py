@@ -5,7 +5,7 @@ import os
 from copy import deepcopy
 
 root_dir = Path(os.path.dirname(os.path.dirname(__file__))) / "benchmarks"
-bench_suite = "generated"
+bench_suite = "cond_var"
 bench_root_path = root_dir / bench_suite
 
 out_files_base = bench_root_path / "output"
@@ -58,6 +58,7 @@ def from_log_file_SPD(file_path: Path) -> list:
     return list(dic.values())
 
 def from_log_file_SUnhang(file_path: Path) -> list:
+    print(file_path)
     file = open(file_path, 'r')
     dic = {}
     
@@ -80,7 +81,7 @@ def from_log_file_SUnhang(file_path: Path) -> list:
         if split_line[0] == "num deadlocks":
             dic["dlk"] = int(split_line[1])
             break
-
+    
     # Skip until end
     for line in file:
         pass

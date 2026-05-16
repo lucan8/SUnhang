@@ -85,7 +85,7 @@ std::optional<EventInfo> TraceParser::get_next_event() {
 
 void TraceParser::print_summary(FILE* log_file) const{
     Logger::print(log_file, "num threads: {}", th_id_map.id_counter);
-    Logger::print(log_file, "num events: {}", line_index);
+    Logger::print(log_file, "num events: {}", line_index - 1);
     Logger::print(log_file, "num locations: {}", var_id_map.id_counter);
     Logger::print(log_file, "num locks: {}", lock_id_map.id_counter);
 }

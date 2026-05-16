@@ -1,3 +1,8 @@
+//Note: Using thread ids and resource ids as indexes in vectors can be quite fragile so be careful
+//Note: No more thread clean-up is done which might not be desirable!
+// UREENTRANTLOCKSET COULD ALSO USE A VECTOR INSTEAD OF A UMAP
+// Change LocksetT to be a sorted vector
+
 // COMPARE:
 // NOTIFY AND NOTIFYALL MERGE THEIR TS INTO ALL SLEEPING THREADS (AS ANYONE COULD WAKE UP)
 // THE QUEUE APROACH
@@ -66,6 +71,8 @@
 //7. Should proably do some form of garbage collection upon thread exits
 
 //IMPORTANT: Generic formatter for iterators
+//TODO: Add the hand-made tests for multi-notif situations
+//TODO: Change LRU to be normal instead of circular
 //TODO: COMPARE THE RUNTIME OF THE SECOND RELEASE WHEN USING VECTOR CLOCKS TO THE UNORDERED_MAP VERSION
 //TODO: ERR REPORT FILE FOR BAD TRACES
 //TODO: Rename the comparison operators as they are actually biased toward the first argument
@@ -124,6 +131,7 @@
 #include <future>
 #include <cassert>
 #include <filesystem>
+
 using namespace std::chrono_literals;
 namespace fs = std::filesystem;
 
@@ -138,21 +146,9 @@ namespace fs = std::filesystem;
 #include "../include/deadlock_checker.hpp"
 
 int main(int argc, char *argv[]) {
-    // const uint8_t exp_args = 4;
-    // if (argc != exp_args){
-    //     Logger::print(LogType::ERR, "Usage: ./SUnhang.exe [input_file_path] [out_summary_file_path] [extra_log_file_path]");
-    //     return 1; 
-    // }
-
-    // const uint8_t exp_args = 4;
-    // if (argc != exp_args){
-    //     Logger::print(LogType::ERR, "Usage: ./SUnhang.exe [input_file_path] [out_summary_file_path] [bad_trace_rep_file]");
-    //     return 1; 
-    // }
-
-    const uint8_t exp_args = 3;
+    const uint8_t exp_args = 4;
     if (argc != exp_args){
-        Logger::print(LogType::ERR, "Usage: ./SUnhang.exe [input_file_path] [out_summary_file_path]");
+        Logger::print(LogType::ERR, "Usage: ./SUnhang.exe [trace_path] [out_summary_path]  [trace_metadata_path] ");
         return 1; 
     }
 
@@ -160,11 +156,11 @@ int main(int argc, char *argv[]) {
 
     std::string trace_file_path = argv[1];
     std::string out_summ_path = argv[2];
-    // std::string bad_trace_rep_path = argv[3];
+    std::string trace_meta_file_path = argv[3];
 
     Logger::print(LogType::DBG, "Input path: {}", trace_file_path);
     Logger::print(LogType::DBG, "Out summary path: {}", out_summ_path);
-    // Logger::print(LogType::DBG, "Err report path: {}", bad_trace_rep_path);
+    Logger::print(LogType::DBG, "Trace meta path: {}", trace_meta_file_path);
 
     std::ifstream trace_file(trace_file_path);
     if(!trace_file.good()) {
@@ -178,32 +174,31 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // std::FILE* bad_trace_rep_file(std::fopen(bad_trace_rep_path.c_str(), "w"));
-    // if (!bad_trace_rep_file){
-    //     Logger::print(LogType::ERR, "Extra log file not found: {}", bad_trace_rep_path);
-    //     return 1;
-    // }
+    std::ifstream trace_meta_file(trace_meta_file_path);
+    if (!log_file){
+        Logger::print(LogType::ERR, "Log file not found: {}", trace_meta_file_path);
+        return 1;
+    }
 
     // // Test stuff
     // TestVectorClock::test();
     // TestPredictor::test();
 
+    // THIS NEEDS TO BE FIRST
+    meta::init(std::move(trace_meta_file));
     TraceParser trace_parser(std::move(trace_file));
-    EventHandler event_handler;
+    EventHandler event_handler(meta::THREAD_COUNT, meta::VAR_COUNT);
 
     // Trace parsing -> graph and critical section construction
-    // uint64_t ev_count = 0;
-    // Logger::print(LogType::INFO, "Parsing trace...");
+    uint64_t ev_count = 0;
     while (trace_parser.events_remaining()){
         auto event_opt = trace_parser.get_next_event();
         if (event_opt.has_value())
             event_handler.handle_event(event_opt.value());
-        
         // ev_count += 1;
         // if (ev_count % 100000 == 0){
-        //     Logger::print(LogType::DBG, "PARSED {} events!", ev_count);
-        //     event_handler.print_summary();
-        //     event_handler.print_th_vc_info();
+        //     Logger::print(LogType::INFO, "Parsed {} events!", ev_count);
+        //     // event_handler.print_th_lockset_info();
         // }
     }
     event_handler.build_neigh_list();

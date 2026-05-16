@@ -6,8 +6,16 @@ import os
 import shutil
 import sys
 
-bench_in_path = "benchmarks/generated/traces/std"
-bench_out_path = "benchmarks/generated/output_SUnhang"
+root_dir = Path(os.path.dirname(os.path.dirname(__file__))) / "benchmarks"
+bench_suite = "generated"
+
+bench_dir = root_dir / bench_suite
+trace_dir = bench_dir / "traces"
+predictor = "SUnhang-1-lvl-locks-as-deps"
+
+meta_dir = trace_dir / "meta"
+bench_in_path =  trace_dir / "std"
+bench_out_path = bench_dir / "output"
 
 def print_summary(trace_file_path: Path):
     ev_count = 0
@@ -79,6 +87,43 @@ def cleanup_old_predictors():
                 print(f"    Removing {predictor}...")
                 shutil.rmtree(predictor_dir)
 
+def from_log_to_meta():
+    os.makedirs(meta_dir, exist_ok=True)
+    for bench_path in bench_out_path.iterdir():
+        log_file_path = bench_path / predictor / "log.txt"
+        bench_name = bench_path.stem
+        meta_file_path = meta_dir / (bench_name + ".meta")
+
+        print(f"LOG PATH: {log_file_path}")
+        print(f"META PATH: {meta_file_path}")
+
+        meta_file = open(meta_file_path, 'w')
+        log_file = open(log_file_path, "r")
+
+        meta_info = f"{401} {20000} {4000}"
+        lines = log_file.readlines()
+
+        if lines:
+            lines = lines[1], lines[3], lines[4]
+            meta_info = " ".join([line.split(": ")[1].strip() for line in lines])
+
+        meta_file.write(meta_info)
+        print(meta_info)
+        
+def split_runtime():
+    dic = {"parse" : 0, "enum" : 0, "abs check" : 0, "sync check" : 0}
+    keys = list(dic.keys())
+
+    for bench_path in bench_out_path.iterdir():
+        log_file_path = bench_path / predictor / "log.txt"
+        log_file = open(log_file_path)
+
+        for i, line in enumerate(log_file.readlines()[-6:-2]):
+            dic[keys[i]] += int(line.split(" = ")[1].split()[0]) / 1000
+    
+    for k, v in dic.items():
+        print(f"{k} = {v:.2f} sec")
+
 def main():
     opt = sys.argv[1]
     match opt:
@@ -93,6 +138,10 @@ def main():
             print_thread_op(tid, in_trace_path, out_trace_path)
         case "print_last_op":
             print_th_last_op(Path(bench_in_path) / f"{sys.argv[2]}.std")
+        case "log_to_meta":
+            from_log_to_meta()
+        case "split_runtime":
+            split_runtime()
         case _:
             print("Invalid option")
 

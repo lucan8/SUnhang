@@ -1,7 +1,10 @@
 #include "../include/event_handler.hpp"
 #include "../include/logger.hpp"
 #include <algorithm>
+#include <numeric>
 #include <memory>
+
+EventHandler::EventHandler(size_t thread_count, size_t var_count) : thread_map(thread_count) , last_write(var_count){}
 
 bool EventHandler::handle_event(const EventInfo& evt_info){
     switch (evt_info.event_type){
@@ -131,7 +134,7 @@ void EventHandler::handle_sleepness(ThreadInfo& th_info, ResourceIdT ass_lock_id
         // Get the cv of this associated lock and it's info
         ResourceIdT cv_id = get_ass_sync_obj(ass_lock_id);
         auto cv_info_it = cv_map.find(cv_id);
-        assert(cv_info_it != cv_map.end()); //REMOVE THIS
+        // assert(cv_info_it != cv_map.end()); //REMOVE THIS
         
         // Acknowledge the event as happening before this
         CVInfo& cv_info = cv_info_it->second;
@@ -178,7 +181,7 @@ void EventHandler::release_event(const EventInfo& evt_info) {
 void EventHandler::fork_event(const EventInfo& evt_info) {
     // Logger::print(LogType::DBG, "Fork event");
     ThreadInfo& th_info = thread_map[evt_info.thread_id];
-    ThreadInfo& target_info = thread_map.emplace(evt_info.target, ThreadInfo()).first->second;
+    ThreadInfo& target_info = thread_map[evt_info.target];
 
     target_info.vec_clock.merge_into(th_info.vec_clock);
 }
@@ -186,7 +189,7 @@ void EventHandler::fork_event(const EventInfo& evt_info) {
 void EventHandler::join_event(const EventInfo& evt_info) {
     // Logger::print(LogType::DBG, "Join event");
     ThreadInfo& th_info = thread_map[evt_info.thread_id];
-    ThreadInfo target_info = thread_map.extract(evt_info.target).mapped();
+    ThreadInfo target_info = thread_map[evt_info.target];
 
     th_info.vec_clock.merge_into(target_info.vec_clock);
 }
@@ -358,10 +361,27 @@ void EventHandler::print_summary() const{
     Logger::print(LogType::DBG, "num cond deps: {}", cond_dep_count);
 }
 
+void EventHandler::print_th_exit_with_locks() const{
+    for (const auto& [tid, th_info] : std::views::enumerate(thread_map)){
+        LocksetT lockset = th_info.u_reen_lockset.to_lockset();
+        if (!lockset.empty()){
+        Logger::print(LogType::WARN, "Thread {} exited holding locks {}", tid, lockset);
+        }
+    }
+}
+
 void EventHandler::print_th_vc_info() const{
     uint64_t sum = 0;
-    for (const auto& [tid, th_info] : thread_map){
+    for (const auto& [tid, th_info] : std::views::enumerate(thread_map)){
         sum += th_info.vec_clock._vector_clock.size();
+    }
+    Logger::print(LogType::DBG, "mean={}, count={}", sum / thread_map.size(), thread_map.size());
+}
+
+void EventHandler::print_th_lockset_info() const{
+    uint64_t sum = 0;
+    for (const auto& [tid, th_info] : std::views::enumerate(thread_map)){
+        sum += th_info.u_reen_lockset._u_lock_map.size();
     }
     Logger::print(LogType::DBG, "mean={}, count={}", sum / thread_map.size(), thread_map.size());
 }
