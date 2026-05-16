@@ -1,3 +1,42 @@
+// COMPARE:
+// NOTIFY AND NOTIFYALL MERGE THEIR TS INTO ALL SLEEPING THREADS (AS ANYONE COULD WAKE UP)
+// THE QUEUE APROACH
+
+// ECLIPSE PRODUCES BAD TRACE
+// THREADS WAKEUP WITHOUT THERE EVER BEING A NOTIFY
+// THIS IS PROBABLY A LIMITATION COMING FROM THE INSTRUMENTOR
+// BUT IN RARE CASES THE WAKE-UP CAN COME FROM THE OS(WTF???)
+
+// TODO JACONTEBE:
+// TEST WITH TIMEOUT 60 OR MORE, ADD MEMORY ACCESSES BACK, CHECK PROGRAM EXITS AS WELL
+// WEIRD LUCENE BEHAVIOUR
+//1. IF WE RUN WITHOUT MEMORY ACCESSES WE FIND CYCLES, PATTERNS AND EVEN DEADLOCK
+//2. OTHERWISE NOTHING IS FOUND! THAT'S WRONG
+
+//COND VAR OBSERVATIONS:
+
+// AUTHOR IMPLEMENTATION QUESTIONS:
+
+//1.
+// RECENT STATUS MIGHT CONTAIN A COND VAR AND THEN THE SAME THREAD MIGHT CALL SIGNAL ON IT
+// THAT MIGHT CREATE THE DEPENDENCY COND_VAR -> COND_VAR WHICH IS PLAIN STUPID
+
+//2. 
+// THE DEPENDENCY ASSOC_LOCK -> COND_VAR ALSO EXISTS AND DOESN'T MAKE MUCH SENSE
+
+// WAIT EXTRA BEHAVIOUR(OF RELEASING THE LOCK BEFORE SLEEP AND ACQUIRING IT UPON WAKING)
+//      ARE HANDLED in convert_2_std from their artifact
+// COND_VAR_ID = -LOCK_ID (the conversion is done here, not in the trace)
+// wait/join if it blocks should update their timestamps
+// to the current state of the system upon waking up
+// if t1 waits and let's say another 2 threads keep executing stuff, upon waking t1 should
+// be aware that the other 2 threads executed before it to avoid creating fake deadlocks
+
+// Currently inefficient because it removes and adds deps back due to new cond_vars appearing
+// We need to update fast, preferably without removing and have an order only at the end
+
+// StdIdMap has counters starting at 1 because of the id and -id lock and cond_var hack
+// IMPORTANT: IS THE PREDECESSOR JUST thread_epoch - 1?
 // Benchmark conclusions
 
 // Generated
@@ -16,23 +55,18 @@
 // SUnahng4: DBCP1 +1 dlk, JDBC-MYSQL4 +1 dlk
 
 // OBSERVATIONS/IMPROVEMENTS
-//1. SOLVED (MENTION IT IN THE PAPER)
-// Small mistake on their side, fork/join actually create fake thread entries in the maps
-// For example fork(18) will create an entry 18 : id, and T18 will create another one which is wrong!
-// They also seem to be counting acquires twice, this makes the benchmarks seem more impressive than they are
 
 //3. 
 // Another source of false positives appears because it can't track control flow
-
-//4.
-
-// Every lock will also have a read operation which is redundant
 
 //5.
 // Only looks at lock operations that use monitors(synchronized blocks)
 // And ignores explicit locking like using java.util.concurrent.locks.Lock;
 
+//7. Should proably do some form of garbage collection upon thread exits
+
 //IMPORTANT: Generic formatter for iterators
+//TODO: COMPARE THE RUNTIME OF THE SECOND RELEASE WHEN USING VECTOR CLOCKS TO THE UNORDERED_MAP VERSION
 //TODO: ERR REPORT FILE FOR BAD TRACES
 //TODO: Rename the comparison operators as they are actually biased toward the first argument
 //TODO: How does this handle nested cycles?
@@ -47,6 +81,10 @@
 //TODO: Template formater for vectors(YOU HAVE IT, USE IT)
 //TODO: Pack the comparison operators of VectorClock together in one
 //TODO: Timer function
+//TODO: Circular array range based for loop
+//TODO: Resources would benefit from a enum
+//TODO: Differentiating between the locksets that contains cond_vars and locks and those that only locks
+// would be useful
 
 // TODO: Bensalem asserts!
 // Graph info for bensalem: 12 nodes, only 3 with outgoing neighbours, graph on the second to last page of your notebook
@@ -57,6 +95,10 @@
 // BIG QUESTION: Shouldn't the nodes(deps) be sorted based on when they appear in the trace?
 // As keeping them in a mere map does not guarantee that ordering.
 // ANSWER: NOP, dependencies can't really use the trace order, that's for events
+
+// OPTIMIZATION:
+// Currently the dep map and CSHist keep events but in most of the situations they refer to the same
+// thing, using shared_ptr would probably be the go here or a master vector of pointers
 
 //OPTIMIZATION:
 // Instead of recomputing the SCCs everytime on the subgraph, take only the SCC from which the node was removed
@@ -150,10 +192,19 @@ int main(int argc, char *argv[]) {
     EventHandler event_handler;
 
     // Trace parsing -> graph and critical section construction
+    // uint64_t ev_count = 0;
+    // Logger::print(LogType::INFO, "Parsing trace...");
     while (trace_parser.events_remaining()){
         auto event_opt = trace_parser.get_next_event();
         if (event_opt.has_value())
             event_handler.handle_event(event_opt.value());
+        
+        // ev_count += 1;
+        // if (ev_count % 100000 == 0){
+        //     Logger::print(LogType::DBG, "PARSED {} events!", ev_count);
+        //     event_handler.print_summary();
+        //     event_handler.print_th_vc_info();
+        // }
     }
     event_handler.build_neigh_list();
 
@@ -161,17 +212,24 @@ int main(int argc, char *argv[]) {
     Logger::print(log_file, "----Trace info----");
     trace_parser.print_summary(log_file);
     event_handler.print_summary(log_file);
+    // event_handler.print_comm_abs_deps();
+    // event_handler.print_th_exit_with_locks();
+
+    // fflush(log_file);
    
-    // event_handler.print_abs_deps(extra_log_file);
-    // Logger::print_dash_line(extra_log_file);
-    // event_handler.print_neigh_list(extra_log_file);
+    // event_handler.print_abs_deps();
+    // Logger::print_dash_line();
+    // event_handler.print_neigh_list();
 
     auto end = std::chrono::system_clock::now();
     auto millis_passed_parse_trace = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
     CycleEnumerator cycle_enumerator(event_handler.graph_view);
     cycle_enumerator.enum_cycles();
+    // cycle_enumerator.print_info();
     Logger::print(log_file, "num cycles: {}", cycle_enumerator.res_cycles.size());
+    // Logger::print(LogType::INFO, "num cycles: {}", cycle_enumerator.res_cycles.size());
+    // fflush(log_file);
 
     end = std::chrono::system_clock::now();
     auto millis_passed_cycle_enum = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
@@ -187,18 +245,23 @@ int main(int argc, char *argv[]) {
     }
 
     Logger::print(log_file, "num abstract: {}", abs_dlk_cycles_ind.size());
+    // Logger::print(LogType::INFO, "num abstract: {}", abs_dlk_cycles_ind.size());
     Logger::print(log_file, "num concrete: -1\n"); // Just to match the format
+    // fflush(log_file);
     
     end = std::chrono::system_clock::now();
     auto millis_passed_abs_dlk_check = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
     
     uint32_t real_dlk_count = 0;
+    std::vector<int> real_dlk_ind;
     for (int i : abs_dlk_cycles_ind){
         auto dlk_info_opt = dlk_checker.get_sync_preserving_dlk(cycle_enumerator.res_cycles[i]);
         if (dlk_info_opt.has_value()){
             real_dlk_count += 1;
             auto dlk_info = dlk_info_opt.value();
             Logger::print(log_file, "Deadlock found on cycle: {}", dlk_info);
+            real_dlk_ind.push_back(i);
+            // fflush(log_file);
         }
     }
 
@@ -206,11 +269,11 @@ int main(int argc, char *argv[]) {
     auto millis_passed_sync_pres_check = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
     
     Logger::print(log_file, "\nnum deadlocks: {}", real_dlk_count);
+    // Logger::print(LogType::INFO, "num deadlocks: {}", real_dlk_count);
 
     Logger::print(log_file, "Time for parsing and graph construction = {} milliseconds", millis_passed_parse_trace);
     Logger::print(log_file, "Time for cycle enumeration = {} milliseconds", millis_passed_cycle_enum - millis_passed_parse_trace);
     Logger::print(log_file, "Time for abs deadlock checks = {} milliseconds", millis_passed_abs_dlk_check - millis_passed_cycle_enum);
     Logger::print(log_file, "Time for sync pres check = {} milliseconds", millis_passed_sync_pres_check - millis_passed_abs_dlk_check);
-    Logger::print(log_file, "{}", millis_passed_sync_pres_check);
     return 0;
 }
