@@ -4,7 +4,8 @@
 #include <numeric>
 #include <memory>
 
-EventHandler::EventHandler(size_t thread_count, size_t var_count) : thread_map(thread_count) , last_write(var_count){}
+EventHandler::EventHandler(size_t thread_count, size_t var_count) 
+    : alive_th_count(1), thread_map(thread_count), last_write(var_count){}
 
 bool EventHandler::handle_event(const EventInfo& evt_info){
     switch (evt_info.event_type){
@@ -45,54 +46,40 @@ bool EventHandler::handle_event(const EventInfo& evt_info){
 }
 
 void EventHandler::read_event(const EventInfo& evt_info) {
-    // Logger::print(LogType::DBG, "Read event");
-
-    if (thread_map.size() <= 1)
+    if (alive_th_count <= 1)
         return;
 
     thread_map[evt_info.thread_id].vec_clock.merge_into(last_write[evt_info.target]);
 }
 
 void EventHandler::write_event(const EventInfo& evt_info) {
-    // Logger::print(LogType::DBG, "Write event");
-
-    if (thread_map.size() <= 1)
+    if (alive_th_count <= 1)
         return;
 
     last_write[evt_info.target] = thread_map[evt_info.thread_id].vec_clock;
 }
 
 void EventHandler::wait_event(const EventInfo& evt_info) {
-    // Logger::print(LogType::DBG, "Wait event");
+    // TODO: CALLING WAIT AS A SINGLE THREAD IS PLAIN STUPID, PROBABLY SHOULD PRINT AN ERROR
+    if (alive_th_count <= 1)
+        return;
     
     ThreadInfo& th_info = thread_map[evt_info.thread_id];
 
-    // TODO: CALLING WAIT AS A SINGLE THREAD IS PLAIN STUPID, PROBABLY SHOULD PRINT AN ERROR
-    if (thread_map.size() <= 1)
-        return;
-    
-    // // If lockset is empty add it to the recent statuses
-    // if (th_info.u_reen_lockset.empty()){
-    //     th_info.recent_sync_status_cont.push(evt_info.target);
-    // }
-    // else{ // Else create a new dep and add it as a recent status
-    Event evt = Event(th_info.vec_clock, evt_info.line, evt_info.src_loc);
-    NodeConstItT dep = create_dep(evt_info.thread_id, evt_info.target, th_info.u_reen_lockset.to_lockset(), evt);
-    th_info.recent_sync_status_cont.push(dep);
     th_info.is_asleep = true;
     cv_map[evt_info.target].sleep_thread();
-    // }
+
+    Event evt = Event(th_info.vec_clock, evt_info.line, evt_info.src_loc);
+    handle_dep_creation(th_info, evt_info, evt);
 }
 
 void EventHandler::notify_event(const EventInfo& evt_info, bool notify_all) {
-    // Logger::print(LogType::DBG, "Write event");
-
-    ThreadInfo& th_info = thread_map[evt_info.thread_id];
-
     // TODO: CALLING NOTIFY AS A SINGLE THREAD IS PLAIN STUPID, PROBABLY SHOULD PRINT AN ERROR
-    if (thread_map.size() <= 1)
+    if (alive_th_count <= 1)
         return;
     
+    ThreadInfo& th_info = thread_map[evt_info.thread_id];
+
     auto& rec_sync_status_cont = th_info.recent_sync_status_cont;
     auto& container = rec_sync_status_cont.container;
     RecentSyncStatusContT new_rec_sync_status_cont;
@@ -129,37 +116,19 @@ void EventHandler::notify_event(const EventInfo& evt_info, bool notify_all) {
     cv_map[evt_info.target].notify_thread(th_info.vec_clock, notify_all);
 }
 
-void EventHandler::handle_sleepness(ThreadInfo& th_info, ResourceIdT ass_lock_id){
-    if (th_info.is_asleep){
-        // Get the cv of this associated lock and it's info
-        ResourceIdT cv_id = get_ass_sync_obj(ass_lock_id);
-        auto cv_info_it = cv_map.find(cv_id);
-        // assert(cv_info_it != cv_map.end()); //REMOVE THIS
-        
-        // Acknowledge the event as happening before this
-        CVInfo& cv_info = cv_info_it->second;
-        //TODO: How do we even get in this situation?
-        if (!cv_info.notif_queue.empty()){
-            th_info.vec_clock.merge_into(cv_info.notif_queue.front().first);
-        }
-
-        // Wake-up
-        th_info.is_asleep = false;
-        cv_info.wake_thread();
-    }
-}
-
 void EventHandler::acquire_event(const EventInfo& evt_info) {
-    // Logger::print(LogType::DBG, "Acquire event");
-    acq_count++;    
+    acq_count++;
     ThreadInfo& th_info = thread_map[evt_info.thread_id];
 
-    // Maybe we just woke up, acknowledge the notify's vector clock
+    // TODO: This shouldn't really be executed if the thread is alone
     handle_sleepness(th_info, evt_info.target);
     Event evt = Event(th_info.vec_clock, evt_info.line, evt_info.src_loc);
 
-    NodeConstItT dep = create_dep(evt_info.thread_id, evt_info.target, th_info.u_reen_lockset.to_lockset(), evt);
-    th_info.recent_sync_status_cont.push(dep);
+    // Only create dependency if thread is not alone
+    if (alive_th_count > 1){
+        // Create the dependency BEFORE acquiring the lock
+        handle_dep_creation(th_info, evt_info, evt);
+    }
 
     // Add ev to critical section history and add lock to lockset
     CSInfo& cs_info = cs_hist.add_lock_ev(evt_info.target, evt_info.thread_id, evt);
@@ -167,8 +136,6 @@ void EventHandler::acquire_event(const EventInfo& evt_info) {
 }
 
 void EventHandler::release_event(const EventInfo& evt_info) {
-    // Logger::print(LogType::DBG, "Release event");
-        
     ThreadInfo& th_info = thread_map[evt_info.thread_id];
     
     // TODO: This could use a safe mode that checks the release was spurious
@@ -182,6 +149,7 @@ void EventHandler::fork_event(const EventInfo& evt_info) {
     // Logger::print(LogType::DBG, "Fork event");
     ThreadInfo& th_info = thread_map[evt_info.thread_id];
     ThreadInfo& target_info = thread_map[evt_info.target];
+    alive_th_count++;
 
     target_info.vec_clock.merge_into(th_info.vec_clock);
 }
@@ -190,6 +158,7 @@ void EventHandler::join_event(const EventInfo& evt_info) {
     // Logger::print(LogType::DBG, "Join event");
     ThreadInfo& th_info = thread_map[evt_info.thread_id];
     ThreadInfo target_info = thread_map[evt_info.target];
+    alive_th_count--;
 
     th_info.vec_clock.merge_into(target_info.vec_clock);
 }
@@ -264,6 +233,39 @@ void EventHandler::build_neigh_list() {
     }
 
     graph_view.init_start_structs();
+}
+
+
+void EventHandler::handle_sleepness(ThreadInfo& th_info, ResourceIdT ass_lock_id){
+    if (th_info.is_asleep){
+        // Get the cv of this associated lock and it's info
+        ResourceIdT cv_id = get_ass_sync_obj(ass_lock_id);
+        auto cv_info_it = cv_map.find(cv_id);
+        // assert(cv_info_it != cv_map.end()); //REMOVE THIS
+        
+        // Acknowledge the event as happening before this
+        CVInfo& cv_info = cv_info_it->second;
+
+        //TODO: The trace is bad if this happened
+        if (!cv_info.notif_queue.empty()){
+            th_info.vec_clock.merge_into(cv_info.notif_queue.front().first);
+        }
+
+        // Wake-up
+        th_info.is_asleep = false;
+        cv_info.wake_thread();
+    }
+}
+
+void EventHandler::handle_dep_creation(ThreadInfo& th_info, const EventInfo& evt_info, const Event& evt){
+    // Create dep and store in recent statuses if this is a notifying thread
+    if (!meta::NOTIF_THREADS.empty() && meta::NOTIF_THREADS[evt_info.thread_id]){
+        NodeConstItT dep = create_dep(evt_info.thread_id, evt_info.target, th_info.u_reen_lockset.to_lockset(), evt);
+        th_info.recent_sync_status_cont.push(dep);
+    }
+    else if(!th_info.u_reen_lockset.empty()){ // otherwise just create the dep if lockset is not empty
+        create_dep(evt_info.thread_id, evt_info.target, th_info.u_reen_lockset.to_lockset(), evt);
+    }
 }
 
 void EventHandler::print_abs_deps() const{

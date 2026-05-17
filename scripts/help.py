@@ -87,14 +87,17 @@ def cleanup_old_predictors():
                 print(f"    Removing {predictor}...")
                 shutil.rmtree(predictor_dir)
 
-def from_log_to_meta():
+def create_trace_meta():
     os.makedirs(meta_dir, exist_ok=True)
     for bench_path in bench_out_path.iterdir():
-        log_file_path = bench_path / predictor / "log.txt"
         bench_name = bench_path.stem
+
+        log_file_path = bench_path / predictor / "log.txt"
+        trace_file_path = bench_in_path / f"{bench_name}.std"
         meta_file_path = meta_dir / (bench_name + ".meta")
 
         print(f"LOG PATH: {log_file_path}")
+        print(f"TRACE PATH: {trace_file_path}")
         print(f"META PATH: {meta_file_path}")
 
         meta_file = open(meta_file_path, 'w')
@@ -108,6 +111,25 @@ def from_log_to_meta():
             meta_info = " ".join([line.split(": ")[1].strip() for line in lines])
 
         meta_file.write(meta_info)
+
+        # Put the threads that called notified at least once
+        notif_threads = set()
+        tid_map = {}
+        tid_cnt = 0
+
+        trace_file = open(trace_file_path, 'r')
+        for line in trace_file:
+            data = line.split("|")
+            tid, ev = data[0], data[1][:data[1].find("(")]
+            
+            if tid not in tid_map:
+                tid_map[tid] = tid_cnt
+                tid_cnt += 1
+
+            if ev == "notify" or ev == "broadcast":
+                notif_threads.add(str(tid_map[tid]))
+
+        meta_file.write(f"\n{len(notif_threads)}\n{" ".join(notif_threads)}")
         print(meta_info)
         
 def split_runtime():
@@ -138,8 +160,8 @@ def main():
             print_thread_op(tid, in_trace_path, out_trace_path)
         case "print_last_op":
             print_th_last_op(Path(bench_in_path) / f"{sys.argv[2]}.std")
-        case "log_to_meta":
-            from_log_to_meta()
+        case "create_trace_meta":
+            create_trace_meta()
         case "split_runtime":
             split_runtime()
         case _:

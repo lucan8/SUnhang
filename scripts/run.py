@@ -6,7 +6,7 @@ from pathlib import Path
 import time
 
 root_dir = Path(os.path.dirname(os.path.dirname(__file__)))
-bench_suite = "cond_var"
+bench_suite = "generated"
 out_files_base = root_dir / "benchmarks" / bench_suite / "output"
 trace_path = root_dir / "benchmarks" / bench_suite / "traces"
 bin_dir = root_dir / "bin"
