@@ -1,7 +1,14 @@
-//Note: Using thread ids and resource ids as indexes in vectors can be quite fragile so be careful
-//Note: No more thread clean-up is done which might not be desirable!
-// UREENTRANTLOCKSET COULD ALSO USE A VECTOR INSTEAD OF A UMAP
+// VERY IMPORTANT: WHY IS DBCP2 EMPTY?
+// VERY IMPORTANT: HANDLE SINGLE THREADED ACTIVITY CORRECTLY
+// BAD: TEST_DIMMUNIX MISSED DEADLOCKS
+
+// OPTIMIZATIONS
+// Note: Using thread ids and resource ids as indexes in vectors can be quite fragile so be careful
+// Note: No more thread clean-up is done which might not be desirable!
 // Change LocksetT to be a sorted vector
+
+// TODO: Store the ids of the threads that call notify at least once
+// This allows us to ignore first level lock acquisitions for all other threads 
 
 // COMPARE:
 // NOTIFY AND NOTIFYALL MERGE THEIR TS INTO ALL SLEEPING THREADS (AS ANYONE COULD WAKE UP)
@@ -71,6 +78,7 @@
 //7. Should proably do some form of garbage collection upon thread exits
 
 //IMPORTANT: Generic formatter for iterators
+//TODO: Remove notifyAll(leave only broadcast)
 //TODO: Add the hand-made tests for multi-notif situations
 //TODO: Change LRU to be normal instead of circular
 //TODO: COMPARE THE RUNTIME OF THE SECOND RELEASE WHEN USING VECTOR CLOCKS TO THE UNORDERED_MAP VERSION
@@ -115,9 +123,6 @@
 // We could prune paths that can't be abstract deadlock patterns when we do cycle enumeration
 // For example if we have the chain (t1, l2, {l1}) -> (t2, l3, {l2}) -> (t1, l1, {l3})
 // We could stop looking at the path instantly as we are sure nothing will come out of it
-
-// OPTIMIZATION:
-// We could use vectors instead of maps for threads and resources as their ids are consecutive integers
 
 #include <string>
 #include <fstream>

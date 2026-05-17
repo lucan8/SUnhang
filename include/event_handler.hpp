@@ -47,6 +47,7 @@ struct EventHandler{
   // INTERNAL STUFF
 
   // These the id of the thread/var as index in the respective vectors
+  size_t alive_th_count;
   std::vector<ThreadInfo> thread_map;
   std::vector<VectorClock> last_write;
   std::unordered_map<ResourceIdT, CVInfo> cv_map;
@@ -79,7 +80,12 @@ struct EventHandler{
   NodeConstItT update_dep(NodeConstItT old_dep, ResourceIdT new_res);
 
   void build_neigh_list();
+
+  // Wakes up the thread if asleep and merges the corresponding notify event timestamp
   void handle_sleepness(ThreadInfo& th_info, ResourceIdT ass_lock_id);
+
+  // Helper that creates dependency(if needed) and adds it to the recent status of the thread (if needed)
+  void handle_dep_creation(ThreadInfo& th_info, const EventInfo& evt_info, const Event& evt);
 
   void print_abs_deps() const;
   void print_comm_abs_deps() const;

@@ -235,6 +235,7 @@ struct StdIdMap{
 
 };
 
+//TODO: I think it's safe to remove global_cnt
 struct UReentrantLocksetT{
     std::vector<int> _u_lock_map;
     std::vector<ResourceIdT> _active_locks; 

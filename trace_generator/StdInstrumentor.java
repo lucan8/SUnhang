@@ -133,7 +133,7 @@ public class StdInstrumentor extends Tool {
             int iid = 0;
             
             if (e.isNotifyAll()) {
-                out.println("T" + tid + "|notifyAll(" + lockId + ")|" + iid);
+                out.println("T" + tid + "|broadcast(" + lockId + ")|" + iid);
             } else {
                 out.println("T" + tid + "|notify(" + lockId + ")|" + iid);
             }

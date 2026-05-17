@@ -19,7 +19,6 @@ using NotifQueue = std::queue<std::pair<VectorClock, uint32_t>>;
 struct VectorClock {
     std::vector<VCValueT> _vector_clock;
     VectorClock();
-    VectorClock(size_t thread_count);
     VectorClock(ThreadIdT increment_thread_id);
 
     // TODO: Remove this
