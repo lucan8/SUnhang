@@ -1,23 +1,27 @@
-// VERY IMPORTANT: WHY IS DBCP2 EMPTY?
-// VERY IMPORTANT: HANDLE SINGLE THREADED ACTIVITY CORRECTLY
-// BAD: TEST_DIMMUNIX MISSED DEADLOCKS
+// MISUNDERSTANDINGS:
+
+// DEAD THREADS DON'T ACTUALLY CAUSE ISSUES FOR SPDOFFLINE
+// ABSTRACT DEPENDENCIES MIGHT INCLUDE SOURCE CODE LOCATIONS, THAT'S WHY THEY GROW
+
+// OBSERVATIONS FOR ORIGINAL
+// STRINGBUFFER PRINTS THE SAME DEADLOCK TWICE FOR SPD
+// DBCP1 PRINTS THE SAME DEADLOCK TWICE FOR SPD
+// MYSQL4: SAME
+// HASHMAP: SAME
+// WEAKHASHMAP: SAME
+// LINKEDHASHMAP: SAME
+// TREEMAP: SAME
+
+// JIGSAW PRINTS THE SAME DEADLOCK MULTIPLE TIMES
 
 // OPTIMIZATIONS
 // Note: Using thread ids and resource ids as indexes in vectors can be quite fragile so be careful
 // Note: No more thread clean-up is done which might not be desirable!
 // Change LocksetT to be a sorted vector
 
-// TODO: Store the ids of the threads that call notify at least once
-// This allows us to ignore first level lock acquisitions for all other threads 
-
 // COMPARE:
 // NOTIFY AND NOTIFYALL MERGE THEIR TS INTO ALL SLEEPING THREADS (AS ANYONE COULD WAKE UP)
 // THE QUEUE APROACH
-
-// ECLIPSE PRODUCES BAD TRACE
-// THREADS WAKEUP WITHOUT THERE EVER BEING A NOTIFY
-// THIS IS PROBABLY A LIMITATION COMING FROM THE INSTRUMENTOR
-// BUT IN RARE CASES THE WAKE-UP CAN COME FROM THE OS(WTF???)
 
 // TODO JACONTEBE:
 // TEST WITH TIMEOUT 60 OR MORE, ADD MEMORY ACCESSES BACK, CHECK PROGRAM EXITS AS WELL
@@ -44,40 +48,10 @@
 // if t1 waits and let's say another 2 threads keep executing stuff, upon waking t1 should
 // be aware that the other 2 threads executed before it to avoid creating fake deadlocks
 
-// Currently inefficient because it removes and adds deps back due to new cond_vars appearing
-// We need to update fast, preferably without removing and have an order only at the end
-
-// StdIdMap has counters starting at 1 because of the id and -id lock and cond_var hack
-// IMPORTANT: IS THE PREDECESSOR JUST thread_epoch - 1?
-// Benchmark conclusions
-
-// Generated
-
-// Bensalem has one false positive due to thread timestamp inheritance being absent from the author's solution
-// DBCP1 has one false positive due to thread timestamp inheritance being absent from the author's solution
-// DBCP2 still kinda sus with 200 dlks(both theirs and my solution gave this result)
-// Eclipse has one more cycles
-// HASHMAP gives a higher number of abs dlk patterns than cycles, which is impossible
-// IDENTITYHASHMAP gives a higher number of abs dlk patterns than cycles, which is impossible
-
-// Original
-
-// SUnhang3: JDBCMySQL-2: give 2 less dlks than SUnhang1, the same as SUnhang2, but with 2 less cycles
-// SUnhang3 and SUnhang2 give the same dlk counts except for JDBC-MYSQL3 which failed for SUnhang2 because of an assert that got removed
-// SUnahng4: DBCP1 +1 dlk, JDBC-MYSQL4 +1 dlk
-
-// OBSERVATIONS/IMPROVEMENTS
-
-//3. 
-// Another source of false positives appears because it can't track control flow
-
-//5.
-// Only looks at lock operations that use monitors(synchronized blocks)
-// And ignores explicit locking like using java.util.concurrent.locks.Lock;
-
-//7. Should proably do some form of garbage collection upon thread exits
-
 //IMPORTANT: Generic formatter for iterators
+//TODO: Should we actually print cycles that only differ by source code location?
+//TODO: Reentrant locks for cshist
+//TODO: Look into implementing the binary trace
 //TODO: Remove notifyAll(leave only broadcast)
 //TODO: Add the hand-made tests for multi-notif situations
 //TODO: Change LRU to be normal instead of circular
@@ -157,8 +131,6 @@ int main(int argc, char *argv[]) {
         return 1; 
     }
 
-    auto start = std::chrono::system_clock::now();
-
     std::string trace_file_path = argv[1];
     std::string out_summ_path = argv[2];
     std::string trace_meta_file_path = argv[3];
@@ -167,8 +139,8 @@ int main(int argc, char *argv[]) {
     Logger::print(LogType::DBG, "Out summary path: {}", out_summ_path);
     Logger::print(LogType::DBG, "Trace meta path: {}", trace_meta_file_path);
 
-    std::ifstream trace_file(trace_file_path);
-    if(!trace_file.good()) {
+    std::FILE* trace_file(std::fopen(trace_file_path.c_str(), "r"));
+    if(!trace_file) {
         Logger::print(LogType::ERR, "In file not found: {}", trace_file_path);
         return 1;
     }
@@ -179,20 +151,22 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    std::ifstream trace_meta_file(trace_meta_file_path);
-    if (!log_file){
-        Logger::print(LogType::ERR, "Log file not found: {}", trace_meta_file_path);
+    std::FILE* trace_meta_file(std::fopen(trace_meta_file_path.c_str(), "r"));
+    if (!trace_meta_file){
+        Logger::print(LogType::ERR, "Meta file not found: {}", trace_meta_file_path);
         return 1;
     }
 
-    // // Test stuff
+    // Test stuff
     // TestVectorClock::test();
     // TestPredictor::test();
 
     // THIS NEEDS TO BE FIRST
-    meta::init(std::move(trace_meta_file));
-    TraceParser trace_parser(std::move(trace_file));
+    meta::init(trace_meta_file);
+    TraceParser trace_parser(trace_file);
     EventHandler event_handler(meta::THREAD_COUNT, meta::VAR_COUNT);
+
+    auto start = std::chrono::system_clock::now();
 
     // Trace parsing -> graph and critical section construction
     uint64_t ev_count = 0;
@@ -200,11 +174,6 @@ int main(int argc, char *argv[]) {
         auto event_opt = trace_parser.get_next_event();
         if (event_opt.has_value())
             event_handler.handle_event(event_opt.value());
-        // ev_count += 1;
-        // if (ev_count % 100000 == 0){
-        //     Logger::print(LogType::INFO, "Parsed {} events!", ev_count);
-        //     // event_handler.print_th_lockset_info();
-        // }
     }
     event_handler.build_neigh_list();
 
@@ -212,24 +181,14 @@ int main(int argc, char *argv[]) {
     Logger::print(log_file, "----Trace info----");
     trace_parser.print_summary(log_file);
     event_handler.print_summary(log_file);
-    // event_handler.print_comm_abs_deps();
-    // event_handler.print_th_exit_with_locks();
-
-    // fflush(log_file);
-   
-    // event_handler.print_abs_deps();
-    // Logger::print_dash_line();
-    // event_handler.print_neigh_list();
 
     auto end = std::chrono::system_clock::now();
     auto millis_passed_parse_trace = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
     CycleEnumerator cycle_enumerator(event_handler.graph_view);
     cycle_enumerator.enum_cycles();
-    // cycle_enumerator.print_info();
+    
     Logger::print(log_file, "num cycles: {}", cycle_enumerator.res_cycles.size());
-    // Logger::print(LogType::INFO, "num cycles: {}", cycle_enumerator.res_cycles.size());
-    // fflush(log_file);
 
     end = std::chrono::system_clock::now();
     auto millis_passed_cycle_enum = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
@@ -245,7 +204,6 @@ int main(int argc, char *argv[]) {
     }
 
     Logger::print(log_file, "num abstract: {}", abs_dlk_cycles_ind.size());
-    // Logger::print(LogType::INFO, "num abstract: {}", abs_dlk_cycles_ind.size());
     Logger::print(log_file, "num concrete: -1\n"); // Just to match the format
     // fflush(log_file);
     
@@ -261,7 +219,6 @@ int main(int argc, char *argv[]) {
             auto dlk_info = dlk_info_opt.value();
             Logger::print(log_file, "Deadlock found on cycle: {}", dlk_info);
             real_dlk_ind.push_back(i);
-            // fflush(log_file);
         }
     }
 
@@ -269,11 +226,17 @@ int main(int argc, char *argv[]) {
     auto millis_passed_sync_pres_check = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
     
     Logger::print(log_file, "\nnum deadlocks: {}", real_dlk_count);
-    // Logger::print(LogType::INFO, "num deadlocks: {}", real_dlk_count);
 
     Logger::print(log_file, "Time for parsing and graph construction = {} milliseconds", millis_passed_parse_trace);
     Logger::print(log_file, "Time for cycle enumeration = {} milliseconds", millis_passed_cycle_enum - millis_passed_parse_trace);
     Logger::print(log_file, "Time for abs deadlock checks = {} milliseconds", millis_passed_abs_dlk_check - millis_passed_cycle_enum);
     Logger::print(log_file, "Time for sync pres check = {} milliseconds", millis_passed_sync_pres_check - millis_passed_abs_dlk_check);
+    Logger::print(log_file, "Total Time = {} milliseconds", millis_passed_sync_pres_check);
+    
+    // Cleanup
+    std::fclose(log_file);
+    std::fclose(trace_meta_file);
+    std::fclose(trace_file);
+
     return 0;
 }

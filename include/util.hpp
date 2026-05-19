@@ -20,22 +20,19 @@ struct meta{
     inline static size_t LOCK_DEPTH = 8;
     inline static std::vector<uint8_t> NOTIF_THREADS = std::vector<uint8_t>();
 
-    static void init(std::ifstream trace_meta_file){
-        trace_meta_file >> THREAD_COUNT >> VAR_COUNT >> LOCK_COUNT;
-
+    static void init(std::FILE* trace_meta_file){
         size_t notif_thread_count = 0;
-        trace_meta_file >> notif_thread_count;
+        fscanf(trace_meta_file, "%zd %zd %zd\n%zd", &THREAD_COUNT, &VAR_COUNT, &LOCK_COUNT, &notif_thread_count);
         
         if (notif_thread_count > 0){
             NOTIF_THREADS.resize(THREAD_COUNT, 0);
             ThreadIdT tid;
 
             for (int i = 0; i < notif_thread_count; ++i){
-                trace_meta_file >> tid;
+                fscanf(trace_meta_file, "%d", &tid);
                 NOTIF_THREADS[tid] = 1;
             }
         }
-
         // Logger::print(LogType::DBG, "th_count: {}, var_count: {}, lock_count: {}, notif_th_count: {}", 
         //               THREAD_COUNT, VAR_COUNT, LOCK_COUNT, notif_thread_count);
         
