@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cstring>
 
 #include "../include/trace_parser.hpp"
 #include "../include/logger.hpp"
@@ -11,39 +12,34 @@ const std::unordered_map<std::string, EventsT> TraceParser::std_event_map = {
     {"notifyAll", EventsT::NOTIFYALL}, {"broadcast", EventsT::NOTIFYALL}
 };
 
-const char TraceParser::trace_sep = '|';
-const uint8_t TraceParser::exp_split_trace_size = 3;
+const char TraceParser::trace_sep[2] = "|";
+const uint8_t TraceParser::exp_trace_token_cnt = 4;
 
 bool TraceParser::events_remaining(){
-    return !trace_file.eof();
+    return !feof(trace_file);
 }
 
 // Map the std formated result to our custom result using the std_* maps
 // std format ex: T1|acq(l1)|25 might turn into 1, 1, 1 uisng the std_* maps
-std::optional<EventInfo> TraceParser::from_std(const std::vector<std::string>& current_result) {
-    // Set event type
-    auto event_len = current_result[1].find("(");
-    std::string event_str = current_result[1].substr(0, event_len);
-    auto event_type = std_event_map.find(event_str);
+std::optional<EventInfo> TraceParser::from_std(const std::string& tid, const std::string& ev_type, const std::string& target,
+                                               const std::string& src_loc) {
+    auto ev_type_it = std_event_map.find(ev_type);
 
     // Event not found
-    if(event_type == std_event_map.end()) {
-        // Logger::print(LogType::WARN, "Event not found: {}", event_str);
+    if(ev_type_it == std_event_map.end()) {
+        // Logger::print(LogType::WARN, "Event not found: {}", ev_type);
         return {};
     }
 
     EventInfo result = {};
 
     // Set event type and thread id
-    result.event_type = event_type->second;
-    result.thread_id = th_id_map.get(current_result[0]);
-    
-    // The event target(the variable on which the event is happening)
-    auto target = current_result[1].substr(event_len + 1, current_result[1].length() - event_len - 2);
+    result.event_type = ev_type_it->second;
+    result.thread_id = th_id_map.get(tid);
 
     // Update maps depending on operation
     if(result.event_type == EventsT::FORK || result.event_type == EventsT::JOIN) {
-        result.target = th_id_map.get(target.contains('T') ? target : "T" + target);
+        result.target = th_id_map.get(target[0] == 'T' ? target : "T" + target);
     }
     else if(result.event_type == EventsT::LK || result.event_type == EventsT::UK) {  
         result.target = lock_id_map.get(target);
@@ -56,27 +52,36 @@ std::optional<EventInfo> TraceParser::from_std(const std::vector<std::string>& c
     }
     
     // Set src code location
-    result.src_loc = std::stoi(current_result[2]);
+    result.src_loc = std::stoi(src_loc);
 
     return result;
 }
 
 std::optional<EventInfo> TraceParser::get_next_event() {
-    std::string evt_str;
-
-    std::getline(trace_file, evt_str);
-    
     line_index++;
 
-    std::vector<std::string> evt_str_split = split(evt_str, trace_sep);
+    char buffer[64];
+    fgets(buffer, sizeof(buffer), trace_file);
 
-    if(evt_str_split.size() != exp_split_trace_size) {
-        Logger::print(LogType::WARN, "Bad trace file format on line {}: {}", line_index, evt_str);
-        return {};
-    }
+    char* tid_c = std::strtok(buffer, trace_sep);
+    if (!tid_c) return {};
     
-    // Convert the split std event with our mapping
-    std::optional<EventInfo> event = from_std(evt_str_split);
+    char* ev_type_c = std::strtok(nullptr, "(");
+    if (!ev_type_c) return {};
+
+    char* target_c = std::strtok(nullptr, ")");
+    if (!target_c) return {};
+
+    char* src_loc_c = std::strtok(nullptr, "\n");
+    if (!src_loc_c) return {};
+
+    // Ignore the trailing "|"
+    src_loc_c += 1; 
+
+    std::string tid(tid_c), ev_type(ev_type_c), target(target_c), src_loc(src_loc_c);
+
+    // Convert the strings to our mapping
+    std::optional<EventInfo> event = from_std(tid, ev_type, target, src_loc);
     if (event.has_value())
         event.value().line = line_index;
 

@@ -13,3 +13,5 @@ ideeas/
 bin/
 *.data
 benchmarks/vendor
+__pycache__/
+!CMakeLists.txt
