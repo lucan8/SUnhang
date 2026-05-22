@@ -1,7 +1,14 @@
+//TODO: WHEN PRINTING THE NUMBER OF EVENTS TO THE META FILE IGNORE THE INVALID EVENTS
+//TODO: LOAD THE IGNORED EVENTS DIRECTLY FROM A FILE 
+// you even have simple serialization/deserialization for dynamic_bitset
+
 // MISUNDERSTANDINGS:
 
 // DEAD THREADS DON'T ACTUALLY CAUSE ISSUES FOR SPDOFFLINE
 // ABSTRACT DEPENDENCIES MIGHT INCLUDE SOURCE CODE LOCATIONS, THAT'S WHY THEY GROW
+// THE ABSTRACT DEP MAP IS ACTUALLY A MAP THAT HAS THE FIRST KEY THE ABS DEP
+// AND THE SECOND KEY THE LOCATION
+// THEN THAT POINTS TO A LIST OF EVENT IDS
 
 // OBSERVATIONS FOR ORIGINAL
 // STRINGBUFFER PRINTS THE SAME DEADLOCK TWICE FOR SPD
@@ -13,8 +20,11 @@
 // TREEMAP: SAME
 
 // JIGSAW PRINTS THE SAME DEADLOCK MULTIPLE TIMES
+// WORSE: JIGSAW DOESN'T PRINT ANYTHING
+// WEIRD, WHY: sharedLocks = new boolean[numEvents]; ?
 
 // OPTIMIZATIONS
+// TODO: IGNORE VARIABLES THAT ARE NEVER READ 
 // Note: Using thread ids and resource ids as indexes in vectors can be quite fragile so be careful
 // Note: No more thread clean-up is done which might not be desirable!
 // Change LocksetT to be a sorted vector
@@ -49,6 +59,7 @@
 // be aware that the other 2 threads executed before it to avoid creating fake deadlocks
 
 //IMPORTANT: Generic formatter for iterators
+//TODO: Events don't need the src_loc, only lock events do
 //TODO: Should we actually print cycles that only differ by source code location?
 //TODO: Reentrant locks for cshist
 //TODO: Look into implementing the binary trace
@@ -135,9 +146,9 @@ int main(int argc, char *argv[]) {
     std::string out_summ_path = argv[2];
     std::string trace_meta_file_path = argv[3];
 
-    Logger::print(LogType::DBG, "Input path: {}", trace_file_path);
-    Logger::print(LogType::DBG, "Out summary path: {}", out_summ_path);
-    Logger::print(LogType::DBG, "Trace meta path: {}", trace_meta_file_path);
+    // Logger::print(LogType::DBG, "Input path: {}", trace_file_path);
+    // Logger::print(LogType::DBG, "Out summary path: {}", out_summ_path);
+    // Logger::print(LogType::DBG, "Trace meta path: {}", trace_meta_file_path);
 
     std::FILE* trace_file(std::fopen(trace_file_path.c_str(), "r"));
     if(!trace_file) {
@@ -169,12 +180,30 @@ int main(int argc, char *argv[]) {
     auto start = std::chrono::system_clock::now();
 
     // Trace parsing -> graph and critical section construction
-    uint64_t ev_count = 0;
-    while (trace_parser.events_remaining()){
-        auto event_opt = trace_parser.get_next_event();
-        if (event_opt.has_value())
-            event_handler.handle_event(event_opt.value());
+    std::vector<EventInfo> events = trace_parser.parse_full_trace();
+    // Logger::print(LogType::INFO, "Finished trace parsing");
+    // uint64_t ev_count = 0;
+    // while (trace_parser.events_remaining()){
+    //     auto event_opt = trace_parser.get_next_event();
+    //     if (event_opt.has_value())
+    //         event_handler.handle_event(event_opt.value());
+    // }
+
+
+    size_t skipped_ev_cnt = 0;
+    for (const auto& [idx, ev] : std::views::enumerate(events)){
+        if (ev.ignored || 
+            is_lock_type(ev.event_type) && !trace_parser.shared_locks.is_shared(ev.target) ||
+            is_access_type(ev.event_type) && !trace_parser.shared_vars.is_shared(ev.target)){
+                skipped_ev_cnt++;
+                continue;
+        }
+        event_handler.handle_event(ev);
     }
+
+    // Logger::print(LogType::DBG, "skipped_ev_cnt: {}", skipped_ev_cnt);
+
+    // Logger::print(LogType::INFO, "Finished event handling");
     event_handler.build_neigh_list();
 
     // Print summaries
@@ -196,11 +225,13 @@ int main(int argc, char *argv[]) {
     DeadlockChecker dlk_checker(event_handler.cs_hist);
 
     std::vector<int> abs_dlk_cycles_ind;
+    size_t conc_count = 0;
     abs_dlk_cycles_ind.reserve(32);
     for (int i = 0; i < cycle_enumerator.res_cycles.size(); ++i){
         bool is_abs_dlk = dlk_checker.is_abs_dlk_pattern(cycle_enumerator.res_cycles[i]);
-        if (is_abs_dlk)
+        if (is_abs_dlk){
             abs_dlk_cycles_ind.push_back(i);
+        }
     }
 
     Logger::print(log_file, "num abstract: {}", abs_dlk_cycles_ind.size());
@@ -212,15 +243,45 @@ int main(int argc, char *argv[]) {
     
     uint32_t real_dlk_count = 0;
     std::vector<int> real_dlk_ind;
+
+    std::vector<std::pair<std::tuple<int, int, int>, int>> vals;
     for (int i : abs_dlk_cycles_ind){
+        auto& cycle = cycle_enumerator.res_cycles[i];
+        
+        for (auto& node : cycle){
+            for (auto& ev : node->second){
+                std::tuple<int, int, int> tup(node->first.thread_id, node->first.resource_id, ev.src_loc);
+                bool found = false;
+                for (auto& [t, c] : vals){
+                    if (t == tup){
+                        found = true;
+                        c += 1;
+                        break;
+                    }
+                }
+                if (!found){
+                    vals.push_back({tup, 0});
+                }
+            }
+        }
+
         auto dlk_info_opt = dlk_checker.get_sync_preserving_dlk(cycle_enumerator.res_cycles[i]);
         if (dlk_info_opt.has_value()){
             real_dlk_count += 1;
             auto dlk_info = dlk_info_opt.value();
             Logger::print(log_file, "Deadlock found on cycle: {}", dlk_info);
+            // Logger::print(LogType::DBG, "{}", cycle_enumerator.res_cycles[i]);
             real_dlk_ind.push_back(i);
         }
     }
+
+    // size_t prod = 1;
+    // for (auto v : count){
+    //     for (auto c : v){
+    //         prod *= c; 
+    //     }
+    // }
+
 
     end = std::chrono::system_clock::now();
     auto millis_passed_sync_pres_check = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();

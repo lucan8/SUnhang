@@ -20,17 +20,16 @@ def from_log_file_SPD(file_path: Path) -> list:
     dic = {}
     empty_res = [0] * (len(mini_columns))
 
-    line = file.readline()
+    line = file.readline().strip()
     if not line:
         return empty_res
     
     # Skip first lines
-    for i in range(6):
+    for i in range(5):
         file.readline()
 
-    dic["dep"] = 0
     # Next 3 lines are actually relevant
-    for i in range(2):
+    for i in range(3):
         split_line = file.readline().strip().split(": ")
         dic[split_line[0].split()[1][:4]] = int(split_line[1])
     
@@ -57,6 +56,7 @@ def from_log_file_SPD(file_path: Path) -> list:
     return list(dic.values())
 
 def from_log_file_SUnhang(file_path: Path) -> list:
+    # print(file_path)
     file = open(file_path, 'r')
     dic = {}
     empty_res = [0] * (len(common_columns) + len(mini_columns) - 1)
@@ -113,7 +113,7 @@ def from_log_file(file_path: Path, pred: str) -> list:
 def get_df_col():
     tuples = common_columns + list(itertools.product(settings.predictors, mini_columns))
     columns = pd.MultiIndex.from_tuples(tuples)
-    print(columns)
+    # print(columns)
 
     print(f"[INFO]: Compiled {len(columns)} columns!")
     return columns
@@ -242,7 +242,7 @@ def main():
 
     df = pd.DataFrame(rows, columns=cols).sort_values('N')
     # print(df)
-    print(df)
+
 
     # Aggregate results into a "Total" column
     total_row = ["Total"] + df.select_dtypes(include='number').sum().to_list()

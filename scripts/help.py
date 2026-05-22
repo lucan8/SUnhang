@@ -108,25 +108,6 @@ def format_meta_file(meta_file_path: Path):
 
     return out_file
 
-# Put the ids of threads that called notify at least once
-def add_notif_meta(meta_file, trace_file_path):
-    notif_threads = set()
-    tid_map = {}
-    tid_cnt = 0
-
-    trace_file = open(trace_file_path, 'r')
-    for line in trace_file:
-        data = line.split("|")
-        tid, ev = data[0], data[1][:data[1].find("(")]
-        
-        if tid not in tid_map:
-            tid_map[tid] = tid_cnt
-            tid_cnt += 1
-
-        if ev == "notify" or ev == "broadcast":
-            notif_threads.add(str(tid_map[tid]))
-
-    meta_file.write(f"\n{len(notif_threads)}\n{" ".join(notif_threads)}")
 
 def create_spd_trace():
     out_dir = settings.trace_dir / "tmp"
@@ -148,25 +129,74 @@ def create_spd_trace():
         
         out_file.close()
 
+# Put the ids of threads that called notify at least once
+def add_notif_meta(meta_file, trace_file_path):
+    notif_threads = set()
+    tid_map = {}
+    tid_cnt = 0
+
+    trace_file = open(trace_file_path, 'r')
+    for line in trace_file:
+        line = line.strip()
+        if not line:
+            continue
+        
+        data = line.split("|")
+        tid, ev = data[0], data[1][:data[1].find("(")]
+        
+        if tid not in tid_map:
+            tid_map[tid] = tid_cnt
+            tid_cnt += 1
+
+        if ev == "notify" or ev == "broadcast":
+            notif_threads.add(str(tid_map[tid]))
+
+    meta_file.write(f"\n{len(notif_threads)}\n{" ".join(notif_threads)}")
+
+def trace_meta_from_log(meta_path: Path, bench_name: str):
+    log_file_path = settings.out_files_base / bench_name / settings.spdoffline_dir / "log.txt"
+    if not log_file_path.exists():
+        return None
+    
+    log_file = open(log_file_path, "r")
+    meta_file = open(meta_path, "w")
+
+    # Skip header
+    log_file.readline()
+    for i in range(4):
+        line = log_file.readline()
+        meta_file.write(f"{int(line.split(": ")[1].strip()) + 1} ")
+    
+    return meta_file
+
 def create_trace_meta():
     os.makedirs(settings.trace_meta_dir, exist_ok=True)
 
     for trace_path in settings.trace_std_dir.iterdir():
         bench_name = trace_path.stem
+        print(bench_name)
 
         meta_file_path = settings.trace_meta_dir / (bench_name + ".meta")
 
         print(f"TRACE PATH: {trace_path}")
         print(f"META PATH: {meta_file_path}")
 
-        # Redirect the output of the converter to the meta file
-        std_to_bin_trace(trace_path, bench_name, meta_file_path)
+        # First try from log
+        print("Trying from log file...")
+        meta_file = trace_meta_from_log(meta_file_path, bench_name)
 
-        print("FINISHED WITH TRACE CONV")
+        # If we don't have one use the converter
+        if meta_file is None:
+            print("Failed. Getting it from trace conversion")
+            # Redirect the output of the converter to the meta file
+            std_to_bin_trace(trace_path, bench_name, meta_file_path)
 
-        # Reformat the redirected output and add the missing pieces
-        meta_file = format_meta_file(meta_file_path)
-        add_notif_meta(meta_file, trace_path)
+            # Reformat the redirected output and add the missing pieces
+            meta_file = format_meta_file(meta_file_path)
+
+        if settings.bench_suite != "original":
+            print("Adding notify metadata...")
+            add_notif_meta(meta_file, trace_path)
         
 def split_runtime():
     dic = {"parse" : 0, "enum" : 0, "abs check" : 0, "sync check" : 0}

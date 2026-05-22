@@ -39,6 +39,22 @@ enum class EventsT {
   NOTIFYALL = 9
 };
 
+inline bool is_lock_type(EventsT ev_type){
+  return ev_type == EventsT::LK || ev_type == EventsT::UK;
+}
+
+inline bool is_access_type(EventsT ev_type){
+  return ev_type == EventsT::RD || ev_type == EventsT::WR;
+}
+
+inline bool is_th_type(EventsT ev_type){
+  return ev_type == EventsT::FORK || ev_type == EventsT::JOIN;
+}
+
+inline bool is_cv_type(EventsT ev_type){
+  return ev_type == EventsT::WAIT || ev_type == EventsT::NOTIFY || ev_type == EventsT::NOTIFYALL;
+}
+
 // Formats EventsT
 // Needed when calling std::format
 template <>
@@ -67,6 +83,7 @@ struct EventInfo{
   ResourceIdT target;
   SrcLocT src_loc;
   TracePosT line; // line in trace file 
+  bool ignored = false;
 
   EventInfo(){}
   EventInfo(ThreadIdT thread_id, EventsT event_type, ResourceIdT target, SrcLocT src_loc, TracePosT line)

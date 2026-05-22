@@ -108,14 +108,15 @@ def run_cmd(cmd: list[str], stdout: str|None=None, timeout: int|None=None):
 
 def get_paths(bench_name: str, predictor: str):
 
+    print(predictor)
     out_path = (settings.out_files_base / bench_name / predictor / "log.txt")
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     
     meta_path = settings.trace_meta_dir / (bench_name + ".meta")
-    input_path = settings.trace_std_dir / (bench_name + ".std")
-
     if predictor == settings.spdoffline_name:
-        input_path = std_to_bin_trace(input_path, bench_name)
+        input_path = settings.trace_bin_dir / (bench_name + f".data")
+    else:
+        input_path = settings.trace_std_dir / (bench_name + f".std")
 
     return input_path, out_path, meta_path
     
@@ -151,11 +152,12 @@ def run_spd_offline(bench_name: str):
     print()
 
 def std_to_bin_trace(trace_path: Path, bench_name: str, stdout:Path|None=None):
+    print("CONVERTING TRACE...")
     output_path = settings.trace_bin_dir / (bench_name + ".data")
-    # jar_path = settings.trace_conv_jar_path
+    jar_path = settings.trace_conv_jar_path
 
-    # cmd = ['java', '-jar', jar_path, f"-p={trace_path}", "-f=std", f"-q={output_path}"]
-    # run_cmd(cmd, stdout)
+    cmd = ['java', '-jar', jar_path, f"-p={trace_path}", "-f=std", f"-q={output_path}"]
+    run_cmd(cmd, stdout)
 
     return output_path
 
@@ -176,7 +178,6 @@ def main():
         benchmarks = options.benchmarks.split(",")
 
     for bench in benchmarks:
-        # ORDER IS VERY IMPORTANT
         run_spd_offline(bench)
         run_sunhang(bench)
 

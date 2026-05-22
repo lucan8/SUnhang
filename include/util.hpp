@@ -14,15 +14,16 @@
 
 // TODO: Load lock depth too
 struct meta{
-    inline static size_t THREAD_COUNT = 1000;
-    inline static size_t VAR_COUNT = 30000;
-    inline static size_t LOCK_COUNT = 3000;
+    inline static size_t THREAD_COUNT;
+    inline static size_t EVENT_COUNT;
+    inline static size_t VAR_COUNT;
+    inline static size_t LOCK_COUNT;
     inline static size_t LOCK_DEPTH = 8;
     inline static std::vector<uint8_t> NOTIF_THREADS = std::vector<uint8_t>();
 
     static void init(std::FILE* trace_meta_file){
         size_t notif_thread_count = 0;
-        fscanf(trace_meta_file, "%zd %zd %zd\n%zd", &THREAD_COUNT, &VAR_COUNT, &LOCK_COUNT, &notif_thread_count);
+        fscanf(trace_meta_file, "%zd %zd %zd %zd\n%zd", &THREAD_COUNT, &EVENT_COUNT, &VAR_COUNT, &LOCK_COUNT, &notif_thread_count);
         
         if (notif_thread_count > 0){
             NOTIF_THREADS.resize(THREAD_COUNT, 0);
@@ -33,8 +34,8 @@ struct meta{
                 NOTIF_THREADS[tid] = 1;
             }
         }
-        // Logger::print(LogType::DBG, "th_count: {}, var_count: {}, lock_count: {}, notif_th_count: {}", 
-        //               THREAD_COUNT, VAR_COUNT, LOCK_COUNT, notif_thread_count);
+        // Logger::print(LogType::DBG, "th_count: {}, ev_count: {}, var_count: {}, lock_count: {}, notif_th_count: {}", 
+        //               THREAD_COUNT, EVENT_COUNT, VAR_COUNT, LOCK_COUNT, notif_thread_count);
         
         // Logger::print(LogType::DBG, "notif_th: {}", NOTIF_THREADS);
     }

@@ -24,5 +24,5 @@ predictors = [sunhang_name, spdoffline_name]
 spdoffline_dir = root_dir / "vendor" / spdoffline_name
 bin_dir = root_dir / "bin"
 sunhang_exe_path = bin_dir / sunhang_base_name
-spdoffline_jar_path = spdoffline_dir / "fat_spdoffline.jar"
+spdoffline_jar_path = spdoffline_dir / "fat_spdoffline1.jar"
 trace_conv_jar_path = spdoffline_dir / "fat_convert.jar"
