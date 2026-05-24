@@ -259,7 +259,7 @@ void EventHandler::handle_sleepness(ThreadInfo& th_info, ResourceIdT ass_lock_id
 
 void EventHandler::handle_dep_creation(ThreadInfo& th_info, const EventInfo& evt_info, const Event& evt){
     // Create dep and store in recent statuses if this is a notifying thread
-    if (!meta::NOTIF_THREADS.empty() && meta::NOTIF_THREADS[evt_info.thread_id]){
+    if (!meta_info.NOTIF_THREADS.empty() && meta_info.NOTIF_THREADS[evt_info.thread_id]){
         NodeConstItT dep = create_dep(evt_info.thread_id, evt_info.target, th_info.u_reen_lockset.to_lockset(), evt);
         th_info.recent_sync_status_cont.push(dep);
     }

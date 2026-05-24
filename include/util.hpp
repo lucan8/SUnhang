@@ -9,37 +9,35 @@
 #include <concepts>
 #include <array>
 #include <fstream>
+#include <unordered_map>
 #include "comm_types.hpp"
 #include "logger.hpp"
 
-// TODO: Load lock depth too
 struct meta{
-    inline static size_t THREAD_COUNT;
-    inline static size_t EVENT_COUNT;
-    inline static size_t VAR_COUNT;
-    inline static size_t LOCK_COUNT;
-    inline static size_t LOCK_DEPTH = 8;
-    inline static std::vector<uint8_t> NOTIF_THREADS = std::vector<uint8_t>();
+    ThreadIdT THREAD_COUNT = 0;
+    EventIdT EVENT_COUNT = 0;
+    ResourceIdT VAR_COUNT = 0;
+    ResourceIdT LOCK_COUNT = 0;
+    uint8_t LOCK_DEPTH = 8;
+    std::vector<uint8_t> NOTIF_THREADS;
 
-    static void init(std::FILE* trace_meta_file){
-        size_t notif_thread_count = 0;
-        fscanf(trace_meta_file, "%zd %zd %zd %zd\n%zd", &THREAD_COUNT, &EVENT_COUNT, &VAR_COUNT, &LOCK_COUNT, &notif_thread_count);
-        
-        if (notif_thread_count > 0){
-            NOTIF_THREADS.resize(THREAD_COUNT, 0);
-            ThreadIdT tid;
+    meta(ThreadIdT THREAD_COUNT, EventIdT EVENT_COUNT, ResourceIdT VAR_COUNT, ResourceIdT LOCK_COUNT)
+        : THREAD_COUNT(THREAD_COUNT), EVENT_COUNT(EVENT_COUNT), VAR_COUNT(VAR_COUNT), LOCK_COUNT(LOCK_COUNT){}
+    
+    meta(){}
 
-            for (int i = 0; i < notif_thread_count; ++i){
-                fscanf(trace_meta_file, "%d", &tid);
-                NOTIF_THREADS[tid] = 1;
-            }
-        }
-        // Logger::print(LogType::DBG, "th_count: {}, ev_count: {}, var_count: {}, lock_count: {}, notif_th_count: {}", 
-        //               THREAD_COUNT, EVENT_COUNT, VAR_COUNT, LOCK_COUNT, notif_thread_count);
-        
-        // Logger::print(LogType::DBG, "notif_th: {}", NOTIF_THREADS);
+    // Resized NOTIF_THREADS to THREAD_COUNT
+    void resize_notif_threads(){
+        NOTIF_THREADS.resize(THREAD_COUNT);
+    }
+
+    // Returns the size of the partial object that will be loaded from the bin/meta file
+    size_t load_sizeof() const{
+        return sizeof(*this) - sizeof(this->LOCK_DEPTH) - sizeof(NOTIF_THREADS);
     }
 };
+
+inline meta meta_info;
 
 // Splits str by sep
 inline std::vector<std::string> split(const std::string& str, char sep){

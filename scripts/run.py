@@ -63,7 +63,7 @@ def pool_proc_mem(process: subprocess.Popen, lang: PLang) -> float:
 
 
 def run_and_profile_cmd(cmd: list[str], lang:PLang, stdout: str|None=None, timeout: int|None=None) -> float:
-    print(f"Running cmd: {cmd}")
+    # print(f"Running cmd: {cmd}")
 
     if stdout is not None:
         stdout = open(stdout, 'w')
@@ -92,7 +92,7 @@ def run_and_profile_cmd(cmd: list[str], lang:PLang, stdout: str|None=None, timeo
 
 # Just runs the command and waits
 def run_cmd(cmd: list[str], stdout: str|None=None, timeout: int|None=None):
-    print(f"Running cmd: {cmd}")
+    # print(f"Running cmd: {cmd}")
 
     if stdout is not None:
         stdout = open(stdout, 'w')
@@ -107,59 +107,54 @@ def run_cmd(cmd: list[str], stdout: str|None=None, timeout: int|None=None):
         stdout.close()
 
 def get_paths(bench_name: str, predictor: str):
-
-    print(predictor)
     out_path = (settings.out_files_base / bench_name / predictor / "log.txt")
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     
-    meta_path = settings.trace_meta_dir / (bench_name + ".meta")
-    if predictor == settings.spdoffline_name:
-        input_path = settings.trace_bin_dir / (bench_name + f".data")
+    # meta_path = settings.trace_meta_dir / (bench_name + ".meta")
+    input_path = conv_trace(bench_name, predictor)
+
+    return input_path, out_path
+
+def run_predictor(bench_name: str, predictor: str):
+    print(f"Running predictor: {predictor}")
+    input_path, out_path = get_paths(bench_name, predictor)
+
+    print("Input path: ", input_path)
+    print("Output path: ", out_path)
+
+    stdout = None
+    if predictor == settings.sunhang_name:
+        lang = PLang.CPP
+        cmd = [settings.sunhang_exe_path, input_path, out_path]
     else:
-        input_path = settings.trace_std_dir / (bench_name + f".std")
-
-    return input_path, out_path, meta_path
+        lang = PLang.JAVA
+        cmd = ["java", "-Xmx8g", "-jar", settings.spdoffline_jar_path, f"-p={input_path}"]
+        stdout = out_path
     
-def run_sunhang(bench_name: str):
-    print(f"SUnhang: Running benchmark: {bench_name}...\n")
-
-    input_path, out_path, meta_path = get_paths(bench_name, settings.sunhang_name)
-
-    print("Input path: ", input_path)
-    print("Output path: ", out_path)
-    print("Meta path: ", meta_path)
-
-    pred_path = settings.sunhang_exe_path
-    cmd = [pred_path, input_path, out_path, meta_path]
-
-    peak_mem_usage = run_and_profile_cmd(cmd, PLang.CPP)
-    open(out_path, 'a').write(f"Peak memory usage = {peak_mem_usage} MB")
-    print()
-    
-def run_spd_offline(bench_name: str):
-    print(f"SPDOffline: Running benchmark: {bench_name}...\n")
-
-    input_path, out_path, _ = get_paths(bench_name, settings.spdoffline_name)
-
-    print("Input path: ", input_path)
-    print("Output path: ", out_path)
-
-    pred_path = settings.spdoffline_jar_path
-    cmd = ["java", "-Xmx8g", "-jar", pred_path, f"-p={input_path}"]
-
-    peak_mem_usage = run_and_profile_cmd(cmd, PLang.JAVA, out_path)
+    peak_mem_usage = run_and_profile_cmd(cmd, lang, stdout)
     open(out_path, 'a').write(f"Peak memory usage = {peak_mem_usage} MB")
     print()
 
-def std_to_bin_trace(trace_path: Path, bench_name: str, stdout:Path|None=None):
-    print("CONVERTING TRACE...")
-    output_path = settings.trace_bin_dir / (bench_name + ".data")
-    jar_path = settings.trace_conv_jar_path
+# Converts trace from std format. Returns the path to the binary trace
+# TODO: Do conversions only if needed
+def conv_trace(bench_name: str, predictor: str) -> Path:
+    std_trace_path = settings.trace_std_dir / (f"{bench_name}.std")
 
-    cmd = ['java', '-jar', jar_path, f"-p={trace_path}", "-f=std", f"-q={output_path}"]
-    run_cmd(cmd, stdout)
+    if predictor == settings.spdoffline_name:
+        bin_trace_path = settings.trace_bin_java_enc_dir / (bench_name + f".data")
+        cmd = ['java', '-jar', settings.spd_trace_conv_jar_path, f"-p={std_trace_path}", "-f=std", f"-q={bin_trace_path}"]
+    else:
+        bin_trace_path = settings.trace_bin_loc_enc_dir / (bench_name + f".data")
+        cmd = [settings.sunhang_conv_exe_path, std_trace_path, bin_trace_path]
+    
+    if not bin_trace_path.exists():
+        print(f"Converting Trace for: {predictor}, {bench_name}")
+        run_cmd(cmd)
+    else:
+        print(f"Skipping Trace Conversion for: {predictor}, {bench_name}")
 
-    return output_path
+
+    return bin_trace_path
 
 def get_benchmarks():
     return [path.stem for path in settings.trace_std_dir.iterdir()]
@@ -178,8 +173,8 @@ def main():
         benchmarks = options.benchmarks.split(",")
 
     for bench in benchmarks:
-        run_spd_offline(bench)
-        run_sunhang(bench)
+        run_predictor(bench, settings.spdoffline_name)
+        run_predictor(bench, settings.sunhang_name)
 
 if __name__ == "__main__":
     main()

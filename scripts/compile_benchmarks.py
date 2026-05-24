@@ -53,6 +53,7 @@ def from_log_file_SPD(file_path: Path) -> list:
     dic['time'] = float(file.readline().strip().split('=')[1].split()[0]) / 1000
     dic['mem'] = float(file.readline().strip().split('=')[1].split()[0])
 
+    # print(file_path, dic)
     return list(dic.values())
 
 def from_log_file_SUnhang(file_path: Path) -> list:

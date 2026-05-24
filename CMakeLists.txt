@@ -12,14 +12,12 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 
-set(SOURCE_FILES
+set(SUNHANG_SRC
     src/logger.cpp
 
-    src/test_predictor.cpp
     src/event_handler.cpp
     src/trace_parser.cpp
     
-    src/test_vectorclock.cpp
     src/vectorclock.cpp
 
     src/ord_dep_graph.cpp
@@ -28,9 +26,14 @@ set(SOURCE_FILES
     src/deadlock_checker.cpp
 )
 
-add_executable(SUnhang src/main.cpp ${SOURCE_FILES})
-# add_executable(conv_trace src/conv_trace.cpp ${SOURCE_FILES})
+set(CONV_TR_SRC
+    src/logger.cpp
+    src/trace_parser.cpp
+)
+
+add_executable(SUnhang src/main.cpp ${SUNHANG_SRC})
+add_executable(conv_trace src/conv_trace.cpp ${CONV_TR_SRC})
 
 # For std print
 target_link_libraries(SUnhang PRIVATE -lstdc++exp)
-# target_link_libraries(conv_trace PRIVATE -lstdc++exp)
+target_link_libraries(conv_trace PRIVATE -lstdc++exp)

@@ -4,7 +4,7 @@
 #include "../include/trace_parser.hpp"
 #include "../include/logger.hpp"
 
-const std::unordered_map<std::string, EventsT> TraceParser::std_event_map = {
+const std::unordered_map<std::string, EventsT> Parser::std_event_map = {
     {"r", EventsT::RD}, {"w", EventsT::WR},
     {"fork", EventsT::FORK}, {"join", EventsT::JOIN},
     {"acq", EventsT::LK}, {"rel", EventsT::UK},
@@ -12,16 +12,16 @@ const std::unordered_map<std::string, EventsT> TraceParser::std_event_map = {
     {"notifyAll", EventsT::NOTIFYALL}, {"broadcast", EventsT::NOTIFYALL}
 };
 
-const char TraceParser::trace_sep[2] = "|";
-const uint8_t TraceParser::exp_trace_token_cnt = 4;
+const char StdParser::trace_sep[2] = "|";
+const uint8_t StdParser::exp_trace_token_cnt = 4;
 
-bool TraceParser::events_remaining(){
+bool Parser::events_remaining(){
     return !feof(trace_file);
 }
 
 // Map the std formated result to our custom result using the std_* maps
 // std format ex: T1|acq(l1)|25 might turn into 1, 1, 1 uisng the std_* maps
-EventInfo TraceParser::from_std(const std::string& tid, EventsT ev_type, const std::string& target,
+EventInfo StdParser::_from_std(const std::string& tid, EventsT ev_type, const std::string& target,
                                 const std::string& src_loc) {
     EventInfo result = {};
 
@@ -35,14 +35,14 @@ EventInfo TraceParser::from_std(const std::string& tid, EventsT ev_type, const s
     }
     else if(is_lock_type(ev_type)) {
         result.target = lock_id_map.get(target);
-        shared_locks.update(result.thread_id, result.target);
+        // shared_locks.update(result.thread_id, result.target);
     }
     else if(is_cv_type(ev_type)) {  
         result.target = get_ass_sync_obj(lock_id_map.get(target));
     }
     else{
         result.target = var_id_map.get(target);
-        shared_vars.update(result.thread_id, result.target);
+        // shared_vars.update(result.thread_id, result.target);
     }
     
     // Set src code location and the trace id
@@ -52,9 +52,7 @@ EventInfo TraceParser::from_std(const std::string& tid, EventsT ev_type, const s
     return result;
 }
 
-std::optional<EventInfo> TraceParser::get_next_event() {
-    line_index++;
-
+std::optional<EventInfo> StdParser::get_next_event() {
     char buffer[64];
     fgets(buffer, sizeof(buffer), trace_file);
     
@@ -80,16 +78,16 @@ std::optional<EventInfo> TraceParser::get_next_event() {
     std::string tid(tid_c), target(target_c), src_loc(src_loc_c);
 
     // Convert the strings to our mapping
-    EventInfo event = from_std(tid, ev_type_it->second, target, src_loc);
+    line_index++;
+    EventInfo event = _from_std(tid, ev_type_it->second, target, src_loc);
 
     return event;
 }
 
 // Helper function for parse_full_trace. Should not be used anywhere else
-void TraceParser::_update_last_write(std::vector<EventInfo>& events, size_t ev_count, 
-                                     std::vector<int>& last_write) const{
-    int last_ev_idx = ev_count - 1;
-    EventInfo& last_ev = events[last_ev_idx];
+void Parser::_update_last_write(std::vector<EventInfo>& events, size_t curr_ev_idx, 
+                                std::vector<int>& last_write) const{
+    EventInfo& last_ev = events[curr_ev_idx];
 
     if (last_ev.event_type == EventsT::WR){
         // Ignore the write before this and update
@@ -97,7 +95,7 @@ void TraceParser::_update_last_write(std::vector<EventInfo>& events, size_t ev_c
         if (last_write_ev_id != -1){
             events[last_write_ev_id].ignored = true;
         }
-        last_write[last_ev.target] = last_ev_idx;
+        last_write[last_ev.target] = curr_ev_idx;
     }
     // Acknowledge the last write(make it so it is not ignored)
     else if (last_ev.event_type == EventsT::RD){
@@ -105,19 +103,17 @@ void TraceParser::_update_last_write(std::vector<EventInfo>& events, size_t ev_c
     }
 }
 
-std::vector<EventInfo> TraceParser::parse_full_trace(){
-    std::vector<EventInfo> events(meta::EVENT_COUNT);
-    size_t ev_count = 0;
-    std::vector<int> last_write(meta::VAR_COUNT, -1);
-
+std::vector<EventInfo> Parser::parse_full_trace(){
+    std::vector<EventInfo> events(meta_info.EVENT_COUNT);
+    std::vector<int> last_write(meta_info.VAR_COUNT, -1);
     size_t invalid_ev_cnt = 0;
-    while (events_remaining()){
+
+    for (size_t i = 0; i < events.size(); ++i){
         auto event_opt = get_next_event();
 
         if (event_opt.has_value()){
-            EventInfo& ev_info = event_opt.value();
-            events[ev_count++] = std::move(ev_info);
-            _update_last_write(events, ev_count, last_write);
+            events[i] = std::move(event_opt.value());
+            _update_last_write(events, i, last_write);
         }
         else{
             invalid_ev_cnt++;
@@ -134,7 +130,7 @@ std::vector<EventInfo> TraceParser::parse_full_trace(){
     return events;
 }
 
-void TraceParser::print_summary(FILE* log_file) const{
+void StdParser::print_summary(FILE* log_file) const{
     Logger::print(log_file, "num threads: {}", th_id_map.id_counter);
     Logger::print(log_file, "num events: {}", line_index);
     Logger::print(log_file, "num locations: {}", var_id_map.id_counter);

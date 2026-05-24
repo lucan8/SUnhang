@@ -26,17 +26,19 @@ struct std::formatter<LocksetT> : std::formatter<std::string> {
     }
 };
 
+// TODO: TRY USING INT8_T
+// NOTE: IF ADDING MORE OR REMOVING ALWAYS BE MIDNFULL OF UPDATING from_int16
 // Event stuff
-enum class EventsT {
-  RD = 1,
-  WR = 2,
-  FORK = 3,
-  JOIN = 4,
-  LK = 5,
-  UK = 6,
-  WAIT = 7,
-  NOTIFY = 8,
-  NOTIFYALL = 9
+enum class EventsT : int16_t {
+  LK = 0,
+  UK = 1,
+  RD = 2,
+  WR = 3,
+  FORK = 4,
+  JOIN = 5,
+  WAIT = 6,
+  NOTIFY = 7,
+  NOTIFYALL = 8
 };
 
 inline bool is_lock_type(EventsT ev_type){
@@ -51,8 +53,21 @@ inline bool is_th_type(EventsT ev_type){
   return ev_type == EventsT::FORK || ev_type == EventsT::JOIN;
 }
 
+inline bool is_notif_type(EventsT ev_type){
+  return ev_type == EventsT::NOTIFY || ev_type == EventsT::NOTIFYALL;
+}
+
+
 inline bool is_cv_type(EventsT ev_type){
-  return ev_type == EventsT::WAIT || ev_type == EventsT::NOTIFY || ev_type == EventsT::NOTIFYALL;
+  return ev_type == EventsT::WAIT || is_notif_type(ev_type);
+}
+
+inline std::optional<EventsT> from_int16(int16_t val){
+  if (val >= static_cast<int>(EventsT::LK) && 
+        val <= static_cast<int>(EventsT::NOTIFYALL)) {
+        return static_cast<EventsT>(val);
+    }
+    return std::nullopt;
 }
 
 // Formats EventsT
@@ -82,11 +97,11 @@ struct EventInfo{
   EventsT event_type;
   ResourceIdT target;
   SrcLocT src_loc;
-  TracePosT line; // line in trace file 
+  EventIdT line; // line in trace file 
   bool ignored = false;
 
   EventInfo(){}
-  EventInfo(ThreadIdT thread_id, EventsT event_type, ResourceIdT target, SrcLocT src_loc, TracePosT line)
+  EventInfo(ThreadIdT thread_id, EventsT event_type, ResourceIdT target, SrcLocT src_loc, EventIdT line = 0)
     : thread_id(thread_id), event_type(event_type), target(target), src_loc(src_loc), line(line){}
 };
 
@@ -100,10 +115,10 @@ struct std::formatter<EventInfo> : std::formatter<std::string> {
 // An Event is defined by it's vector clock and position in the trace (so by two moments in time)
 struct Event{
   VectorClock vc;
-  TracePosT tr_pos;
+  EventIdT tr_pos;
   SrcLocT src_loc;
   
-  Event(const VectorClock& vc, TracePosT tr_pos, SrcLocT src_loc) 
+  Event(const VectorClock& vc, EventIdT tr_pos, SrcLocT src_loc) 
     : vc(vc), tr_pos(tr_pos), src_loc(src_loc) {}
   
   Event(){}
@@ -258,8 +273,8 @@ struct UReentrantLocksetT{
     std::vector<ResourceIdT> _active_locks; 
     int global_cnt;
 
-    UReentrantLocksetT(): global_cnt(0), _u_lock_map(meta::LOCK_COUNT) {
-        _active_locks.reserve(meta::LOCK_DEPTH); 
+    UReentrantLocksetT(): global_cnt(0), _u_lock_map(meta_info.LOCK_COUNT) {
+        _active_locks.reserve(meta_info.LOCK_DEPTH); 
     }
 
     void acquire(ResourceIdT lock_id){

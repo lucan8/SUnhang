@@ -1,6 +1,9 @@
 //TODO: WHEN PRINTING THE NUMBER OF EVENTS TO THE META FILE IGNORE THE INVALID EVENTS
 //TODO: LOAD THE IGNORED EVENTS DIRECTLY FROM A FILE 
 // you even have simple serialization/deserialization for dynamic_bitset
+// TODO: DEFINE SOME KIND OF EVENT NAMESPACE
+// TODO: LOOK INTO ENDIANESS
+
 
 // MISUNDERSTANDINGS:
 
@@ -59,6 +62,7 @@
 // be aware that the other 2 threads executed before it to avoid creating fake deadlocks
 
 //IMPORTANT: Generic formatter for iterators
+//TODO: Cleanup the parsers
 //TODO: Events don't need the src_loc, only lock events do
 //TODO: Should we actually print cycles that only differ by source code location?
 //TODO: Reentrant locks for cshist
@@ -136,9 +140,9 @@ namespace fs = std::filesystem;
 #include "../include/deadlock_checker.hpp"
 
 int main(int argc, char *argv[]) {
-    const uint8_t exp_args = 4;
+    const uint8_t exp_args = 3;
     if (argc != exp_args){
-        Logger::print(LogType::ERR, "Usage: ./SUnhang.exe [trace_path] [out_summary_path]  [trace_metadata_path] ");
+        Logger::print(LogType::ERR, "Usage: ./SUnhang.exe [trace_path] [out_summary_path]");
         return 1; 
     }
 
@@ -150,7 +154,7 @@ int main(int argc, char *argv[]) {
     // Logger::print(LogType::DBG, "Out summary path: {}", out_summ_path);
     // Logger::print(LogType::DBG, "Trace meta path: {}", trace_meta_file_path);
 
-    std::FILE* trace_file(std::fopen(trace_file_path.c_str(), "r"));
+    std::FILE* trace_file(std::fopen(trace_file_path.c_str(), "rb"));
     if(!trace_file) {
         Logger::print(LogType::ERR, "In file not found: {}", trace_file_path);
         return 1;
@@ -173,22 +177,13 @@ int main(int argc, char *argv[]) {
     // TestPredictor::test();
 
     // THIS NEEDS TO BE FIRST
-    meta::init(trace_meta_file);
-    TraceParser trace_parser(trace_file);
-    EventHandler event_handler(meta::THREAD_COUNT, meta::VAR_COUNT);
+    // meta::init(trace_meta_file);
+    BinParser trace_parser(trace_file);
+    EventHandler event_handler(meta_info.THREAD_COUNT, meta_info.VAR_COUNT);
 
     auto start = std::chrono::system_clock::now();
 
-    // Trace parsing -> graph and critical section construction
     std::vector<EventInfo> events = trace_parser.parse_full_trace();
-    // Logger::print(LogType::INFO, "Finished trace parsing");
-    // uint64_t ev_count = 0;
-    // while (trace_parser.events_remaining()){
-    //     auto event_opt = trace_parser.get_next_event();
-    //     if (event_opt.has_value())
-    //         event_handler.handle_event(event_opt.value());
-    // }
-
 
     size_t skipped_ev_cnt = 0;
     for (const auto& [idx, ev] : std::views::enumerate(events)){

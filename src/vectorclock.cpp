@@ -2,9 +2,9 @@
 #include "../include/util.hpp"
 #include <algorithm>
 
-VectorClock::VectorClock() : _vector_clock(meta::THREAD_COUNT, 0) {}
+VectorClock::VectorClock() : _vector_clock(meta_info.THREAD_COUNT, 0) {}
 
-VectorClock::VectorClock(ThreadIdT increment_thread_id) : _vector_clock(meta::THREAD_COUNT, 0) {
+VectorClock::VectorClock(ThreadIdT increment_thread_id) : _vector_clock(meta_info.THREAD_COUNT, 0) {
     this->set(increment_thread_id, 1);
 }
 
