@@ -173,7 +173,7 @@ def main():
         benchmarks = options.benchmarks.split(",")
 
     for bench in benchmarks:
-        run_predictor(bench, settings.spdoffline_name)
+        #run_predictor(bench, settings.spdoffline_name)
         run_predictor(bench, settings.sunhang_name)
 
 if __name__ == "__main__":

@@ -57,7 +57,6 @@ def from_log_file_SPD(file_path: Path) -> list:
     return list(dic.values())
 
 def from_log_file_SUnhang(file_path: Path) -> list:
-    # print(file_path)
     file = open(file_path, 'r')
     dic = {}
     empty_res = [0] * (len(common_columns) + len(mini_columns) - 1)
@@ -92,7 +91,7 @@ def from_log_file_SUnhang(file_path: Path) -> list:
             break
     
     # Skip the next 4
-    for i in range(4):
+    for i in range(6):
         file.readline()
 
     # Time and memory

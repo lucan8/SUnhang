@@ -9,7 +9,6 @@ typedef int32_t ResourceIdT;
 typedef int32_t SrcLocT;
 typedef int64_t BinEvT;
 
-typedef std::set<ResourceIdT> LocksetT;
 typedef std::unordered_set<ResourceIdT> ULocksetT;
 
 typedef std::unordered_set<ResourceIdT> UThreadSetT;

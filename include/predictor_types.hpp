@@ -14,13 +14,12 @@
 #include "comm_types.hpp"
 #include "util.hpp"
 
-
 // Format for LocksetT
 template <>
 struct std::formatter<LocksetT> : std::formatter<std::string> {
     auto format(const LocksetT& lockset, format_context& ctx) const {
         auto out = ctx.out();
-        for (const auto& res_id : lockset)
+        for (const auto& res_id : lockset._vec)
           std::format_to(out, "{}, ", res_id);
         return out;
     }
@@ -162,15 +161,14 @@ struct CSInfo{
   Event lock_ev;
   Event unlock_ev;
 
-  CSInfo(Event lock_ev, Event unlock_ev = {})
+  CSInfo(Event&& lock_ev, Event&& unlock_ev)
     : lock_ev(std::move(lock_ev)), unlock_ev(std::move(unlock_ev)){}
-  
-  CSInfo(){}
-  
-  void set_unlock_ev(const Event& unlock_ev){
-    this->unlock_ev = unlock_ev;
-  }
 
+  CSInfo(Event&& lock_ev)
+    : lock_ev(std::move(lock_ev)){}
+  
+  CSInfo() = default;
+  
   // Compares two critical sections using trace location
   bool less_than_eq_tr(const CSInfo& other) const{
     return lock_ev.tr_pos <= other.lock_ev.tr_pos && unlock_ev.tr_pos <= other.lock_ev.tr_pos;
@@ -208,12 +206,12 @@ struct CSHist{
   }
 
   // Adds the lock event to the history
-  CSInfo& add_lock_ev(ResourceIdT res_id, ThreadIdT tid, Event lock_ev){
+  CSInfo& add_lock_ev(ResourceIdT res_id, ThreadIdT tid, Event&& lock_ev){
     return _cs_hist[res_id][tid].emplace(std::move(lock_ev));
   }
 
   // Sets the unlock event in the history
-  std::optional<CSInfo*> add_unlock_ev(ResourceIdT res_id, ThreadIdT tid, Event unlock_ev){
+  std::optional<CSInfo*> add_unlock_ev(ResourceIdT res_id, ThreadIdT tid, Event&& unlock_ev){
     std::optional<CSInfo*> cs = get_back(res_id, tid);
     // assert(cs.has_value()); // There should be a lock before an unlock!
     if (!cs.has_value())
@@ -270,35 +268,25 @@ struct StdIdMap{
 //TODO: I think it's safe to remove global_cnt
 struct UReentrantLocksetT{
     std::vector<int> _u_lock_map;
-    std::vector<ResourceIdT> _active_locks; 
-    int global_cnt;
+    LocksetT _active_locks; 
 
-    UReentrantLocksetT(): global_cnt(0), _u_lock_map(meta_info.LOCK_COUNT) {
-        _active_locks.reserve(meta_info.LOCK_DEPTH); 
+    UReentrantLocksetT(): _u_lock_map(meta_info.LOCK_COUNT) {
+        _active_locks._vec.reserve(meta_info.LOCK_DEPTH); 
     }
 
     void acquire(ResourceIdT lock_id){
-        global_cnt += 1;
-
         if (_u_lock_map[lock_id] == 0) {
-            // Insert in sorted order
-            auto it = std::lower_bound(_active_locks.begin(), _active_locks.end(), lock_id);
-            _active_locks.insert(it, lock_id);
+            _active_locks.insert(lock_id);
         }
         
         _u_lock_map[lock_id] += 1;
     }
     
     void release(ResourceIdT lock_id){
-        global_cnt -= 1;
         _u_lock_map[lock_id] -= 1;
 
         if (_u_lock_map[lock_id] == 0) {
-            // Find using binary search and remove
-            auto it = std::lower_bound(_active_locks.begin(), _active_locks.end(), lock_id);
-            if (it != _active_locks.end() && *it == lock_id) {
-                _active_locks.erase(it);
-            }
+           _active_locks.unsafe_erase(lock_id);
         }
     }
 
@@ -311,20 +299,22 @@ struct UReentrantLocksetT{
         if (count <= 0){
             return false;
         }
-        return global_cnt == count;
+        return size() == count;
     }
 
     size_t size() const{
-        return _active_locks.size(); 
-    }
-
-    LocksetT to_lockset() const{
-        return LocksetT(_active_locks.begin(), _active_locks.end());
+        return _active_locks._vec.size(); 
     }
 
     bool empty() const{
-        return global_cnt <= 0;
+        return size() <= 0;
     }
+};
+
+struct AbsDepView {
+    ThreadIdT thread_id;
+    ResourceIdT resource_id;
+    const LocksetT& lockset;
 };
 
 struct AbsDependency{
@@ -337,6 +327,13 @@ struct AbsDependency{
 
   // Implements all comparison operators in the default way(first compare by thread, then resource, then lockset)
   auto operator<=>(const AbsDependency&) const = default;
+
+  // Comparison agains the view
+  auto operator<=>(const AbsDepView& rhs) const {
+        if (auto cmp = thread_id <=> rhs.thread_id; cmp != 0) return cmp;
+        if (auto cmp = resource_id <=> rhs.resource_id; cmp != 0) return cmp;
+        return lockset._vec <=> rhs.lockset._vec;
+    }
 
   // return true if thread_ids and resource_ids differ and locksets don't intersect, false otherwise
   bool is_valid_neigh_cand(const AbsDependency& other) const{
@@ -357,10 +354,10 @@ struct AbsDependency{
   bool is_lock_dep() const{
     return resource_id >= 0;
   }
-
 };
 
-typedef std::map<AbsDependency, std::vector<Event>> NodeContainerT;
+// The explicit std::less<> is necesssary to allow transparent lookup 
+typedef std::map<AbsDependency, std::vector<Event>, std::less<>> NodeContainerT;
 typedef std::map<AbsDependency, std::vector<Event>>::const_iterator NodeConstItT;
 
 // Format for AbsDependency

@@ -151,6 +151,8 @@ struct TraceBinFormater{
 // REIMPLEMENTED FROM THE ARTIFACT OF SPDOFFLINE(/root/spdoffline/src/parse/bin)
 // The files opened for this should be in rb mode
 struct BinParser : public Parser{
+  constexpr static uint32_t EV_BLOCK_CNT = (4096 * 16) / sizeof(BinEvT);
+
   // Initializes meta_info
   BinParser(std::FILE* trace_file) : Parser(trace_file){
     std::fread(&meta_info, meta_info.load_sizeof(), 1, trace_file);
@@ -190,6 +192,52 @@ struct BinParser : public Parser{
     }
 
     return ev_info;
+  }
+
+  std::vector<EventInfo> parse_full_trace_with_blocks() {   
+    // The might be invalid events like req which we want to ignore
+    std::vector<EventInfo> events;
+    events.reserve(meta_info.EVENT_COUNT);
+
+    std::vector<int> last_write(meta_info.VAR_COUNT, -1);
+    size_t invalid_ev_cnt = 0;
+    
+    std::array<BinEvT, EV_BLOCK_CNT> bin_ev_block;
+    size_t read_ev_cnt = 0;
+
+    do{
+      read_ev_cnt = std::fread(bin_ev_block.data(), sizeof(BinEvT), EV_BLOCK_CNT, trace_file);
+
+      for (int i = 0; i < read_ev_cnt; ++i){
+        BinEvT bin_ev = bin_ev_block[i];
+
+        // Convert the binary event to EventInfo
+        std::optional<EventInfo> ev_info_opt = TraceBinFormater::bin_to_ev(bin_ev);
+        if (!ev_info_opt.has_value()){
+          continue;
+        }
+
+        line_index++;
+        EventInfo& ev_info = ev_info_opt.value();
+        ev_info.line = line_index;
+
+        // Update shared trackers for lock and var, convert the id of the target for cond vars
+        if(is_lock_type(ev_info.event_type)) {
+            shared_locks.update(ev_info.thread_id, ev_info.target);
+        }
+        else if(is_access_type(ev_info.event_type)){
+            shared_vars.update(ev_info.thread_id, ev_info.target);
+        }
+        else if (is_notif_type(ev_info.event_type)){
+            meta_info.NOTIF_THREADS[ev_info.thread_id] = 1;
+        }
+
+        events.emplace_back(std::move(ev_info));
+        _update_last_write(events, events.size() - 1, last_write);
+      }
+    } while(read_ev_cnt == EV_BLOCK_CNT);
+
+    return events;
   }
 
   void print_summary(FILE* log_file) const override{

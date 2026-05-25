@@ -3,6 +3,7 @@
 // you even have simple serialization/deserialization for dynamic_bitset
 // TODO: DEFINE SOME KIND OF EVENT NAMESPACE
 // TODO: LOOK INTO ENDIANESS
+// TODO: See if you can use SortedVector anywhere else 
 
 
 // MISUNDERSTANDINGS:
@@ -148,7 +149,6 @@ int main(int argc, char *argv[]) {
 
     std::string trace_file_path = argv[1];
     std::string out_summ_path = argv[2];
-    std::string trace_meta_file_path = argv[3];
 
     // Logger::print(LogType::DBG, "Input path: {}", trace_file_path);
     // Logger::print(LogType::DBG, "Out summary path: {}", out_summ_path);
@@ -166,12 +166,6 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    std::FILE* trace_meta_file(std::fopen(trace_meta_file_path.c_str(), "r"));
-    if (!trace_meta_file){
-        Logger::print(LogType::ERR, "Meta file not found: {}", trace_meta_file_path);
-        return 1;
-    }
-
     // Test stuff
     // TestVectorClock::test();
     // TestPredictor::test();
@@ -181,9 +175,15 @@ int main(int argc, char *argv[]) {
     BinParser trace_parser(trace_file);
     EventHandler event_handler(meta_info.THREAD_COUNT, meta_info.VAR_COUNT);
 
-    auto start = std::chrono::system_clock::now();
+    auto start = std::chrono::steady_clock::now();
 
-    std::vector<EventInfo> events = trace_parser.parse_full_trace();
+    std::vector<EventInfo> events = trace_parser.parse_full_trace_with_blocks();
+
+    Logger::print(log_file, "----Trace info----");
+    trace_parser.print_summary(log_file);
+
+    auto end = std::chrono::steady_clock::now();
+    auto millis_passed_parse_trace = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
     size_t skipped_ev_cnt = 0;
     for (const auto& [idx, ev] : std::views::enumerate(events)){
@@ -196,25 +196,25 @@ int main(int argc, char *argv[]) {
         event_handler.handle_event(ev);
     }
 
+    // Print summary
+    event_handler.print_summary(log_file);
+
+    end = std::chrono::steady_clock::now();
+    auto millis_passed_handle_events = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    
     // Logger::print(LogType::DBG, "skipped_ev_cnt: {}", skipped_ev_cnt);
 
     // Logger::print(LogType::INFO, "Finished event handling");
     event_handler.build_neigh_list();
-
-    // Print summaries
-    Logger::print(log_file, "----Trace info----");
-    trace_parser.print_summary(log_file);
-    event_handler.print_summary(log_file);
-
-    auto end = std::chrono::system_clock::now();
-    auto millis_passed_parse_trace = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    end = std::chrono::steady_clock::now();
+    auto millis_passed_build_neigh_list = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
     CycleEnumerator cycle_enumerator(event_handler.graph_view);
     cycle_enumerator.enum_cycles();
     
     Logger::print(log_file, "num cycles: {}", cycle_enumerator.res_cycles.size());
 
-    end = std::chrono::system_clock::now();
+    end = std::chrono::steady_clock::now();
     auto millis_passed_cycle_enum = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
     DeadlockChecker dlk_checker(event_handler.cs_hist);
@@ -233,7 +233,7 @@ int main(int argc, char *argv[]) {
     Logger::print(log_file, "num concrete: -1\n"); // Just to match the format
     // fflush(log_file);
     
-    end = std::chrono::system_clock::now();
+    end = std::chrono::steady_clock::now();
     auto millis_passed_abs_dlk_check = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
     
     uint32_t real_dlk_count = 0;
@@ -278,20 +278,21 @@ int main(int argc, char *argv[]) {
     // }
 
 
-    end = std::chrono::system_clock::now();
+    end = std::chrono::steady_clock::now();
     auto millis_passed_sync_pres_check = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
     
     Logger::print(log_file, "\nnum deadlocks: {}", real_dlk_count);
 
-    Logger::print(log_file, "Time for parsing and graph construction = {} milliseconds", millis_passed_parse_trace);
-    Logger::print(log_file, "Time for cycle enumeration = {} milliseconds", millis_passed_cycle_enum - millis_passed_parse_trace);
+    Logger::print(log_file, "Time for parsing = {} milliseconds", millis_passed_parse_trace);
+    Logger::print(log_file, "Time for event handling = {} milliseconds", millis_passed_handle_events - millis_passed_parse_trace);
+    Logger::print(log_file, "Time for neight list building = {} milliseconds", millis_passed_build_neigh_list - millis_passed_handle_events);
+    Logger::print(log_file, "Time for cycle enumeration = {} milliseconds", millis_passed_cycle_enum - millis_passed_build_neigh_list);
     Logger::print(log_file, "Time for abs deadlock checks = {} milliseconds", millis_passed_abs_dlk_check - millis_passed_cycle_enum);
     Logger::print(log_file, "Time for sync pres check = {} milliseconds", millis_passed_sync_pres_check - millis_passed_abs_dlk_check);
     Logger::print(log_file, "Total Time = {} milliseconds", millis_passed_sync_pres_check);
     
     // Cleanup
     std::fclose(log_file);
-    std::fclose(trace_meta_file);
     std::fclose(trace_file);
 
     return 0;

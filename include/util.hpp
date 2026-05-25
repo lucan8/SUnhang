@@ -39,6 +39,39 @@ struct meta{
 
 inline meta meta_info;
 
+
+template <typename T>
+struct SortedVector{
+    std::vector<T> _vec;
+
+    auto operator<=>(const SortedVector&) const = default;
+    
+    bool contains(T val) const{
+        auto it = std::lower_bound(_vec.begin(), _vec.end(), val);
+        return it != _vec.end() && *it == val;
+    }
+
+    void insert(T val){
+        auto it = std::lower_bound(_vec.begin(), _vec.end(), val);
+        _vec.insert(it, val);
+    }
+    
+    void erase(T val){
+        auto it = std::lower_bound(_vec.begin(), _vec.end(), val);
+        if (it != _vec.end() && *it == val) {
+            _vec.erase(it);
+        }
+    }
+
+    // erases the element without checking if it exists
+    void unsafe_erase(T val){
+        auto it = std::lower_bound(_vec.begin(), _vec.end(), val);
+        _vec.erase(it);
+    }
+};
+
+typedef SortedVector<ResourceIdT> LocksetT;
+
 // Splits str by sep
 inline std::vector<std::string> split(const std::string& str, char sep){
     std::stringstream ss(str);
@@ -66,8 +99,8 @@ inline bool is_cond_var(ResourceIdT res_id){
 // Returns true if ls1 and ls2 intersect, false otherwise
 // Currently iterates of ls2 and checks if all elements are in ls1
 inline bool lockset_intersection(const LocksetT& ls1, const LocksetT& ls2){
-    for (const auto lock : ls2)
-        if (ls1.find(lock) != ls1.end())
+    for (const auto lock : ls2._vec)
+        if (ls1.contains(lock))
             return true;
     return false;
 }
@@ -75,9 +108,8 @@ inline bool lockset_intersection(const LocksetT& ls1, const LocksetT& ls2){
 // Returns true if ls1 and ls2 intersect, false otherwise
 // Doesn't count cond vars for intersection
 inline bool lockset_intersection_soft(const LocksetT& ls1, const LocksetT& ls2){
-    for (const auto lock : ls2){
-        auto found_elem = ls1.find(lock);
-        if (found_elem != ls1.end() && !is_cond_var(*found_elem))
+    for (const auto lock : ls2._vec){
+        if (ls1.contains(lock) && !is_cond_var(lock))
             return true;
     }
     return false;
@@ -86,7 +118,7 @@ inline bool lockset_intersection_soft(const LocksetT& ls1, const LocksetT& ls2){
 // Insert the elements of src in dst ignoring cond vars
 // Returns true if no duplicates were found false otherwise, stopping at the first found element
 inline bool insert_lockset(const LocksetT& src, ULocksetT& dst){
-    for (const auto& res_id : src){
+    for (const auto& res_id : src._vec){
         if (!is_cond_var(res_id)){ // Ignore cond vars
             auto [it, inserted] = dst.insert(res_id);
             if (!inserted){
@@ -97,6 +129,7 @@ inline bool insert_lockset(const LocksetT& src, ULocksetT& dst){
 
     return true;
 }
+
 
 // Define constraint for LazyQueue that enforces the container to be either a vector or deque
 template <typename> struct is_vec_or_deq : std::false_type{};

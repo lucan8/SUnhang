@@ -69,6 +69,7 @@ void EventHandler::wait_event(const EventInfo& evt_info) {
     th_info.is_asleep = true;
     cv_map[evt_info.target].sleep_thread();
 
+    //TODO: Unnecessary copy in handle_dep_creation
     Event evt = Event(th_info.vec_clock, evt_info.line, evt_info.src_loc);
     handle_dep_creation(th_info, evt_info, evt);
 }
@@ -87,29 +88,29 @@ void EventHandler::notify_event(const EventInfo& evt_info, bool notify_all) {
     for (auto it = container.begin(); it != container.end(); ++it){
         auto& sync_status = it->data.value();
 
-        // Sync status is just a resource(first level locks/cond_vars)
-        if (std::holds_alternative<ResourceIdT>(sync_status)) {
-            ResourceIdT res_id = std::get<ResourceIdT>(sync_status);
+        // // Sync status is just a resource(first level locks/cond_vars)
+        // if (std::holds_alternative<ResourceIdT>(sync_status)) {
+        //     ResourceIdT res_id = std::get<ResourceIdT>(sync_status);
             
-            // Ignore assoicated lock
-            if (res_id == get_ass_sync_obj(evt_info.target)){
-                continue;
-            }
+        //     // Ignore assoicated lock
+        //     if (res_id == get_ass_sync_obj(evt_info.target)){
+        //         continue;
+        //     }
             
-            // Set event and lockset containing the cond var
-            Event evt = Event(th_info.vec_clock, evt_info.line, evt_info.src_loc);
-            LocksetT lockset;
-            lockset.insert(evt_info.target);
+        //     // Set event and lockset containing the cond var
+        //     Event evt = Event(th_info.vec_clock, evt_info.line, evt_info.src_loc);
+        //     LocksetT lockset;
+        //     lockset.insert(evt_info.target);
             
-            // Add the new dependency to the new recent statuses array
-            NodeConstItT new_dep = create_dep(evt_info.thread_id, res_id, lockset, evt);
-            new_rec_sync_status_cont.push(new_dep);
-        } else if (std::holds_alternative<NodeConstItT>(sync_status)) { // Sync status is a dep
+        //     // Add the new dependency to the new recent statuses array
+        //     NodeConstItT new_dep = create_dep(evt_info.thread_id, res_id, lockset, evt);
+        //     new_rec_sync_status_cont.push(new_dep);
+        // } else if (std::holds_alternative<NodeConstItT>(sync_status)) { // Sync status is a dep
             NodeConstItT old_dep = std::get<NodeConstItT>(sync_status);
             NodeConstItT new_dep = update_dep(old_dep, evt_info.target);
 
             new_rec_sync_status_cont.push(new_dep);
-        }
+        //}
     }
 
     th_info.recent_sync_status_cont = std::move(new_rec_sync_status_cont);
@@ -122,16 +123,17 @@ void EventHandler::acquire_event(const EventInfo& evt_info) {
 
     // TODO: This shouldn't really be executed if the thread is alone
     handle_sleepness(th_info, evt_info.target);
+
+    // Order matters: First call handle_dep_creation then move the event in cs_hist
     Event evt = Event(th_info.vec_clock, evt_info.line, evt_info.src_loc);
 
-    // Only create dependency if thread is not alone
+    // Only create dependency (BEFORE acquiring the lock) if thread is not alone.
     if (alive_th_count > 1){
-        // Create the dependency BEFORE acquiring the lock
         handle_dep_creation(th_info, evt_info, evt);
     }
 
     // Add ev to critical section history and add lock to lockset
-    CSInfo& cs_info = cs_hist.add_lock_ev(evt_info.target, evt_info.thread_id, evt);
+    CSInfo& cs_info = cs_hist.add_lock_ev(evt_info.target, evt_info.thread_id, std::move(evt));
     th_info.u_reen_lockset.acquire(evt_info.target);
 }
 
@@ -165,7 +167,7 @@ void EventHandler::join_event(const EventInfo& evt_info) {
 
 NodeConstItT EventHandler::update_dep(NodeConstItT old_dep, ResourceIdT new_res){ 
     // Nothing to update here
-    if (old_dep->first.lockset.find(new_res) != old_dep->first.lockset.end()){
+    if (old_dep->first.lockset.contains(new_res)){
         return old_dep;
     }
 
@@ -182,13 +184,13 @@ NodeConstItT EventHandler::update_dep(NodeConstItT old_dep, ResourceIdT new_res)
     if (!new_dep.inserted){
         new_dep.position->second.append_range(node_handle.mapped());
         // Remove the old_dep mappings
-        for (auto res : old_dep->first.lockset){
+        for (auto res : old_dep->first.lockset._vec){
             lock_dep_map[res].erase(old_dep);
         }
     }
     else{
         // Update with lock_dep_map with the new iterator only if there is a new iterator
-        for (auto res : old_dep->first.lockset){
+        for (auto res : old_dep->first.lockset._vec){
             lock_dep_map[res].erase(old_dep);
             lock_dep_map[res].insert(new_dep_it);
         }
@@ -201,15 +203,24 @@ NodeConstItT EventHandler::update_dep(NodeConstItT old_dep, ResourceIdT new_res)
 
 NodeConstItT EventHandler::create_dep(ThreadIdT tid, ResourceIdT desired_res, const LocksetT& lockset,
                                const Event& evt){
-    // Create abstract dependency and add it's instance to the vector
-    AbsDependency dep(tid, desired_res, lockset);
-    auto [it, inserted] = graph_view.graph.abs_deps_map.try_emplace(std::move(dep), std::vector<Event>{});
-    it->second.push_back(evt);
 
-    // Locks from lockset should point to this dependency
-    if (inserted)
-        for (const auto lock : lockset)
-            lock_dep_map[lock].insert(it);
+    // Search for entry using a view(less overhead)
+    auto it = graph_view.graph.abs_deps_map.find(AbsDepView{tid, desired_res, lockset});
+
+    // Create the object and insert only if found
+    if (it == graph_view.graph.abs_deps_map.end()) {
+        AbsDependency dep(tid, desired_res, lockset);
+        auto [inserted_it, inserted] = graph_view.graph.abs_deps_map.emplace(std::move(dep), std::vector<Event>{});
+        it = inserted_it;
+
+        // Locks from lockset should point to this dependency
+        if (inserted)
+            for (const auto lock : lockset._vec)
+                lock_dep_map[lock].insert(it);
+    }
+
+    // Add the event of this dependency
+    it->second.push_back(evt);
     
     return it;
 }
@@ -260,11 +271,11 @@ void EventHandler::handle_sleepness(ThreadInfo& th_info, ResourceIdT ass_lock_id
 void EventHandler::handle_dep_creation(ThreadInfo& th_info, const EventInfo& evt_info, const Event& evt){
     // Create dep and store in recent statuses if this is a notifying thread
     if (!meta_info.NOTIF_THREADS.empty() && meta_info.NOTIF_THREADS[evt_info.thread_id]){
-        NodeConstItT dep = create_dep(evt_info.thread_id, evt_info.target, th_info.u_reen_lockset.to_lockset(), evt);
+        NodeConstItT dep = create_dep(evt_info.thread_id, evt_info.target, th_info.u_reen_lockset._active_locks, evt);
         th_info.recent_sync_status_cont.push(dep);
     }
     else if(!th_info.u_reen_lockset.empty()){ // otherwise just create the dep if lockset is not empty
-        create_dep(evt_info.thread_id, evt_info.target, th_info.u_reen_lockset.to_lockset(), evt);
+        create_dep(evt_info.thread_id, evt_info.target, th_info.u_reen_lockset._active_locks, evt);
     }
 }
 
@@ -365,8 +376,8 @@ void EventHandler::print_summary() const{
 
 void EventHandler::print_th_exit_with_locks() const{
     for (const auto& [tid, th_info] : std::views::enumerate(thread_map)){
-        LocksetT lockset = th_info.u_reen_lockset.to_lockset();
-        if (!lockset.empty()){
+        LocksetT lockset = th_info.u_reen_lockset._active_locks;
+        if (!lockset._vec.empty()){
         Logger::print(LogType::WARN, "Thread {} exited holding locks {}", tid, lockset);
         }
     }
