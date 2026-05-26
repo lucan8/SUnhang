@@ -3,8 +3,8 @@
 // you even have simple serialization/deserialization for dynamic_bitset
 // TODO: DEFINE SOME KIND OF EVENT NAMESPACE
 // TODO: LOOK INTO ENDIANESS
-// TODO: See if you can use SortedVector anywhere else 
-
+// TODO: See if you can use SortedVector anywhere else
+// OPTIMIZATION: Make a normal VectorClock class and a OwnedVectorClock class(fighting agains branch pred?)
 
 // MISUNDERSTANDINGS:
 
@@ -172,11 +172,9 @@ int main(int argc, char *argv[]) {
 
     // THIS NEEDS TO BE FIRST
     // meta::init(trace_meta_file);
-    BinParser trace_parser(trace_file);
-    EventHandler event_handler(meta_info.THREAD_COUNT, meta_info.VAR_COUNT);
-
     auto start = std::chrono::steady_clock::now();
 
+    BinParser trace_parser(trace_file);
     std::vector<EventInfo> events = trace_parser.parse_full_trace_with_blocks();
 
     Logger::print(log_file, "----Trace info----");
@@ -185,6 +183,7 @@ int main(int argc, char *argv[]) {
     auto end = std::chrono::steady_clock::now();
     auto millis_passed_parse_trace = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
+    EventHandler event_handler(meta_info.THREAD_COUNT, meta_info.VAR_COUNT);
     size_t skipped_ev_cnt = 0;
     for (const auto& [idx, ev] : std::views::enumerate(events)){
         if (ev.ignored || 

@@ -2,123 +2,118 @@
 #include "../include/util.hpp"
 #include <algorithm>
 
-VectorClock::VectorClock() : _vector_clock(meta_info.THREAD_COUNT, 0) {}
+VectorClock::VectorClock() {}
 
-VectorClock::VectorClock(ThreadIdT increment_thread_id) : _vector_clock(meta_info.THREAD_COUNT, 0) {
-    this->set(increment_thread_id, 1);
-}
-
-VCValueT VectorClock::find(ThreadIdT thread_id) const {
-    if (thread_id < _vector_clock.size()) {
-        return this->_vector_clock[thread_id];
-    }
-    return 0;
-}
-
-void VectorClock::set(ThreadIdT thread_id, VCValueT value) {
-    if (thread_id < _vector_clock.size()) {
-        this->_vector_clock[thread_id] = value;
-    }
-}
-
-VectorClock VectorClock::merge(const VectorClock& other) const {
-    VectorClock result;
-
-    for (size_t i = 0; i < _vector_clock.size(); ++i) {
-        result._vector_clock[i] = std::max(this->_vector_clock[i], other._vector_clock[i]);
-    }
-
-    return result;
+VectorClock::VectorClock(ThreadIdT tid) : owner_th(tid){
+    this->_vector_clock.emplace_back(tid, 1);
 }
 
 bool VectorClock::merge_into(const VectorClock& other) {
     bool changed = false;
-    
-    for (size_t i = 0; i < _vector_clock.size(); ++i) {
-        if (other._vector_clock[i] > 0) {
-            if (this->_vector_clock[i] < other._vector_clock[i]) {
-                this->_vector_clock[i] = other._vector_clock[i];
-                changed = true;
-            }
-        }
-    }
 
-    return changed;
-}
+    // Static workspace
+    static std::vector<ThEpoch> workspace;
+    workspace.clear(); 
 
-bool VectorClock::th_pred_merge_into(const VectorClock& other, ThreadIdT tid) {
-    bool changed = false;
-    
-    for (size_t i = 0; i < _vector_clock.size(); ++i) {
-        VCValueT val = other._vector_clock[i];
-        if (val == 0) continue;
+    auto it1 = this->_vector_clock.begin();
+    auto it2 = other._vector_clock.begin();
 
-        if (i == tid) {
-            changed = merge_into_epoch(ThEpoch(tid, std::max(0, val - 1))) || changed;
+    // Merge loop
+    while (it1 != this->_vector_clock.end() && it2 != other._vector_clock.end()) {
+        if (it1->tid == it2->tid) {
+            VCValueT max_val = std::max(it1->val, it2->val);
+            if (max_val > it1->val) changed = true;
+            workspace.push_back({it1->tid, max_val});
+            ++it1; ++it2;
+        } else if (it1->tid < it2->tid) {
+            workspace.push_back(*it1);
+            ++it1;
         } else {
-            changed = merge_into_epoch(ThEpoch(i, val)) || changed;
+            workspace.push_back(*it2);
+            changed = true;
+            ++it2;
         }
+
+        // Update the index of the owner thread
+        if (owner_th.has_value() && workspace.back().tid == owner_th.value().tid){
+            owner_th.value().idx = workspace.size() - 1;
+        }
+    }
+
+    // Update the index of the owner thread
+    while (it1 != this->_vector_clock.end()) { 
+        workspace.push_back(*it1); 
+        if (owner_th.has_value() && it1->tid == owner_th.value().tid) {
+            owner_th.value().idx = workspace.size() - 1;
+        }
+        it1++; 
+    }
+
+    while (it2 != other._vector_clock.end()) { workspace.push_back(*it2++); changed = true; }
+
+    if (changed) {
+        this->_vector_clock.swap(workspace);
     }
 
     return changed;
 }
 
-bool VectorClock::pred_merge_into_epoch(const VectorClock& other, ThreadIdT tid) {
-    if (tid >= _vector_clock.size()) return false;
-    
-    VCValueT val = other._vector_clock[tid];
-    if (val == 0) return false;
-    
-    ThEpoch epoch(tid, val - 1);
-    return merge_into_epoch(epoch);
+// It decrements other, merges into this and increments other back
+bool VectorClock::th_pred_merge_into(VectorClock& other) {
+   other.decrement();
+   bool res = merge_into(other);
+   other.increment();
+
+   return res;
 }
 
-bool VectorClock::merge_into_epoch(const ThEpoch& epoch) {
-    if (epoch.first >= _vector_clock.size()) return false;
-
-    if (this->_vector_clock[epoch.first] < epoch.second) {
-        this->_vector_clock[epoch.first] = epoch.second;
-        return true;
-    }
-
-    return false;
+// You better not call increment or decrement without owners!
+void VectorClock::increment() {
+    this->_vector_clock[owner_th.value().idx].val++;
 }
 
-void VectorClock::increment(ThreadIdT thread_id) {
-    if (thread_id < _vector_clock.size()) {
-        this->_vector_clock[thread_id]++;
-    }
-}
-
-void VectorClock::decrement(ThreadIdT thread_id) {
-    if (thread_id < _vector_clock.size()) {
-        this->_vector_clock[thread_id] = std::max(0, this->_vector_clock[thread_id] - 1);
-    }
+void VectorClock::decrement() {
+    size_t owner_th_idx = owner_th.value().idx;
+    this->_vector_clock[owner_th_idx].val = std::max(0LL, this->_vector_clock[owner_th_idx].val - 1);
 }
 
 bool operator<=(const VectorClock& vc1, const VectorClock& vc2) {
-    for (size_t i = 0; i < vc1._vector_clock.size(); ++i) {
-        if (vc1._vector_clock[i] > 0 && vc1._vector_clock[i] > vc2._vector_clock[i]) {
+    auto it1 = vc1._vector_clock.begin();
+    auto it2 = vc2._vector_clock.begin();
+
+    while (it1 != vc1._vector_clock.end() && it2 != vc2._vector_clock.end()) {
+        if (it1->tid == it2->tid) {
+            if (it1->val > it2->val) return false;
+            ++it1; ++it2;
+        } else if (it1->tid < it2->tid) {
             return false;
+        } else {
+            ++it2;
         }
     }
-    return true;
+
+    return it1 == vc1._vector_clock.end();
 }
 
 bool operator<(const VectorClock& vc1, const VectorClock& vc2) {
-    bool one_strictly_less = false; 
-    
-    for (size_t i = 0; i < vc1._vector_clock.size(); ++i) {
-        if (vc1._vector_clock[i] > 0 || vc2._vector_clock[i] > 0) {
-            if (vc1._vector_clock[i] > vc2._vector_clock[i]) {
-                return false;
-            } else if (vc1._vector_clock[i] < vc2._vector_clock[i]) {
-                one_strictly_less = true;
-            }
+    bool one_strictly_less = false;
+    auto it1 = vc1._vector_clock.begin();
+    auto it2 = vc2._vector_clock.begin();
+
+    while (it1 != vc1._vector_clock.end() && it2 != vc2._vector_clock.end()) {
+        if (it1->tid == it2->tid) {
+            if (it1->val > it2->val) return false;
+            else if (it1->val < it2->val) one_strictly_less = true;
+            ++it1; ++it2;
+        } else if (it1->tid < it2->tid) {
+            return false;
+        } else {
+            one_strictly_less = true;
+            ++it2;
         }
     }
 
-    return one_strictly_less;
+    return it1 == vc1._vector_clock.end() && (one_strictly_less || it2 != vc2._vector_clock.end());
 }
 
 bool operator>(const VectorClock& vc1, const VectorClock& vc2) {
@@ -130,10 +125,5 @@ bool operator==(const VectorClock& vc1, const VectorClock& vc2){
 }
 
 bool VectorClock::empty() const {
-    for (size_t i = 0; i < _vector_clock.size(); ++i) {
-        if (this->_vector_clock[i] > 0) {
-            return false;
-        }
-    }
-    return true;
+    return _vector_clock.empty();
 }

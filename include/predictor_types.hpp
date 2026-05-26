@@ -389,4 +389,6 @@ struct ThreadInfo{
   RecentSyncStatusContT recent_sync_status_cont;
   VectorClock vec_clock;
   bool is_asleep = false;
+
+  ThreadInfo(ThreadIdT tid) : vec_clock(tid){};
 };

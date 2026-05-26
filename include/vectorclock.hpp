@@ -4,44 +4,42 @@
 #include <string>
 #include <format>
 #include <queue>
+#include <flat_map>
 #include "comm_types.hpp"
 
 struct VectorClock;
 
-using VCValueT = int;
-
-using ThEpochConstIt = std::unordered_map<ThreadIdT, VCValueT>::const_iterator;
-using ThEpoch = std::unordered_map<ThreadIdT, VCValueT>::value_type;
+using VCValueT = EventIdT;
 
 // Contains: Timestamp of notify event and the number of threads that should receive the notif
 using NotifQueue = std::queue<std::pair<VectorClock, uint32_t>>;
 
-struct VectorClock {
-    std::vector<VCValueT> _vector_clock;
-    VectorClock();
-    VectorClock(ThreadIdT increment_thread_id);
+struct ThEpoch{
+    ThreadIdT tid;
+    VCValueT val;
+};
 
-    // TODO: Remove this
-    VCValueT find(ThreadIdT thread_id) const;
-    
-    VectorClock merge(const VectorClock& other) const;
+struct OwnerThInfo{
+    ThreadIdT tid;
+    size_t idx = 0;
+    OwnerThInfo(ThreadIdT tid) : tid(tid){} 
+};
+
+struct VectorClock {
+    std::vector<ThEpoch> _vector_clock;
+    std::optional<OwnerThInfo> owner_th;
+
+    VectorClock();
+    VectorClock(ThreadIdT owner_th);
     
     // Merges other into this, returns true if any change occured
     bool merge_into(const VectorClock& other);
 
     // Get the thread's epoch and merge it's predecessor into this
-    bool th_pred_merge_into(const VectorClock& other, ThreadIdT tid);
+    bool th_pred_merge_into(VectorClock& other);
     
-    // Get the thread's epoch and merge it's predecessor into this
-    bool pred_merge_into_epoch(const VectorClock& other, ThreadIdT tid);
-
-    // Meges epoch in this vector clock
-    bool merge_into_epoch(const ThEpoch& epoch);
-    
-    void set(ThreadIdT thread_id, VCValueT val);
-    
-    void increment(ThreadIdT thread_id);
-    void decrement(ThreadIdT thread_id);
+    void increment();
+    void decrement();
 
     //TODO: Pack these together in one
     // all epoches have to be <=

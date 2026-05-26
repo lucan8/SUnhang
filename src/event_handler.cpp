@@ -5,7 +5,13 @@
 #include <memory>
 
 EventHandler::EventHandler(size_t thread_count, size_t var_count) 
-    : alive_th_count(1), thread_map(thread_count), last_write(var_count){}
+    : alive_th_count(1), last_write(var_count){
+    // Initialize thread_map
+    thread_map.reserve(thread_count);
+    for (int i = 0; i < thread_count; ++i){
+        thread_map.emplace_back(i);
+    }
+}
 
 bool EventHandler::handle_event(const EventInfo& evt_info){
     switch (evt_info.event_type){
@@ -41,7 +47,7 @@ bool EventHandler::handle_event(const EventInfo& evt_info){
     }
 
     // Time passes for this thread(and it can't be stopped...)
-    thread_map[evt_info.thread_id].vec_clock.increment(evt_info.thread_id);
+    thread_map[evt_info.thread_id].vec_clock.increment();
     return true;
 }
 

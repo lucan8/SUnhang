@@ -2,7 +2,7 @@ from pathlib import Path
 import os
 
 root_dir = Path(os.path.dirname(os.path.dirname(__file__)))
-bench_suite = "original"
+bench_suite = "cond_var"
 bench_dir = root_dir / "benchmarks" / bench_suite
 
 out_files_base = bench_dir / "output"

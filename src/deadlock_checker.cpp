@@ -111,11 +111,11 @@ void DeadlockChecker::_update_vc_with_curr_cycle(const Cycle& cycle_evt, VectorC
     for (int i = 0; i < cycle_evt.size(); ++i){
         EventLazyQueue ev_lazy_q = cycle_evt.wrapped_events[i];
 
-        const Event& ev = *ev_lazy_q.start_elem;
+        Event& ev = const_cast<Event&>(*ev_lazy_q.start_elem);
         ThreadIdT tid = cycle_evt.nodes[i]->first.thread_id;
         
         // Merge the event predecessor in the vc 
-        vc.th_pred_merge_into(ev.vc, tid);
+        vc.th_pred_merge_into(ev.vc);
     }
 }
 

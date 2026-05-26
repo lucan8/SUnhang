@@ -46,17 +46,26 @@ struct SortedVector{
 
     auto operator<=>(const SortedVector&) const = default;
     
-    bool contains(T val) const{
+    bool contains(const T& val) const {
         auto it = std::lower_bound(_vec.begin(), _vec.end(), val);
         return it != _vec.end() && *it == val;
     }
 
-    void insert(T val){
+    auto find(const T& val) const {
         auto it = std::lower_bound(_vec.begin(), _vec.end(), val);
-        _vec.insert(it, val);
+        if (it == _vec.end() || *it != val){
+            return _vec.end();
+        }
+
+        return it;
+    }
+
+    void insert(const T& val){
+        auto it = std::lower_bound(_vec.begin(), _vec.end(), val);
+        _vec.insert(it, val);    
     }
     
-    void erase(T val){
+    void erase(const T& val){
         auto it = std::lower_bound(_vec.begin(), _vec.end(), val);
         if (it != _vec.end() && *it == val) {
             _vec.erase(it);
@@ -64,7 +73,7 @@ struct SortedVector{
     }
 
     // erases the element without checking if it exists
-    void unsafe_erase(T val){
+    void unsafe_erase(const T& val){
         auto it = std::lower_bound(_vec.begin(), _vec.end(), val);
         _vec.erase(it);
     }
