@@ -39,42 +39,59 @@ struct meta{
 
 inline meta meta_info;
 
-
-template <typename T>
-struct SortedVector{
+template <typename T, typename Compare = std::less<T>>
+struct SortedVector {
     std::vector<T> _vec;
+    Compare _comp;
 
-    auto operator<=>(const SortedVector&) const = default;
+    SortedVector() = default;
+    SortedVector(size_t size) : _vec(size){}
+    
+    auto operator<=>(const SortedVector& other) const {
+        return _vec <=> other._vec;
+    }
+
+    bool operator==(const SortedVector& other) const {
+        return _vec == other._vec;
+    }
     
     bool contains(const T& val) const {
-        auto it = std::lower_bound(_vec.begin(), _vec.end(), val);
-        return it != _vec.end() && *it == val;
+        auto it = std::lower_bound(_vec.begin(), _vec.end(), val, _comp);
+        return it != _vec.end() && *it == val; 
     }
 
     auto find(const T& val) const {
-        auto it = std::lower_bound(_vec.begin(), _vec.end(), val);
+        auto it = std::lower_bound(_vec.begin(), _vec.end(), val, _comp);
         if (it == _vec.end() || *it != val){
             return _vec.end();
         }
-
         return it;
     }
 
     void insert(const T& val){
-        auto it = std::lower_bound(_vec.begin(), _vec.end(), val);
+        auto it = std::lower_bound(_vec.begin(), _vec.end(), val, _comp);
         _vec.insert(it, val);    
     }
+
+    T& unique_insert(const T& val){
+        auto it = std::lower_bound(_vec.begin(), _vec.end(), val, _comp);
+        if (it == _vec.end() || *it != val){
+            it = _vec.insert(it, val);
+        }
+        return *it;
+    }
     
-    void erase(const T& val){
-        auto it = std::lower_bound(_vec.begin(), _vec.end(), val);
+    bool erase(const T& val){
+        auto it = std::lower_bound(_vec.begin(), _vec.end(), val, _comp);
         if (it != _vec.end() && *it == val) {
             _vec.erase(it);
+            return true;
         }
+        return false;
     }
 
-    // erases the element without checking if it exists
     void unsafe_erase(const T& val){
-        auto it = std::lower_bound(_vec.begin(), _vec.end(), val);
+        auto it = std::lower_bound(_vec.begin(), _vec.end(), val, _comp);
         _vec.erase(it);
     }
 };
@@ -526,6 +543,20 @@ bool is_valid_iter(Iter iter, Iter sentinel){
 }
 
 struct IteratorHasher {
+    template <typename Iter>
+    std::size_t operator()(const Iter& it) const {
+        // Hash the address of the pair the iterator points to
+        return std::hash<const void*>{}(&(*it));
+    }
+
+    // Add this to handle the equality check
+    template <typename Iter>
+    bool operator()(const Iter& lhs, const Iter& rhs) const {
+        return lhs == rhs;
+    }
+};
+
+struct IteratorComp {
     template <typename Iter>
     std::size_t operator()(const Iter& it) const {
         // Hash the address of the pair the iterator points to

@@ -147,11 +147,13 @@ def conv_trace(bench_name: str, predictor: str) -> Path:
         bin_trace_path = settings.trace_bin_loc_enc_dir / (bench_name + f".data")
         cmd = [settings.sunhang_conv_exe_path, std_trace_path, bin_trace_path]
     
-    if not bin_trace_path.exists():
-        print(f"Converting Trace for: {predictor}, {bench_name}")
-        run_cmd(cmd)
-    else:
-        print(f"Skipping Trace Conversion for: {predictor}, {bench_name}")
+    print(f"Converting Trace for: {predictor}, {bench_name}")
+    run_cmd(cmd)
+    # if not bin_trace_path.exists():
+    #     print(f"Converting Trace for: {predictor}, {bench_name}")
+    #     run_cmd(cmd)
+    # else:
+    #     print(f"Skipping Trace Conversion for: {predictor}, {bench_name}")
 
 
     return bin_trace_path

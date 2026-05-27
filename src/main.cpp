@@ -5,6 +5,7 @@
 // TODO: LOOK INTO ENDIANESS
 // TODO: See if you can use SortedVector anywhere else
 // OPTIMIZATION: Make a normal VectorClock class and a OwnedVectorClock class(fighting agains branch pred?)
+// OPTIMIZATION: MAKE REENTRANT LOCKSET USE SPARSE VECTORS
 
 // MISUNDERSTANDINGS:
 

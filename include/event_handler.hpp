@@ -46,14 +46,15 @@ struct EventHandler{
 
   // INTERNAL STUFF
 
-  // These the id of the thread/var as index in the respective vectors
+  // These use the id of the thread/var as index in the respective vectors
   size_t alive_th_count;
   std::vector<ThreadInfo> thread_map;
   std::vector<VectorClock> last_write;
   std::unordered_map<ResourceIdT, CVInfo> cv_map;
 
   // Intermediary step that helps to build the neighbour list of the graph
-  std::unordered_map<ResourceIdT, NodeUSetT> lock_dep_map;
+  // std::unordered_map<ResourceIdT, NodeUSetT> lock_dep_map;
+  std::unordered_map<ResourceIdT, SortedVector<NodeConstItT, NodeConstItTComp>> lock_dep_map;
 
   // Statistical info
   uint32_t acq_count = 0;

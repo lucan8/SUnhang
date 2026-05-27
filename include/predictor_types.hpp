@@ -195,47 +195,73 @@ struct CSInfoComp{
     }
 };
 
-// Critical section history
-struct CSHist{
-  std::unordered_map<ResourceIdT, std::unordered_map<ThreadIdT, OwnedLazyQueue<std::deque<CSInfo>>>> _cs_hist;
 
-  // All that which was "removed" from the history is now back
-  void reset(){
-    for (auto& [res_id, th_cs_umap] : _cs_hist){
-      for (auto& [th_id, cs_queue] : th_cs_umap){
-        cs_queue.reset();
-      }
+// Groups the thread ID with its queue continuously in memory
+struct ThreadCSHist {
+    ThreadIdT tid;
+    OwnedLazyQueue<std::vector<CSInfo>> queue;
+
+    ThreadCSHist(ThreadIdT tid) : tid(tid) {
+      queue.queue.reserve(10);
     }
-  }
+};
 
-  // Adds the lock event to the history
-  CSInfo& add_lock_ev(ResourceIdT res_id, ThreadIdT tid, Event&& lock_ev){
-    return _cs_hist[res_id][tid].emplace(std::move(lock_ev));
-  }
+struct CSHist {
+    std::unordered_map<ResourceIdT, std::vector<ThreadCSHist>> _cs_hist;
 
-  // Sets the unlock event in the history
-  std::optional<CSInfo*> add_unlock_ev(ResourceIdT res_id, ThreadIdT tid, Event&& unlock_ev){
-    std::optional<CSInfo*> cs = get_back(res_id, tid);
-    // assert(cs.has_value()); // There should be a lock before an unlock!
-    if (!cs.has_value())
-      return {};
+    void reset() {
+        for (auto& [res_id, th_vec] : _cs_hist) {
+            for (auto& th_hist : th_vec) {
+                th_hist.queue.reset();
+            }
+        }
+    }
 
-    cs.value()->unlock_ev = std::move(unlock_ev);
-    return cs.value();
-  }
- 
-  // Returns the last cs of tid involving res_id if it exists
-  std::optional<CSInfo*> get_back(ResourceIdT res_id, ThreadIdT tid){
-    auto umap_it = _cs_hist.find(res_id);
-    if (umap_it == _cs_hist.end())
-      return {};
+    CSInfo& add_lock_ev(ResourceIdT res_id, ThreadIdT tid, Event&& lock_ev) {
+        auto& th_vec = _cs_hist[res_id];
+        
+        // Linearly search for the thread
+        for (auto& th_hist : th_vec) {
+            if (th_hist.tid == tid) {
+                th_hist.queue.emplace(std::move(lock_ev));
+                return th_hist.queue.back();
+            }
+        }
 
-    auto vec_it = umap_it->second.find(tid);
-    if (vec_it == umap_it->second.end() || vec_it->second.empty())
-      return {};
-    
-    return &vec_it->second.back();
-  }
+        // If thread hasn't used this lock yet, add it
+        th_vec.emplace_back(tid);
+        th_vec.back().queue.emplace(std::move(lock_ev));
+        return th_vec.back().queue.back();
+    }
+
+    std::optional<CSInfo*> add_unlock_ev(ResourceIdT res_id, ThreadIdT tid, Event&& unlock_ev) {
+        auto umap_it = _cs_hist.find(res_id);
+        if (umap_it == _cs_hist.end()) return {};
+
+        for (auto& th_hist : umap_it->second) {
+            if (th_hist.tid == tid) {
+                if (th_hist.queue.empty()) return {};
+                
+                CSInfo& cs = th_hist.queue.back();
+                cs.unlock_ev = std::move(unlock_ev);
+                return &cs;
+            }
+        }
+        return {};
+    }
+
+    std::optional<CSInfo*> get_back(ResourceIdT res_id, ThreadIdT tid) {
+        auto umap_it = _cs_hist.find(res_id);
+        if (umap_it == _cs_hist.end()) return {};
+
+        for (auto& th_hist : umap_it->second) {
+            if (th_hist.tid == tid) {
+                if (th_hist.queue.empty()) return {};
+                return &th_hist.queue.back();
+            }
+        }
+        return {};
+    }
 };
 
 struct StdIdMap{
@@ -268,41 +294,62 @@ struct StdIdMap{
 
 };
 
-//TODO: I think it's safe to remove global_cnt
-struct UReentrantLocksetT{
-    std::vector<int> _u_lock_map;
-    LocksetT _active_locks; 
+struct LocksetEntry{
+  ThreadIdT tid;
+  size_t count;
 
-    UReentrantLocksetT(): _u_lock_map(meta_info.LOCK_COUNT) {
+  auto operator<=>(const LocksetEntry& other) const {
+    return tid <=> other.tid;
+  }
+
+  bool operator==(const LocksetEntry& other) const {
+    return tid == other.tid;
+  }
+
+  LocksetEntry(ThreadIdT tid) : tid(tid), count(0){}
+};
+
+struct UReentrantLocksetT{
+    SortedVector<LocksetEntry> _active_locks; 
+
+    UReentrantLocksetT(){
         _active_locks._vec.reserve(meta_info.LOCK_DEPTH); 
     }
 
-    void acquire(ResourceIdT lock_id){
-        if (_u_lock_map[lock_id] == 0) {
-            _active_locks.insert(lock_id);
-        }
-        
-        _u_lock_map[lock_id] += 1;
+    // Returns true if the lock is acquired for the first time
+    bool acquire(ResourceIdT lock_id){
+        LocksetEntry& entry = _active_locks.unique_insert(lock_id);
+        entry.count += 1;
+
+        return entry.count == 1;
     }
     
-    void release(ResourceIdT lock_id){
-        _u_lock_map[lock_id] -= 1;
+    // Returns true if the lock is released for the last time
+    bool release(ResourceIdT lock_id){
+        bool last_time = false;
 
-        if (_u_lock_map[lock_id] == 0) {
-           _active_locks.unsafe_erase(lock_id);
+        auto it = _active_locks.find(lock_id);
+        size_t& count = const_cast<size_t&>(it->count);
+        count -= 1;
+
+        if (count == 0) {
+           _active_locks._vec.erase(it);
+           last_time = true;
         }
+
+        return last_time;
     }
 
     bool contains(ResourceIdT lock_id) const{
-        return _u_lock_map[lock_id] > 0;
+        return _active_locks.contains(lock_id);
     }
 
-    bool contains_only(ResourceIdT lock_id) const{
-        int count = _u_lock_map[lock_id];
-        if (count <= 0){
-            return false;
-        }
-        return size() == count;
+    LocksetT to_lockset() const{
+      LocksetT lockset(_active_locks._vec.size());
+      for (int i = 0; i < lockset._vec.size(); ++i){
+        lockset._vec[i] = _active_locks._vec[i].tid;
+      }
+      return lockset;
     }
 
     size_t size() const{
@@ -361,7 +408,14 @@ struct AbsDependency{
 
 // The explicit std::less<> is necesssary to allow transparent lookup 
 typedef std::map<AbsDependency, std::vector<Event>, std::less<>> NodeContainerT;
-typedef std::map<AbsDependency, std::vector<Event>>::const_iterator NodeConstItT;
+typedef NodeContainerT::const_iterator NodeConstItT;
+
+struct NodeConstItTComp {
+    bool operator()(const NodeConstItT& a, const NodeConstItT& b) const {
+
+        return a->first < b->first;
+    }
+};
 
 // Format for AbsDependency
 template <>

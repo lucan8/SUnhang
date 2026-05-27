@@ -138,19 +138,19 @@ void EventHandler::acquire_event(const EventInfo& evt_info) {
         handle_dep_creation(th_info, evt_info, evt);
     }
 
-    // Add ev to critical section history and add lock to lockset
-    CSInfo& cs_info = cs_hist.add_lock_ev(evt_info.target, evt_info.thread_id, std::move(evt));
-    th_info.u_reen_lockset.acquire(evt_info.target);
+    // Add lock to lockset and if it's the first time acquiring, add the event to cs_hist as well(reentrant behaviour)
+    if (th_info.u_reen_lockset.acquire(evt_info.target)){
+        CSInfo& cs_info = cs_hist.add_lock_ev(evt_info.target, evt_info.thread_id, std::move(evt));
+    }
 }
 
 void EventHandler::release_event(const EventInfo& evt_info) {
     ThreadInfo& th_info = thread_map[evt_info.thread_id];
     
-    // TODO: This could use a safe mode that checks the release was spurious
-    // Check it using the u_reen_lockset, cs_hist is not very reliable
-    th_info.u_reen_lockset.release(evt_info.target);
-    
-    cs_hist.add_unlock_ev(evt_info.target, evt_info.thread_id, std::move(Event(th_info.vec_clock, evt_info.line, evt_info.src_loc)));
+    // Release lock and add the event only if it was the last release(reentrant behaviour)
+    if (th_info.u_reen_lockset.release(evt_info.target)){
+        cs_hist.add_unlock_ev(evt_info.target, evt_info.thread_id, std::move(Event(th_info.vec_clock, evt_info.line, evt_info.src_loc)));
+    }
 }
 
 void EventHandler::fork_event(const EventInfo& evt_info) {
@@ -196,12 +196,10 @@ NodeConstItT EventHandler::update_dep(NodeConstItT old_dep, ResourceIdT new_res)
     }
     else{
         // Update with lock_dep_map with the new iterator only if there is a new iterator
-        for (auto res : old_dep->first.lockset._vec){
+        for (auto res : new_dep_it->first.lockset._vec){
             lock_dep_map[res].erase(old_dep);
             lock_dep_map[res].insert(new_dep_it);
         }
-        // Add new_res to the lock_dep_map
-        lock_dep_map[new_res].insert(new_dep_it);
     }
 
     return new_dep_it;
@@ -239,7 +237,7 @@ void EventHandler::build_neigh_list() {
             continue;
         
         // Add valid candidates to the neigbour list of dep
-        for (auto cand : lock_dep_it->second)
+        for (auto cand : lock_dep_it->second._vec)
             if (node_it->first.is_valid_neigh_cand_soft(cand->first))
                 graph_view.graph.neigh_list[node_it].push_back(cand);
     }
@@ -277,11 +275,11 @@ void EventHandler::handle_sleepness(ThreadInfo& th_info, ResourceIdT ass_lock_id
 void EventHandler::handle_dep_creation(ThreadInfo& th_info, const EventInfo& evt_info, const Event& evt){
     // Create dep and store in recent statuses if this is a notifying thread
     if (!meta_info.NOTIF_THREADS.empty() && meta_info.NOTIF_THREADS[evt_info.thread_id]){
-        NodeConstItT dep = create_dep(evt_info.thread_id, evt_info.target, th_info.u_reen_lockset._active_locks, evt);
+        NodeConstItT dep = create_dep(evt_info.thread_id, evt_info.target, th_info.u_reen_lockset.to_lockset(), evt);
         th_info.recent_sync_status_cont.push(dep);
     }
     else if(!th_info.u_reen_lockset.empty()){ // otherwise just create the dep if lockset is not empty
-        create_dep(evt_info.thread_id, evt_info.target, th_info.u_reen_lockset._active_locks, evt);
+        create_dep(evt_info.thread_id, evt_info.target, th_info.u_reen_lockset.to_lockset(), evt);
     }
 }
 
@@ -302,8 +300,8 @@ void EventHandler::print_lock_deps_map() const{
     Logger::print(LogType::INFO, "------------------------------------");
 
     for (const auto& [lock, dep_vec] : lock_dep_map){
-        Logger::print(LogType::DBG, "(Lock){}: {}(Dep count)", lock, dep_vec.size());
-        for (const auto dep : dep_vec)
+        Logger::print(LogType::DBG, "(Lock){}: {}(Dep count)", lock, dep_vec._vec.size());
+        for (const auto dep : dep_vec._vec)
             Logger::print(LogType::DBG, "{}", dep->first);
     }
 
@@ -382,7 +380,7 @@ void EventHandler::print_summary() const{
 
 void EventHandler::print_th_exit_with_locks() const{
     for (const auto& [tid, th_info] : std::views::enumerate(thread_map)){
-        LocksetT lockset = th_info.u_reen_lockset._active_locks;
+        LocksetT lockset = th_info.u_reen_lockset.to_lockset();
         if (!lockset._vec.empty()){
         Logger::print(LogType::WARN, "Thread {} exited holding locks {}", tid, lockset);
         }
@@ -400,7 +398,7 @@ void EventHandler::print_th_vc_info() const{
 void EventHandler::print_th_lockset_info() const{
     uint64_t sum = 0;
     for (const auto& [tid, th_info] : std::views::enumerate(thread_map)){
-        sum += th_info.u_reen_lockset._u_lock_map.size();
+        sum += th_info.u_reen_lockset.size();
     }
     Logger::print(LogType::DBG, "mean={}, count={}", sum / thread_map.size(), thread_map.size());
 }
