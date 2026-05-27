@@ -85,50 +85,48 @@ std::optional<EventInfo> StdParser::get_next_event() {
 }
 
 // Helper function for parse_full_trace. Should not be used anywhere else
-void Parser::_update_last_write(std::vector<EventInfo>& events, size_t curr_ev_idx, 
-                                std::vector<int>& last_write) const{
-    EventInfo& last_ev = events[curr_ev_idx];
-
-    if (last_ev.event_type == EventsT::WR){
+void Parser::_update_last_write(std::vector<uint8_t>& ignored_events, EventIdT event_idx, EventsT event_type,
+                                ResourceIdT target, std::vector<EventIdT>& last_write) const{
+    if (event_type == EventsT::WR){
         // Ignore the write before this and update
-        int last_write_ev_id = last_write[last_ev.target];
+        int last_write_ev_id = last_write[target];
         if (last_write_ev_id != -1){
-            events[last_write_ev_id].ignored = true;
+            ignored_events[last_write_ev_id] = true;
         }
-        last_write[last_ev.target] = curr_ev_idx;
+        last_write[target] = event_idx;
     }
     // Acknowledge the last write(make it so it is not ignored)
-    else if (last_ev.event_type == EventsT::RD){
-        last_write[last_ev.target] = -1;
+    else if (event_type == EventsT::RD){
+        last_write[target] = -1;
     }
 }
 
-std::vector<EventInfo> Parser::parse_full_trace(){
-    std::vector<EventInfo> events(meta_info.EVENT_COUNT);
-    std::vector<int> last_write(meta_info.VAR_COUNT, -1);
-    size_t invalid_ev_cnt = 0;
+// std::vector<EventInfo> Parser::parse_full_trace(){
+//     std::vector<EventInfo> events(meta_info.EVENT_COUNT);
+//     std::vector<int> last_write(meta_info.VAR_COUNT, -1);
+//     size_t invalid_ev_cnt = 0;
 
-    for (size_t i = 0; i < events.size(); ++i){
-        auto event_opt = get_next_event();
+//     for (size_t i = 0; i < events.size(); ++i){
+//         auto event_opt = get_next_event();
 
-        if (event_opt.has_value()){
-            events[i] = std::move(event_opt.value());
-            _update_last_write(events, i, last_write);
-        }
-        else{
-            invalid_ev_cnt++;
-        }
+//         if (event_opt.has_value()){
+//             events[i] = std::move(event_opt.value());
+//             _update_last_write(events, i, last_write);
+//         }
+//         else{
+//             invalid_ev_cnt++;
+//         }
 
-        // if (ev_count % 100000 == 0){
-        //     Logger::print(LogType::DBG, "Parsed {} events", ev_count);
-        // }
-    }
+//         // if (ev_count % 100000 == 0){
+//         //     Logger::print(LogType::DBG, "Parsed {} events", ev_count);
+//         // }
+//     }
 
-    // Logger::print(LogType::DBG, "Parsed {} events", ev_count);
-    // Logger::print(LogType::DBG, "Invalid {} events", invalid_ev_cnt);
+//     // Logger::print(LogType::DBG, "Parsed {} events", ev_count);
+//     // Logger::print(LogType::DBG, "Invalid {} events", invalid_ev_cnt);
 
-    return events;
-}
+//     return events;
+// }
 
 void StdParser::print_summary(FILE* log_file) const{
     Logger::print(log_file, "num threads: {}", th_id_map.id_counter);

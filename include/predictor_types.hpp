@@ -69,6 +69,10 @@ inline std::optional<EventsT> from_int16(int16_t val){
     return std::nullopt;
 }
 
+inline EventsT unsafe_from_int16(int16_t val){
+    return static_cast<EventsT>(val);
+}
+
 // Formats EventsT
 // Needed when calling std::format
 template <>
@@ -97,7 +101,6 @@ struct EventInfo{
   ResourceIdT target;
   SrcLocT src_loc;
   EventIdT line; // line in trace file 
-  bool ignored = false;
 
   EventInfo(){}
   EventInfo(ThreadIdT thread_id, EventsT event_type, ResourceIdT target, SrcLocT src_loc, EventIdT line = 0)

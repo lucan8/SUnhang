@@ -7,6 +7,7 @@
 #include <stdint.h>
 
 #include "predictor_types.hpp"
+#include "event_handler.hpp"
 #include "ord_dep_graph.hpp"
 #include "vectorclock.hpp"
 
@@ -65,12 +66,13 @@ struct Parser{
   bool events_remaining();
 
   // Always make sure the file did not reach eof before calling this using events_remaining
-  virtual std::optional<EventInfo> get_next_event() = 0;
+  virtual std::optional<EventInfo> get_next_event(){}
 
   // Helper function for parse_full_trace. Should not be used anywhere else
-  void _update_last_write(std::vector<EventInfo>& events, size_t curr_ev_idx, std::vector<int>& last_write) const;
+  void _update_last_write(std::vector<uint8_t>& ignored_events, EventIdT event_idx, EventsT event_type,
+                          ResourceIdT target, std::vector<EventIdT>& last_write) const;
 
-  std::vector<EventInfo> parse_full_trace();
+  // std::vector<EventInfo> parse_full_trace();
 
   virtual void print_summary(FILE* log_file) const = 0;
 
@@ -79,13 +81,11 @@ struct Parser{
 struct TraceBinFormater{
   //TODO: Probably don't need that count_bit_count
   struct EvBinFormatter{
-    const int16_t count_bit_count; // The number of bits used to represent the count
     const int16_t ev_bit_offset;
     const BinEvT ev_comp_mask;
 
     EvBinFormatter(int16_t count_bit_count, int16_t ev_bit_offset)
-      : count_bit_count(count_bit_count), ev_bit_offset(ev_bit_offset), 
-        ev_comp_mask(((1LL << count_bit_count) - 1) << ev_bit_offset){}
+      : ev_bit_offset(ev_bit_offset), ev_comp_mask(((1LL << count_bit_count) - 1) << ev_bit_offset){}
     
     // Converts the event bin component from binary repr to the actual value
     BinEvT bin_to_ev_comp(BinEvT ev_bin_comp) const{
@@ -146,12 +146,43 @@ struct TraceBinFormater{
 		                 SRC_LOC_FMT.bin_to_ev_comp(bin_ev)
                     );
   }
+
+  static EventInfo unsafe_bin_to_ev(BinEvT bin_ev) {
+    return EventInfo(THREAD_FMT.bin_to_ev_comp(bin_ev),
+                     unsafe_from_int16(OP_FMT.bin_to_ev_comp(bin_ev)),
+	                   TARGET_FMT.bin_to_ev_comp(bin_ev),
+		                 SRC_LOC_FMT.bin_to_ev_comp(bin_ev)
+                    );
+  }
+
+  static std::optional<EventsT> extract_ev_type(BinEvT bin_ev) {
+    return from_int16(OP_FMT.bin_to_ev_comp(bin_ev));
+  }
+
+  static EventsT unsafe_extract_ev_type(BinEvT bin_ev) {
+    return unsafe_from_int16(OP_FMT.bin_to_ev_comp(bin_ev));
+  }
+
+  static ThreadIdT extract_tid(BinEvT bin_ev) {
+    return THREAD_FMT.bin_to_ev_comp(bin_ev);
+  }
+
+  static ResourceIdT extract_target(BinEvT bin_ev) {
+    return TARGET_FMT.bin_to_ev_comp(bin_ev);
+  }
+
+  static ResourceIdT extract_src_loc(BinEvT bin_ev) {
+    return SRC_LOC_FMT.bin_to_ev_comp(bin_ev);
+  }
 };
 
 // REIMPLEMENTED FROM THE ARTIFACT OF SPDOFFLINE(/root/spdoffline/src/parse/bin)
 // The files opened for this should be in rb mode
 struct BinParser : public Parser{
   constexpr static uint32_t EV_BLOCK_CNT = (4096 * 16) / sizeof(BinEvT);
+
+  std::vector<uint8_t> ignored_events;
+  std::array<BinEvT, EV_BLOCK_CNT> bin_ev_block;
 
   // Initializes meta_info
   BinParser(std::FILE* trace_file) : Parser(trace_file){
@@ -165,79 +196,126 @@ struct BinParser : public Parser{
     shared_locks.reset(meta_info.LOCK_COUNT);
     shared_vars.reset(meta_info.VAR_COUNT);
     meta_info.resize_notif_threads();
+    ignored_events.resize(meta_info.EVENT_COUNT, 0);
   }
 
-  // Always make sure the file did not reach eof before calling this using events_remaining
-  std::optional<EventInfo> get_next_event() override{    
-    BinEvT bin_ev;
-    std::fread(&bin_ev, sizeof(bin_ev), 1, trace_file);
-
-    // Convert the binary event to EventInfo
-    std::optional<EventInfo> ev_info_opt = TraceBinFormater::bin_to_ev(bin_ev);
-    if (!ev_info_opt.has_value()) return {};
-
-    line_index++;
-    EventInfo& ev_info = ev_info_opt.value();
-    ev_info.line = line_index;
-
-    // Update shared trackers for lock and var, convert the id of the target for cond vars
-    if(is_lock_type(ev_info.event_type)) {
-        shared_locks.update(ev_info.thread_id, ev_info.target);
-    }
-    else if(is_access_type(ev_info.event_type)){
-        shared_vars.update(ev_info.thread_id, ev_info.target);
-    }
-    else if (is_notif_type(ev_info.event_type)){
-        meta_info.NOTIF_THREADS[ev_info.thread_id] = 1;
-    }
-
-    return ev_info;
-  }
-
-  std::vector<EventInfo> parse_full_trace_with_blocks() {   
-    // The might be invalid events like req which we want to ignore
-    std::vector<EventInfo> events;
-    events.reserve(meta_info.EVENT_COUNT);
-
-    std::vector<int> last_write(meta_info.VAR_COUNT, -1);
-    size_t invalid_ev_cnt = 0;
-    
-    std::array<BinEvT, EV_BLOCK_CNT> bin_ev_block;
-    size_t read_ev_cnt = 0;
+  // Not used at the moment
+  std::optional<EventInfo> get_next_event() override {
+    static size_t read_ev_cnt = 0;
+    static int block_ev_idx = -1;
+    static EventIdT curr_ev_id = -1;
 
     do{
-      read_ev_cnt = std::fread(bin_ev_block.data(), sizeof(BinEvT), EV_BLOCK_CNT, trace_file);
+        block_ev_idx++;
+        if (block_ev_idx < read_ev_cnt){
+          curr_ev_id++;
+          if (ignored_events[curr_ev_id]){
+            continue;
+          }
+          
+          BinEvT bin_ev = bin_ev_block[block_ev_idx];
 
-      for (int i = 0; i < read_ev_cnt; ++i){
-        BinEvT bin_ev = bin_ev_block[i];
+          // OPTIMIZATION: Extract only event_type and target first, check the conditions
+          // and if they are false extract the rest and construct the EventInfo object
+          EventInfo ev_info = TraceBinFormater::unsafe_bin_to_ev(bin_ev);
+          
+          if (is_lock_type(ev_info.event_type) && !shared_locks.is_shared(ev_info.target)) {
+              continue;
+          }
+          if (is_access_type(ev_info.event_type) && !shared_vars.is_shared(ev_info.target)) {
+              continue;
+          }
 
-        // Convert the binary event to EventInfo
-        std::optional<EventInfo> ev_info_opt = TraceBinFormater::bin_to_ev(bin_ev);
-        if (!ev_info_opt.has_value()){
-          continue;
+          ev_info.line = curr_ev_id;
+          return ev_info;
         }
-
-        line_index++;
-        EventInfo& ev_info = ev_info_opt.value();
-        ev_info.line = line_index;
-
-        // Update shared trackers for lock and var, convert the id of the target for cond vars
-        if(is_lock_type(ev_info.event_type)) {
-            shared_locks.update(ev_info.thread_id, ev_info.target);
+        else{
+          read_ev_cnt = std::fread(bin_ev_block.data(), sizeof(BinEvT), EV_BLOCK_CNT, trace_file);
+          block_ev_idx = -1;
         }
-        else if(is_access_type(ev_info.event_type)){
-            shared_vars.update(ev_info.thread_id, ev_info.target);
-        }
-        else if (is_notif_type(ev_info.event_type)){
-            meta_info.NOTIF_THREADS[ev_info.thread_id] = 1;
-        }
+    } while (read_ev_cnt == EV_BLOCK_CNT || block_ev_idx < read_ev_cnt);
 
-        events.emplace_back(std::move(ev_info));
-        _update_last_write(events, events.size() - 1, last_write);
-      }
+    // EOF reached, no more events
+    return std::nullopt;
+  }
+
+  void preprocess_trace() {
+      // Account for metadata loading
+      long start_file_pos = std::ftell(trace_file);
+
+      std::vector<EventIdT> last_write(meta_info.VAR_COUNT, -1);
+
+      size_t read_ev_cnt = 0;
+      EventIdT curr_ev_id = -1;
+
+      do {
+          read_ev_cnt = std::fread(bin_ev_block.data(), sizeof(BinEvT), EV_BLOCK_CNT, trace_file);
+
+          for (size_t i = 0; i < read_ev_cnt; ++i) {
+              curr_ev_id++;
+              BinEvT bin_ev = bin_ev_block[i];
+
+              // Not very safe, but surely faster. The trace should be correct
+              EventsT event_type = TraceBinFormater::unsafe_extract_ev_type(bin_ev);
+              ThreadIdT thread_id = TraceBinFormater::extract_tid(bin_ev);
+              ResourceIdT target = TraceBinFormater::extract_target(bin_ev);
+
+              if (is_lock_type(event_type)) {
+                  shared_locks.update(thread_id, target);
+              } else if (is_access_type(event_type)) {
+                  shared_vars.update(thread_id, target);
+                  _update_last_write(ignored_events, curr_ev_id, event_type, target, last_write);
+              } else if (is_notif_type(event_type)) {
+                  meta_info.NOTIF_THREADS[thread_id] = 1;
+              }
+          }
+      } while(read_ev_cnt == EV_BLOCK_CNT);
+
+      // Restore the file's position
+      std::fseek(trace_file, start_file_pos, SEEK_SET);
+  }
+
+  
+  void parse_and_handle_trace(EventHandler& event_handler) {       
+    std::array<BinEvT, EV_BLOCK_CNT> bin_ev_block;
+    size_t read_ev_cnt = 0;
+    EventIdT curr_ev_id = -1;
+
+    do {
+        read_ev_cnt = std::fread(bin_ev_block.data(), sizeof(BinEvT), EV_BLOCK_CNT, trace_file);
+
+        for (size_t i = 0; i < read_ev_cnt; ++i) {
+            curr_ev_id++;
+
+            // Don't process events that should be ignored
+            if (ignored_events[curr_ev_id]) {
+              continue;
+            }
+
+            BinEvT bin_ev = bin_ev_block[i];
+            
+            // Only extract what's necessary to check the conditions
+            EventsT event_type = TraceBinFormater::unsafe_extract_ev_type(bin_ev); 
+            ResourceIdT target = TraceBinFormater::extract_target(bin_ev);
+
+            if (is_lock_type(event_type) && !shared_locks.is_shared(target)) {
+                continue;
+            }
+            if (is_access_type(event_type) && !shared_vars.is_shared(target)) {
+                continue;
+            }
+
+            // Fetch the rest afterwards
+            EventInfo ev_info(TraceBinFormater::extract_tid(bin_ev),
+                              event_type,
+                              target,
+                              TraceBinFormater::extract_src_loc(bin_ev),
+                              curr_ev_id
+                             );
+
+            event_handler.handle_event(ev_info);
+        }
     } while(read_ev_cnt == EV_BLOCK_CNT);
-
-    return events;
   }
 
   void print_summary(FILE* log_file) const override{

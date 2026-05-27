@@ -173,9 +173,10 @@ int main(int argc, char *argv[]) {
     // THIS NEEDS TO BE FIRST
     // meta::init(trace_meta_file);
     auto start = std::chrono::steady_clock::now();
-
+    
+    // Preprocess trace file(fill metadata, determine events to be ignored etc...)
     BinParser trace_parser(trace_file);
-    std::vector<EventInfo> events = trace_parser.parse_full_trace_with_blocks();
+    trace_parser.preprocess_trace();
 
     Logger::print(log_file, "----Trace info----");
     trace_parser.print_summary(log_file);
@@ -183,17 +184,9 @@ int main(int argc, char *argv[]) {
     auto end = std::chrono::steady_clock::now();
     auto millis_passed_parse_trace = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
+    // Read and handle events
     EventHandler event_handler(meta_info.THREAD_COUNT, meta_info.VAR_COUNT);
-    size_t skipped_ev_cnt = 0;
-    for (const auto& [idx, ev] : std::views::enumerate(events)){
-        if (ev.ignored || 
-            is_lock_type(ev.event_type) && !trace_parser.shared_locks.is_shared(ev.target) ||
-            is_access_type(ev.event_type) && !trace_parser.shared_vars.is_shared(ev.target)){
-                skipped_ev_cnt++;
-                continue;
-        }
-        event_handler.handle_event(ev);
-    }
+    trace_parser.parse_and_handle_trace(event_handler);
 
     // Print summary
     event_handler.print_summary(log_file);
