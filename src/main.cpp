@@ -3,10 +3,12 @@
 // you even have simple serialization/deserialization for dynamic_bitset
 // TODO: DEFINE SOME KIND OF EVENT NAMESPACE
 // TODO: LOOK INTO ENDIANESS
+// BIG QUESTION: SHOULD' READS ALSO BE ORDERED BEFORE WRITES?
+// LOGICAL BUG FOUND BY RUNNING src_code_loc_test1/src_code_loc_bug1_dlf
 // TODO: See if you can use SortedVector anywhere else
 // OPTIMIZATION: Make a normal VectorClock class and a OwnedVectorClock class(fighting agains branch pred?)
-// OPTIMIZATION: MAKE REENTRANT LOCKSET USE SPARSE VECTORS
-
+// TODO: Event probably doesn't need src_loc anymore
+// TODO: See why the big runtime for sor
 // MISUNDERSTANDINGS:
 
 // DEAD THREADS DON'T ACTUALLY CAUSE ISSUES FOR SPDOFFLINE
@@ -191,11 +193,10 @@ int main(int argc, char *argv[]) {
 
     // Print summary
     event_handler.print_summary(log_file);
+    fflush(log_file);
 
     end = std::chrono::steady_clock::now();
     auto millis_passed_handle_events = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-    
-    // Logger::print(LogType::DBG, "skipped_ev_cnt: {}", skipped_ev_cnt);
 
     // Logger::print(LogType::INFO, "Finished event handling");
     event_handler.build_neigh_list();
@@ -206,25 +207,28 @@ int main(int argc, char *argv[]) {
     cycle_enumerator.enum_cycles();
     
     Logger::print(log_file, "num cycles: {}", cycle_enumerator.res_cycles.size());
+    fflush(log_file);
 
     end = std::chrono::steady_clock::now();
     auto millis_passed_cycle_enum = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
-    DeadlockChecker dlk_checker(event_handler.cs_hist);
+    DeadlockChecker dlk_checker(event_handler.cs_hist, event_handler.dep_loc_map);
 
-    std::vector<int> abs_dlk_cycles_ind;
-    size_t conc_count = 0;
-    abs_dlk_cycles_ind.reserve(32);
-    for (int i = 0; i < cycle_enumerator.res_cycles.size(); ++i){
-        bool is_abs_dlk = dlk_checker.is_abs_dlk_pattern(cycle_enumerator.res_cycles[i]);
-        if (is_abs_dlk){
-            abs_dlk_cycles_ind.push_back(i);
+    // Each cycle might have multiple abstract deadlock patterns
+    std::vector<AbsDlkPattern> all_abs_dlk_patterns;
+    size_t abs_dlk_pattern_count = 0;
+
+    for (const auto& cycle : cycle_enumerator.res_cycles){
+        std::vector<AbsDlkPattern> abs_dlk_patterns = dlk_checker.get_abs_dlk_patterns(cycle);
+        if (abs_dlk_patterns.size() > 0){
+            abs_dlk_pattern_count += abs_dlk_patterns.size();
+            all_abs_dlk_patterns.insert(all_abs_dlk_patterns.end(), abs_dlk_patterns.begin(), abs_dlk_patterns.end());
         }
     }
 
-    Logger::print(log_file, "num abstract: {}", abs_dlk_cycles_ind.size());
+    Logger::print(log_file, "num abstract: {}", abs_dlk_pattern_count);
     Logger::print(log_file, "num concrete: -1\n"); // Just to match the format
-    // fflush(log_file);
+    fflush(log_file);
     
     end = std::chrono::steady_clock::now();
     auto millis_passed_abs_dlk_check = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
@@ -232,44 +236,18 @@ int main(int argc, char *argv[]) {
     uint32_t real_dlk_count = 0;
     std::vector<int> real_dlk_ind;
 
-    std::vector<std::pair<std::tuple<int, int, int>, int>> vals;
-    for (int i : abs_dlk_cycles_ind){
-        auto& cycle = cycle_enumerator.res_cycles[i];
-        
-        for (auto& node : cycle){
-            for (auto& ev : node->second){
-                std::tuple<int, int, int> tup(node->first.thread_id, node->first.resource_id, ev.src_loc);
-                bool found = false;
-                for (auto& [t, c] : vals){
-                    if (t == tup){
-                        found = true;
-                        c += 1;
-                        break;
-                    }
-                }
-                if (!found){
-                    vals.push_back({tup, 0});
-                }
-            }
+    std::set<std::vector<SimpleNode>> verified_patterns;
+    for (auto& abs_dlk_pattern : all_abs_dlk_patterns){
+        if (verified_patterns.find(abs_dlk_pattern.nodes) != verified_patterns.end()){
+            continue;
         }
 
-        auto dlk_info_opt = dlk_checker.get_sync_preserving_dlk(cycle_enumerator.res_cycles[i]);
-        if (dlk_info_opt.has_value()){
+        if (dlk_checker.is_sync_preserving_dlk(abs_dlk_pattern)){
+            verified_patterns.insert(abs_dlk_pattern.nodes);
             real_dlk_count += 1;
-            auto dlk_info = dlk_info_opt.value();
-            Logger::print(log_file, "Deadlock found on cycle: {}", dlk_info);
-            // Logger::print(LogType::DBG, "{}", cycle_enumerator.res_cycles[i]);
-            real_dlk_ind.push_back(i);
+            Logger::print(log_file, "Deadlock found on cycle: {}", abs_dlk_pattern.nodes);
         }
     }
-
-    // size_t prod = 1;
-    // for (auto v : count){
-    //     for (auto c : v){
-    //         prod *= c; 
-    //     }
-    // }
-
 
     end = std::chrono::steady_clock::now();
     auto millis_passed_sync_pres_check = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();

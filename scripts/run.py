@@ -149,11 +149,11 @@ def conv_trace(bench_name: str, predictor: str) -> Path:
     
     print(f"Converting Trace for: {predictor}, {bench_name}")
     run_cmd(cmd)
-    # if not bin_trace_path.exists():
-    #     print(f"Converting Trace for: {predictor}, {bench_name}")
-    #     run_cmd(cmd)
-    # else:
-    #     print(f"Skipping Trace Conversion for: {predictor}, {bench_name}")
+    if not bin_trace_path.exists():
+        print(f"Converting Trace for: {predictor}, {bench_name}")
+        run_cmd(cmd)
+    else:
+        print(f"Skipping Trace Conversion for: {predictor}, {bench_name}")
 
 
     return bin_trace_path
@@ -175,7 +175,7 @@ def main():
         benchmarks = options.benchmarks.split(",")
 
     for bench in benchmarks:
-        #run_predictor(bench, settings.spdoffline_name)
+        # run_predictor(bench, settings.spdoffline_name)
         run_predictor(bench, settings.sunhang_name)
 
 if __name__ == "__main__":

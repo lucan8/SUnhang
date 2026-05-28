@@ -19,7 +19,7 @@ struct std::formatter<NodeChainT> : std::formatter<std::string> {
     auto format(const NodeChainT& node_chain, format_context& ctx) const {
         auto out = ctx.out();
         for (const auto& node : node_chain)
-          std::format_to(out, "{}, ", node->first);
+          std::format_to(out, "{}, ", *node);
         return out;
     }
 };
@@ -40,7 +40,7 @@ struct NodeItLess{
         if (!is_valid_iter(node2, sentinel_node))
             return true;
         
-        return node1->first < node2->first;
+        return *node1 < *node2;
     }
 };
 
@@ -59,7 +59,7 @@ struct OrdDepGraph{
     size_t get_lock_dep_count() const{
         size_t lock_dep_count = 0;
 
-        for (const auto& [dep, ev] : abs_deps_map){
+        for (const auto& dep: abs_deps_map){
             if (dep.is_lock_dep()){
                 lock_dep_count += 1;
             }
