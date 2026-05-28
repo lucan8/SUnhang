@@ -156,7 +156,6 @@ inline bool insert_lockset(const LocksetT& src, ULocksetT& dst){
     return true;
 }
 
-
 // Define constraint for LazyQueue that enforces the container to be either a vector or deque
 template <typename> struct is_vec_or_deq : std::false_type{};
 template <typename T, typename A> struct is_vec_or_deq<std::vector<T, A>> : std::true_type{};
@@ -232,8 +231,9 @@ struct LazyQueue {
     // If all elements are greater than x optional won't have a value
     template <typename ValT, typename CompT>
     requires std::predicate<CompT, const T&, const ValT&>
-    std::optional<const T*> pop_until(const ValT& x, CompT comp, bool inclusive) {
+    std::pair<std::optional<const T*>, bool> pop_until(const ValT& x, CompT comp, bool inclusive) {
         const ContainerT& q = get();
+        auto tmp = start_elem;
 
         if (inclusive){
             start_elem = std::upper_bound(start_elem, q.cend(), x, comp);
@@ -241,11 +241,11 @@ struct LazyQueue {
         else{
             start_elem = std::lower_bound(start_elem, q.cend(), x, comp);
         }
-        
+
         if (start_elem == q.begin())
-            return {};
+            return {std::nullopt, false};
         
-        return &(*std::prev(start_elem));
+        return {&(*std::prev(start_elem)), tmp == start_elem};
     }
 
     bool empty() const{
@@ -543,27 +543,13 @@ bool is_valid_iter(Iter iter, Iter sentinel){
 }
 
 struct IteratorHasher {
+    // Uses the address the iterator point to
     template <typename Iter>
     std::size_t operator()(const Iter& it) const {
-        // Hash the address of the pair the iterator points to
         return std::hash<const void*>{}(&(*it));
     }
 
-    // Add this to handle the equality check
-    template <typename Iter>
-    bool operator()(const Iter& lhs, const Iter& rhs) const {
-        return lhs == rhs;
-    }
-};
-
-struct IteratorComp {
-    template <typename Iter>
-    std::size_t operator()(const Iter& it) const {
-        // Hash the address of the pair the iterator points to
-        return std::hash<const void*>{}(&(*it));
-    }
-
-    // Add this to handle the equality check
+    // Equality check
     template <typename Iter>
     bool operator()(const Iter& lhs, const Iter& rhs) const {
         return lhs == rhs;

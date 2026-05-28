@@ -49,10 +49,10 @@ struct std::formatter<MinSCC> : std::formatter<std::string> {
         auto out = ctx.out();
 
         for (const auto& node : scc.nodes) {
-            out = std::format_to(out, "{}\n", node->first);
+            out = std::format_to(out, "{}\n", *node);
         }
         
-        return std::format_to(out, "Min node: {}", scc.min_node->first);
+        return std::format_to(out, "Min node: {}", *scc.min_node);
     }
 };
 

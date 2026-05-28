@@ -2,59 +2,71 @@
 #include "../include/deadlock_checker.hpp"
 #include "../include/logger.hpp"
 
-bool DeadlockChecker::is_abs_dlk_pattern(const NodeChainT& cycle){
+bool DeadlockChecker::is_abs_dlk_pattern_gen(const NodeChainT& cycle) const{
     ULocksetT desired_locks;
     UThreadSetT threads;
     ULocksetT acq_locks;
 
     for (auto node : cycle){
         // Insert and check thread
-        auto inserted_thread = threads.insert(node->first.thread_id);
+        auto inserted_thread = threads.insert(node->thread_id);
         if (!inserted_thread.second)
             return false;
 
         // Insert and check desired lock
-        auto inserted_des_lock = desired_locks.insert(node->first.resource_id);
+        auto inserted_des_lock = desired_locks.insert(node->resource_id);
         if (!inserted_des_lock.second)
             return false;
         
         // Insert all locks of the node's lockset and check all of them were inserted
-        if (!insert_lockset(node->first.lockset, acq_locks))
+        if (!insert_lockset(node->lockset, acq_locks))
             return false;
     }
 
     return true;
 }
 
-std::optional<std::vector<SimpleNode>> DeadlockChecker::get_sync_preserving_dlk(const NodeChainT& cycle){
+void DeadlockChecker::_cartesian_prod_loc(const NodeLocToEvMapT& dep_loc_map, const NodeChainT& cycle, int curr_node_idx, AbsDlkPattern curr_res, std::vector<AbsDlkPattern>& res) const{
+    if (curr_node_idx == cycle.size()){
+        assert(curr_res.nodes.size() == curr_res.events.size()); // Sanity check
+        res.push_back(std::move(curr_res));
+        return;
+    }
+
+    auto node = cycle[curr_node_idx];
+    AbsDlkPattern next_res(std::move(curr_res));
+
+    for (const auto& [src_loc, evts] : dep_loc_map.at(node)) {
+        next_res.nodes[curr_node_idx] = SimpleNode(node->thread_id, node->resource_id, src_loc);
+        next_res.events[curr_node_idx] = ViewLazyQueue(evts);
+        _cartesian_prod_loc(dep_loc_map, cycle, curr_node_idx + 1, next_res, res);
+    }
+}
+
+std::vector<AbsDlkPattern> DeadlockChecker::get_abs_dlk_patterns(const NodeChainT& cycle){
+    if (!is_abs_dlk_pattern_gen(cycle)){
+        return {};
+    }
+
+    std::vector<AbsDlkPattern> res;
+    _cartesian_prod_loc(dep_loc_map, cycle, 0, AbsDlkPattern(cycle.size()), res);
+    return res;
+}
+
+bool DeadlockChecker::is_sync_preserving_dlk(AbsDlkPattern& cycle){
     VectorClock vc;
     cs_hist.reset();
 
-    // Wrap the event vectors of the dependencies in lazy queues
-    std::vector<EventLazyQueue> cycle_evt = _node_chain_to_lazy_q_vec(cycle);
-
     bool all_nodes_alive = true;
     while(all_nodes_alive){
-        _update_vc_with_curr_cycle(Cycle(cycle_evt, cycle), vc);
-
+        _update_vc_with_curr_cycle(cycle.events, vc);
         _get_sync_pres_closure(vc);
         
-        // Logger::print(LogType::DBG, "{}", cycle_evt);
-
-        bool is_sync_pres_dlk = _check_sync_pres_closure(cycle_evt, vc);
-        
-        // Logger::print(LogType::NONE, "{}", is_sync_pres_dlk);
-        
-        if (is_sync_pres_dlk){
-            std::vector<SimpleNode> res;
-            res.reserve(cycle_evt.size());
-            for (int i = 0; i < cycle.size(); ++i){
-                res.emplace_back(cycle[i]->first.thread_id, cycle[i]->first.resource_id, (cycle_evt[i].start_elem)->src_loc);
-            }
-            return res;
+        if (_check_sync_pres_closure(cycle.events, vc)){
+            return true;
         }
         
-        all_nodes_alive = _update_abs_dep_start_ev(cycle_evt, vc);
+        all_nodes_alive = _update_abs_dep_start_ev(cycle.events, vc);
     }
 
     return {};
@@ -73,7 +85,7 @@ void DeadlockChecker::_get_sync_pres_closure(VectorClock& vc){
             int max_cs_ind = -1; // Using index instead of iterator as it is more stable
 
             for (auto& [th_id, cs_queue] : th_cs_umap){
-                auto cs_opt = cs_queue.pop_until(vc, CSInfoComp(), false);
+                auto cs_opt = cs_queue.pop_until(vc, CSInfoComp(), false).first;
                 if (cs_opt.has_value()){
                     // Add critical section to vector
                     const CSInfo* cs = cs_opt.value();
@@ -107,12 +119,9 @@ bool DeadlockChecker::_check_sync_pres_closure(const std::vector<EventLazyQueue>
 }
 
 // TODO: Do we really need the predecessor?
-void DeadlockChecker::_update_vc_with_curr_cycle(const Cycle& cycle_evt, VectorClock& vc) const{
+void DeadlockChecker::_update_vc_with_curr_cycle(const std::vector<EventLazyQueue>& cycle_evt, VectorClock& vc) const{
     for (int i = 0; i < cycle_evt.size(); ++i){
-        EventLazyQueue ev_lazy_q = cycle_evt.wrapped_events[i];
-
-        Event& ev = const_cast<Event&>(*ev_lazy_q.start_elem);
-        ThreadIdT tid = cycle_evt.nodes[i]->first.thread_id;
+        Event& ev = const_cast<Event&>(*cycle_evt[i].start_elem);
         
         // Merge the event predecessor in the vc 
         vc.th_pred_merge_into(ev.vc);
@@ -122,7 +131,7 @@ void DeadlockChecker::_update_vc_with_curr_cycle(const Cycle& cycle_evt, VectorC
 // For each node, "removes" all events <= vc
 // Returns false if any node became empty during the process(no more events to verify), true otherwise
 // False is early returned, meaning not all nodes were updated!
-bool DeadlockChecker::_update_abs_dep_start_ev(std::span<EventLazyQueue> cycle_evt, const VectorClock& vc) const{
+bool DeadlockChecker::_update_abs_dep_start_ev(std::vector<EventLazyQueue>& cycle_evt, const VectorClock& vc) const{
     for (auto& ev_lazy_q : cycle_evt){
         ev_lazy_q.pop_until(vc, EventComp(), true);
 
@@ -131,17 +140,4 @@ bool DeadlockChecker::_update_abs_dep_start_ev(std::span<EventLazyQueue> cycle_e
     }
 
     return true;
-}
-
- // Wraps the the events (that the nodes in the cycle point to) in a lazy queue
-// TODO: This should probably not be here as it mereley does conversion
-std::vector<EventLazyQueue> DeadlockChecker::_node_chain_to_lazy_q_vec(const NodeChainT& cycle) const{
-    std::vector<EventLazyQueue> nodes_events;
-    nodes_events.reserve(cycle.size());
-
-    for (const auto& node : cycle)
-        nodes_events.emplace_back(node->second);
-
-    
-    return nodes_events;
 }

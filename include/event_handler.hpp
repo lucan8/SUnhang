@@ -43,6 +43,7 @@ struct EventHandler{
   // RESULTS
   OrdDepGraphView graph_view;
   CSHist cs_hist;
+  NodeLocToEvMapT dep_loc_map;
 
   // INTERNAL STUFF
 

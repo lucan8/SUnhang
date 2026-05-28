@@ -407,13 +407,16 @@ struct AbsDependency{
 };
 
 // The explicit std::less<> is necesssary to allow transparent lookup 
-typedef std::map<AbsDependency, std::vector<Event>, std::less<>> NodeContainerT;
+// typedef std::map<AbsDependency, std::vector<Event>, std::less<>> NodeContainerT;
+typedef std::set<AbsDependency, std::less<>> NodeContainerT;
 typedef NodeContainerT::const_iterator NodeConstItT;
+typedef std::unordered_map<NodeConstItT, std::unordered_map<SrcLocT, std::vector<Event>>, IteratorHasher> NodeLocToEvMapT;
+typedef std::unordered_map<SrcLocT, std::vector<Event>>::const_iterator LocEntryT;
 
 struct NodeConstItTComp {
     bool operator()(const NodeConstItT& a, const NodeConstItT& b) const {
 
-        return a->first < b->first;
+        return *a < *b;
     }
 };
 

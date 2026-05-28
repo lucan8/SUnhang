@@ -173,33 +173,35 @@ void EventHandler::join_event(const EventInfo& evt_info) {
 
 NodeConstItT EventHandler::update_dep(NodeConstItT old_dep, ResourceIdT new_res){ 
     // Nothing to update here
-    if (old_dep->first.lockset.contains(new_res)){
+    if (old_dep->lockset.contains(new_res)){
         return old_dep;
     }
 
     // Get old dep
-    auto node_handle = graph_view.graph.abs_deps_map.extract(old_dep);
+    auto dep_graph_nh = graph_view.graph.abs_deps_map.extract(old_dep);
+
+    // Remove old entries
+    for (auto res : old_dep->lockset._vec){
+        lock_dep_map[res].erase(old_dep);
+    }
+    auto dep_loc_map_nh = dep_loc_map.extract(old_dep);
     
     // Add the new resource to the lockset and re-insert
-    node_handle.key().lockset.insert(new_res);
-    auto new_dep = graph_view.graph.abs_deps_map.insert(std::move(node_handle));
+    dep_graph_nh.value().lockset.insert(new_res);
+    auto new_dep = graph_view.graph.abs_deps_map.insert(std::move(dep_graph_nh));
     auto new_dep_it = new_dep.position;
-    node_handle = std::move(new_dep.node);
 
     // Dependency already exists? Add the new events to the list
     if (!new_dep.inserted){
-        new_dep.position->second.append_range(node_handle.mapped());
-        // Remove the old_dep mappings
-        for (auto res : old_dep->first.lockset._vec){
-            lock_dep_map[res].erase(old_dep);
+        for (const auto& entry : dep_loc_map_nh.mapped()){
+           dep_loc_map[new_dep_it][entry.first].append_range(entry.second);
         }
     }
-    else{
-        // Update with lock_dep_map with the new iterator only if there is a new iterator
-        for (auto res : new_dep_it->first.lockset._vec){
-            lock_dep_map[res].erase(old_dep);
+    else{ // Update lock_dep_map with the new iterator
+        for (auto res : new_dep_it->lockset._vec){
             lock_dep_map[res].insert(new_dep_it);
         }
+        dep_loc_map[new_dep_it] = std::move(dep_loc_map_nh.mapped());
     }
 
     return new_dep_it;
@@ -210,11 +212,11 @@ NodeConstItT EventHandler::create_dep(ThreadIdT tid, ResourceIdT desired_res, co
 
     // Search for entry using a view(less overhead)
     auto it = graph_view.graph.abs_deps_map.find(AbsDepView{tid, desired_res, lockset});
-
+    
     // Create the object and insert only if found
     if (it == graph_view.graph.abs_deps_map.end()) {
         AbsDependency dep(tid, desired_res, lockset);
-        auto [inserted_it, inserted] = graph_view.graph.abs_deps_map.emplace(std::move(dep), std::vector<Event>{});
+        auto [inserted_it, inserted] = graph_view.graph.abs_deps_map.emplace(std::move(dep));
         it = inserted_it;
 
         // Locks from lockset should point to this dependency
@@ -223,8 +225,7 @@ NodeConstItT EventHandler::create_dep(ThreadIdT tid, ResourceIdT desired_res, co
                 lock_dep_map[lock].insert(it);
     }
 
-    // Add the event of this dependency
-    it->second.push_back(evt);
+    dep_loc_map[it][evt.src_loc].push_back(evt);
     
     return it;
 }
@@ -232,13 +233,13 @@ NodeConstItT EventHandler::create_dep(ThreadIdT tid, ResourceIdT desired_res, co
 void EventHandler::build_neigh_list() {
     for (auto node_it = graph_view.get_real_nodes_start(); node_it != graph_view.get_nodes_end(); ++node_it){
         // Get candidate neighbours
-        auto lock_dep_it = lock_dep_map.find(node_it->first.resource_id);
+        auto lock_dep_it = lock_dep_map.find(node_it->resource_id);
         if (lock_dep_it == lock_dep_map.end())
             continue;
         
         // Add valid candidates to the neigbour list of dep
         for (auto cand : lock_dep_it->second._vec)
-            if (node_it->first.is_valid_neigh_cand_soft(cand->first))
+            if (node_it->is_valid_neigh_cand_soft(*cand))
                 graph_view.graph.neigh_list[node_it].push_back(cand);
     }
 
@@ -283,122 +284,122 @@ void EventHandler::handle_dep_creation(ThreadInfo& th_info, const EventInfo& evt
     }
 }
 
-void EventHandler::print_abs_deps() const{
-    Logger::print(LogType::INFO, "ABSTRACT DEPENDENCIES");
-    Logger::print(LogType::INFO, "------------------------------------");
+// void EventHandler::print_abs_deps() const{
+//     Logger::print(LogType::INFO, "ABSTRACT DEPENDENCIES");
+//     Logger::print(LogType::INFO, "------------------------------------");
 
-    for (const auto& [dep, timestamps] : graph_view.graph.abs_deps_map){
-        Logger::print(LogType::DBG, "{}: {}", dep ,timestamps.size());
-    }
+//     for (const auto& dep : graph_view.graph.abs_deps_map){
+//         Logger::print(LogType::DBG, "{}", *dep);
+//     }
 
-    Logger::print(LogType::INFO, "Num deps: {}", graph_view.graph.abs_deps_map.size());
-    Logger::print(LogType::INFO, "------------------------------------");
-}
+//     Logger::print(LogType::INFO, "Num deps: {}", graph_view.graph.abs_deps_map.size());
+//     Logger::print(LogType::INFO, "------------------------------------");
+// }
 
-void EventHandler::print_lock_deps_map() const{
-    Logger::print(LogType::INFO, "LOCK DEPENDENCIES MAP");
-    Logger::print(LogType::INFO, "------------------------------------");
+// void EventHandler::print_lock_deps_map() const{
+//     Logger::print(LogType::INFO, "LOCK DEPENDENCIES MAP");
+//     Logger::print(LogType::INFO, "------------------------------------");
 
-    for (const auto& [lock, dep_vec] : lock_dep_map){
-        Logger::print(LogType::DBG, "(Lock){}: {}(Dep count)", lock, dep_vec._vec.size());
-        for (const auto dep : dep_vec._vec)
-            Logger::print(LogType::DBG, "{}", dep->first);
-    }
+//     for (const auto& [lock, dep_vec] : lock_dep_map){
+//         Logger::print(LogType::DBG, "(Lock){}: {}(Dep count)", lock, dep_vec._vec.size());
+//         for (const auto dep : dep_vec._vec)
+//             Logger::print(LogType::DBG, "{}", *dep);
+//     }
 
-    Logger::print(LogType::INFO, "Num locks: {}", lock_dep_map.size());
-    Logger::print(LogType::INFO, "------------------------------------");
-}
+//     Logger::print(LogType::INFO, "Num locks: {}", lock_dep_map.size());
+//     Logger::print(LogType::INFO, "------------------------------------");
+// }
 
-void EventHandler::print_neigh_list() const{
-    Logger::print(LogType::INFO, "NEIGHBOUR LIST");
-    Logger::print(LogType::INFO, "------------------------------------");
+// void EventHandler::print_neigh_list() const{
+//     Logger::print(LogType::INFO, "NEIGHBOUR LIST");
+//     Logger::print(LogType::INFO, "------------------------------------");
 
-    for (const auto& [dep, neigh_list] : graph_view.graph.neigh_list){
-        Logger::print(LogType::DBG, "{}(dep): {}(neigh count)", dep->first, neigh_list.size());
-        for (const auto neigh : neigh_list)
-            Logger::print(LogType::DBG, "{}", neigh->first);
-    }
+//     for (const auto& [dep, neigh_list] : graph_view.graph.neigh_list){
+//         Logger::print(LogType::DBG, "{}(dep): {}(neigh count)", *dep, neigh_list.size());
+//         for (const auto neigh : neigh_list)
+//             Logger::print(LogType::DBG, "{}", *neigh);
+//     }
 
-    Logger::print(LogType::INFO, "Num deps that have neigh: {}", graph_view.graph.neigh_list.size());
-    Logger::print(LogType::INFO, "------------------------------------");
-}
+//     Logger::print(LogType::INFO, "Num deps that have neigh: {}", graph_view.graph.neigh_list.size());
+//     Logger::print(LogType::INFO, "------------------------------------");
+// }
 
-void EventHandler::print_abs_deps(std::FILE* out_file) const{
-    Logger::print(out_file, "ABSTRACT DEPENDENCIES");
-    Logger::print(out_file, "------------------------------------");
+// void EventHandler::print_abs_deps(std::FILE* out_file) const{
+//     Logger::print(out_file, "ABSTRACT DEPENDENCIES");
+//     Logger::print(out_file, "------------------------------------");
 
-    for (const auto& [dep, timestamps] : graph_view.graph.abs_deps_map){
-        Logger::print(out_file, "{}: {}", dep ,timestamps.size());
-    }
+//     for (const auto& dep : graph_view.graph.abs_deps_map){
+//         Logger::print(out_file, "{}: {}", *dep);
+//     }
 
-    Logger::print(out_file, "Num deps: {}", graph_view.graph.abs_deps_map.size());
-    Logger::print(out_file, "------------------------------------");
-}
+//     Logger::print(out_file, "Num deps: {}", graph_view.graph.abs_deps_map.size());
+//     Logger::print(out_file, "------------------------------------");
+// }
 
-void EventHandler::print_comm_abs_deps() const{
-    Logger::print(LogType::DBG, "COMMUNICATION ABSTRACT DEPENDENCIES");
-    Logger::print(LogType::DBG, "------------------------------------");
+// void EventHandler::print_comm_abs_deps() const{
+//     Logger::print(LogType::DBG, "COMMUNICATION ABSTRACT DEPENDENCIES");
+//     Logger::print(LogType::DBG, "------------------------------------");
 
-    size_t count = 0;
-    for (const auto& [dep, timestamps] : graph_view.graph.abs_deps_map){
-        if (is_cond_var(dep.resource_id)){
-            Logger::print(LogType::DBG, "{}: {}", dep, timestamps.size());
-            count += 1;
-       }
-    }
+//     size_t count = 0;
+//     for (const auto& dep : graph_view.graph.abs_deps_map){
+//         if (is_cond_var(dep.resource_id)){
+//             Logger::print(LogType::DBG, "{}", *dep);
+//             count += 1;
+//        }
+//     }
 
-    Logger::print(LogType::DBG, "Num deps: {}", count);
-    Logger::print(LogType::DBG, "------------------------------------");
-}
+//     Logger::print(LogType::DBG, "Num deps: {}", count);
+//     Logger::print(LogType::DBG, "------------------------------------");
+// }
 
-void EventHandler::print_neigh_list(std::FILE* out_file) const{
-    Logger::print(out_file, "NEIGHBOUR LIST");
-    Logger::print(out_file, "------------------------------------");
+// void EventHandler::print_neigh_list(std::FILE* out_file) const{
+//     Logger::print(out_file, "NEIGHBOUR LIST");
+//     Logger::print(out_file, "------------------------------------");
 
-    for (const auto& [dep, neigh_list] : graph_view.graph.neigh_list){
-        Logger::print(out_file, "{}(dep): {}(neigh count)", dep->first, neigh_list.size());
-        for (const auto neigh : neigh_list)
-            Logger::print(out_file, "{}", neigh->first);
-    }
+//     for (const auto& [dep, neigh_list] : graph_view.graph.neigh_list){
+//         Logger::print(out_file, "{}(dep): {}(neigh count)", *dep, neigh_list.size());
+//         for (const auto neigh : neigh_list)
+//             Logger::print(out_file, "{}", neigh);
+//     }
 
-    Logger::print(out_file, "Num deps that have neigh: {}", graph_view.graph.neigh_list.size());
-    Logger::print(out_file, "------------------------------------");
-}
+//     Logger::print(out_file, "Num deps that have neigh: {}", graph_view.graph.neigh_list.size());
+//     Logger::print(out_file, "------------------------------------");
+// }
 
 void EventHandler::print_summary(std::FILE* log_file) const{
     Logger::print(log_file, "num acq/req: {}", acq_count);
     Logger::print(log_file, "num deps: {}", graph_view.graph.abs_deps_map.size());
 }
 
-void EventHandler::print_summary() const{
-    Logger::print(LogType::DBG, "num acq/req: {}", acq_count);
+// void EventHandler::print_summary() const{
+//     Logger::print(LogType::DBG, "num acq/req: {}", acq_count);
 
-    auto [lock_dep_count, cond_dep_count] = graph_view.graph.get_split_dep_counts();
-    Logger::print(LogType::DBG, "num lock deps: {}", lock_dep_count);
-    Logger::print(LogType::DBG, "num cond deps: {}", cond_dep_count);
-}
+//     auto [lock_dep_count, cond_dep_count] = graph_view.graph.get_split_dep_counts();
+//     Logger::print(LogType::DBG, "num lock deps: {}", lock_dep_count);
+//     Logger::print(LogType::DBG, "num cond deps: {}", cond_dep_count);
+// }
 
-void EventHandler::print_th_exit_with_locks() const{
-    for (const auto& [tid, th_info] : std::views::enumerate(thread_map)){
-        LocksetT lockset = th_info.u_reen_lockset.to_lockset();
-        if (!lockset._vec.empty()){
-        Logger::print(LogType::WARN, "Thread {} exited holding locks {}", tid, lockset);
-        }
-    }
-}
+// void EventHandler::print_th_exit_with_locks() const{
+//     for (const auto& [tid, th_info] : std::views::enumerate(thread_map)){
+//         LocksetT lockset = th_info.u_reen_lockset.to_lockset();
+//         if (!lockset._vec.empty()){
+//         Logger::print(LogType::WARN, "Thread {} exited holding locks {}", tid, lockset);
+//         }
+//     }
+// }
 
-void EventHandler::print_th_vc_info() const{
-    uint64_t sum = 0;
-    for (const auto& [tid, th_info] : std::views::enumerate(thread_map)){
-        sum += th_info.vec_clock._vector_clock.size();
-    }
-    Logger::print(LogType::DBG, "mean={}, count={}", sum / thread_map.size(), thread_map.size());
-}
+// void EventHandler::print_th_vc_info() const{
+//     uint64_t sum = 0;
+//     for (const auto& [tid, th_info] : std::views::enumerate(thread_map)){
+//         sum += th_info.vec_clock._vector_clock.size();
+//     }
+//     Logger::print(LogType::DBG, "mean={}, count={}", sum / thread_map.size(), thread_map.size());
+// }
 
-void EventHandler::print_th_lockset_info() const{
-    uint64_t sum = 0;
-    for (const auto& [tid, th_info] : std::views::enumerate(thread_map)){
-        sum += th_info.u_reen_lockset.size();
-    }
-    Logger::print(LogType::DBG, "mean={}, count={}", sum / thread_map.size(), thread_map.size());
-}
+// void EventHandler::print_th_lockset_info() const{
+//     uint64_t sum = 0;
+//     for (const auto& [tid, th_info] : std::views::enumerate(thread_map)){
+//         sum += th_info.u_reen_lockset.size();
+//     }
+//     Logger::print(LogType::DBG, "mean={}, count={}", sum / thread_map.size(), thread_map.size());
+// }
