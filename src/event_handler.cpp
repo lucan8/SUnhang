@@ -1,8 +1,10 @@
-#include "../include/event_handler.hpp"
-#include "../include/logger.hpp"
 #include <algorithm>
 #include <numeric>
 #include <memory>
+
+#include "../include/event_handler.hpp"
+#include "../include/meta_info.hpp"
+#include "../include/logger.hpp"
 
 void CVInfo::sleep_thread(){
     to_notify_count += 1;
@@ -34,7 +36,7 @@ EventHandler::EventHandler(size_t thread_count, size_t var_count)
     // Initialize thread_map
     thread_map.reserve(thread_count);
     for (int i = 0; i < thread_count; ++i){
-        thread_map.emplace_back(i);
+        thread_map.emplace_back(i, meta_info.LOCK_DEPTH);
     }
 }
 

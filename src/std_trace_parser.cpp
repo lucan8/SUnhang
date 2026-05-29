@@ -1,6 +1,8 @@
 #include <cstring>
 
 #include "../include/std_trace_parser.hpp"
+#include "../include/meta_info.hpp"
+#include "../include/lockset.hpp"
 
 const std::unordered_map<std::string, EventsT> StdParser::std_event_map = {
     {"r", EventsT::RD}, {"w", EventsT::WR},
@@ -12,6 +14,32 @@ const std::unordered_map<std::string, EventsT> StdParser::std_event_map = {
 
 const char StdParser::trace_sep[2] = "|";
 const uint8_t StdParser::exp_trace_token_cnt = 4;
+
+StdIdMap::StdIdMap() : id_counter(0){}
+
+void StdIdMap::reset(){
+    id_counter = 0;
+    _map.clear();
+}
+
+// Returns the corresponding id for std_id from _map
+// Updates the _map and counter if not found
+int StdIdMap::get(const std::string& std_id){
+    auto map_entry = _map.find(std_id);
+    int result_id;
+
+    if(map_entry == _map.end()) {
+        _map[std_id] = id_counter;
+        result_id = id_counter;
+        id_counter += 1;
+        } else {
+        result_id = map_entry->second;
+        }
+
+        return result_id;
+}
+
+StdParser::StdParser(std::FILE* trace_file) : trace_file(trace_file), line_index(0){}
 
 bool StdParser::events_remaining() const{
     return !feof(trace_file);

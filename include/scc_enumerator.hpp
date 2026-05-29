@@ -22,7 +22,8 @@ struct MinSCC{
     NodeConstItT sentinel_node;
 
     MinSCC(NodeConstItT sentinel_node): nodes(), min_node(sentinel_node), sentinel_node(sentinel_node){}
-
+    MinSCC() : nodes(), min_node(nullptr), sentinel_node(nullptr){}
+    
     bool operator<(const MinSCC& other) const{
         assert(sentinel_node == other.sentinel_node);
             

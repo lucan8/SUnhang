@@ -4,7 +4,7 @@
 #include <optional>
 
 #include "common_types.hpp"
-#include "predictor_types.hpp"
+#include "event.hpp"
 
 struct TraceBinFormatter{
   struct EvBinFormatter{

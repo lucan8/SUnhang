@@ -4,7 +4,11 @@
 #include <ranges>
 #include <optional>
 
-#include "predictor_types.hpp"
+#include "abstract_dependency.hpp"
+
+typedef AbsDepContainerT NodeContainerT;
+typedef AbsDepConstItT NodeConstItT;
+typedef AbsDepConstItComp NodeConstItComp;
 
 typedef std::vector<NodeConstItT> NodeChainT;
 typedef std::unordered_set<NodeConstItT, IteratorHasher> NodeUSetT;

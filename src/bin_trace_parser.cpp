@@ -1,5 +1,5 @@
 #include "../include/bin_trace_parser.hpp"
-
+#include "../include/meta_info.hpp"
 
 SharedObjTracker::SharedObjTracker(size_t obj_count) 
     : _is_shared(obj_count), _shared_count(0), _shared_cand_map(obj_count, INVALID_TID){}

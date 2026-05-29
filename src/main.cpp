@@ -1,17 +1,12 @@
 // TODO: WHY DO WE NEED SORTED STUFF FOR GRAPH BASED COMPUTATIONS?
-// TODO: DEFINE SOME KIND OF EVENT NAMESPACE
+// TODO: WHY DOES DERBY2 FAIL WHEN MOVING THE GRAPH VIEW IN THE CYCLE ENUMERATOR?
+
 // LOGICAL BUG FOUND BY RUNNING src_code_loc_test1/src_code_loc_bug1_dlf
-// TODO: See if you can use SortedVector anywhere else
+
 // OPTIMIZATION: Make a normal VectorClock class and a OwnedVectorClock class(fighting agains branch pred?)
+
 // TODO: Event probably doesn't need src_loc anymore
 // TODO: See why the big runtime for sor
-// MISUNDERSTANDINGS:
-
-// DEAD THREADS DON'T ACTUALLY CAUSE ISSUES FOR SPDOFFLINE
-// ABSTRACT DEPENDENCIES MIGHT INCLUDE SOURCE CODE LOCATIONS, THAT'S WHY THEY GROW
-// THE ABSTRACT DEP MAP IS ACTUALLY A MAP THAT HAS THE FIRST KEY THE ABS DEP
-// AND THE SECOND KEY THE LOCATION
-// THEN THAT POINTS TO A LIST OF EVENT IDS
 
 // OPTIMIZATIONS
 // TODO: IGNORE VARIABLES THAT ARE NEVER READ 
@@ -115,6 +110,7 @@
 using namespace std::chrono_literals;
 namespace fs = std::filesystem;
 
+#include "../include/meta_info.hpp"
 #include "../include/bin_trace_parser.hpp"
 #include "../include/event_handler.hpp"
 #include "../include/logger.hpp"
@@ -188,7 +184,7 @@ int main(int argc, char *argv[]) {
     end = std::chrono::steady_clock::now();
     auto millis_passed_cycle_enum = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
-    DeadlockChecker dlk_checker(event_handler.cs_hist, event_handler.dep_loc_ev_map);
+    DeadlockChecker dlk_checker(std::move(event_handler.cs_hist), std::move(event_handler.dep_loc_ev_map));
 
     // Each cycle might have multiple abstract deadlock patterns
     std::vector<AbsDlkPattern> all_abs_dlk_patterns;

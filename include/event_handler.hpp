@@ -3,12 +3,40 @@
 #include <unordered_map>
 #include <map>
 #include <vector>
-#include <fstream>
 #include <queue>
 
-#include "predictor_types.hpp"
+#include "abstract_dependency.hpp"
 #include "ord_dep_graph.hpp"
-#include "vectorclock.hpp"
+#include "event.hpp"
+#include "critical_section_history.hpp"
+#include "lockset.hpp"
+#include "lru.hpp"
+
+// HELPER STRUCTURES
+using SyncStatusT = std::variant<NodeConstItT, ResourceIdT>;
+
+// Custom hasher for SyncStatus
+//TODO: Can't this have collisions?
+struct SyncStatusHash {
+  std::size_t operator()(const SyncStatusT& sync_status) const {
+    if (std::holds_alternative<ResourceIdT>(sync_status)) {
+        return std::hash<ResourceIdT>{}(std::get<ResourceIdT>(sync_status));
+    }
+
+    return IteratorHasher()(std::get<NodeConstItT>(sync_status));
+  }
+};
+
+using RecentSyncStatusContT = CircularLRU<SyncStatusT, 8, SyncStatusHash>;
+
+struct ThreadInfo{
+  UReentrantLocksetT u_reen_lockset;
+  RecentSyncStatusContT recent_sync_status_cont;
+  VectorClock vec_clock;
+  bool is_asleep = false;
+
+  ThreadInfo(ThreadIdT tid, size_t lock_depth) : vec_clock(tid), u_reen_lockset(lock_depth){};
+};
 
 // Contains: Timestamp of notify event and the number of threads that should receive the notif
 using NotifQueue = std::queue<std::pair<VectorClock, uint32_t>>;
@@ -22,6 +50,7 @@ struct CVInfo{
   void wake_thread();
 };
 
+// ACTUAL EVENT HANDLER
 struct EventHandler{
   // OUTPUT
 

@@ -4,6 +4,20 @@
 
 #include "bin_trace_formatter.hpp"
 
+struct StdIdMap{
+  size_t id_counter;
+  std::unordered_map<std::string, int> _map;
+
+  StdIdMap();
+
+  void reset();
+
+  // Returns the corresponding id for std_id from _map
+  // Updates the _map and counter if not found
+  int get(const std::string& std_id);
+};
+
+// Passed file should be already opened in read mode and have the std format
 struct StdParser{
   const static char trace_sep[2];
   const static uint8_t exp_trace_token_cnt;
@@ -15,7 +29,7 @@ struct StdParser{
   // Maps for converting from std format
   StdIdMap lock_id_map, th_id_map, var_id_map;
 
-  StdParser(std::FILE* trace_file) : trace_file(trace_file), line_index(0){}
+  StdParser(std::FILE* trace_file);
 
   // THE ACTUAL PARSER FUNCTIONS
 

@@ -1,4 +1,3 @@
-#include "../include/formatters.hpp"
 #include "../include/deadlock_checker.hpp"
 #include "../include/logger.hpp"
 
@@ -38,7 +37,7 @@ void DeadlockChecker::_cartesian_prod_loc(const DepLocToEvMapT& dep_loc_ev_map, 
 
     for (const auto& [src_loc, evts] : dep_loc_ev_map.at(node)) {
         next_res.nodes[curr_node_idx] = SimpleNode(node->thread_id, node->resource_id, src_loc);
-        next_res.events[curr_node_idx] = ViewLazyQueue(evts);
+        next_res.events[curr_node_idx] = EventLazyQueue(evts);
         _cartesian_prod_loc(dep_loc_ev_map, cycle, curr_node_idx + 1, next_res, res);
     }
 }
