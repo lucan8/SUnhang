@@ -11,7 +11,7 @@
 #include <variant>
 #include <map>
 #include "vectorclock.hpp"
-#include "comm_types.hpp"
+#include "common_types.hpp"
 #include "util.hpp"
 
 // Format for LocksetT

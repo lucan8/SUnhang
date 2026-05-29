@@ -2,7 +2,9 @@
 #include "../include/cycle_enumerator.hpp"
 #include "../include/logger.hpp"
 
-
+CycleEnumerator::CycleEnumerator(OrdDepGraphView& graph_view)
+    : graph_view(graph_view), curr_min_scc(graph_view.get_nodes_end()){}
+    
 std::vector<NodeChainT> CycleEnumerator::enum_cycles(){
     int i = 0;
     while (!graph_view.empty()){

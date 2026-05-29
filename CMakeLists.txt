@@ -16,7 +16,7 @@ set(SUNHANG_SRC
     src/logger.cpp
 
     src/event_handler.cpp
-    src/trace_parser.cpp
+    src/bin_trace_parser.cpp
     
     src/vectorclock.cpp
 
@@ -28,7 +28,7 @@ set(SUNHANG_SRC
 
 set(CONV_TR_SRC
     src/logger.cpp
-    src/trace_parser.cpp
+    src/std_trace_parser.cpp
 )
 
 add_executable(SUnhang src/main.cpp ${SUNHANG_SRC})

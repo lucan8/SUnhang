@@ -1,10 +1,8 @@
 #pragma once
 
-#include <map>
-#include <unordered_set>
 #include <format>
+#include <cassert>
 
-#include "predictor_types.hpp"
 #include "ord_dep_graph.hpp"
 
 // Information about the dependency that is needed whilst computing the strongly connected component
@@ -17,7 +15,6 @@ struct AbsDepInfo{
         : index(index), low_index(low_index), on_stack(on_stack){}
 };
 
-
 // Contains the strongly connected component as an unordered_set of nodes(subgraph) and a pointer to the minimum node 
 struct MinSCC{
     NodeUSetT nodes;
@@ -27,8 +24,7 @@ struct MinSCC{
     MinSCC(NodeConstItT sentinel_node): nodes(), min_node(sentinel_node), sentinel_node(sentinel_node){}
 
     bool operator<(const MinSCC& other) const{
-        if (sentinel_node != other.sentinel_node)
-            throw std::runtime_error("Can't compare iterators with different sentinel nodes!");
+        assert(sentinel_node == other.sentinel_node);
             
         return NodeItLess(sentinel_node)(min_node, other.min_node);
     }

@@ -4,10 +4,14 @@
 #include <map>
 #include <vector>
 #include <fstream>
+#include <queue>
+
 #include "predictor_types.hpp"
 #include "ord_dep_graph.hpp"
 #include "vectorclock.hpp"
 
+// Contains: Timestamp of notify event and the number of threads that should receive the notif
+using NotifQueue = std::queue<std::pair<VectorClock, uint32_t>>;
 
 struct CVInfo{
   NotifQueue notif_queue;

@@ -1,6 +1,5 @@
 #include "../include/scc_enumerator.hpp"
 #include "../include/logger.hpp"
-#include <cassert>
 
 MinSCC SCCEnumerator::get_min_strong_conn_comp(){
     for (auto node_it = graph_view.start_node_it; node_it != graph_view.get_nodes_end(); ++node_it){

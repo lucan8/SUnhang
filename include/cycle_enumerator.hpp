@@ -2,7 +2,6 @@
 
 #include "ord_dep_graph.hpp"
 #include "scc_enumerator.hpp"
-#include "ord_dep_graph.hpp"
 
 struct CycleEnumerator{
     OrdDepGraphView& graph_view;
@@ -16,9 +15,7 @@ struct CycleEnumerator{
     NodeChainT stack;
     MinSCC curr_min_scc;
     
-    CycleEnumerator(OrdDepGraphView& graph_view)
-        : graph_view(graph_view), curr_min_scc(graph_view.get_nodes_end()){
-    }
+    CycleEnumerator(OrdDepGraphView& graph_view);
 
     std::vector<NodeChainT> enum_cycles();
     bool _enum_cycles(NodeConstItT node);

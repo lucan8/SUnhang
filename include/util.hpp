@@ -10,7 +10,7 @@
 #include <array>
 #include <fstream>
 #include <unordered_map>
-#include "comm_types.hpp"
+#include "common_types.hpp"
 #include "logger.hpp"
 
 struct meta{

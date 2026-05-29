@@ -17,24 +17,10 @@
 // AND THE SECOND KEY THE LOCATION
 // THEN THAT POINTS TO A LIST OF EVENT IDS
 
-// OBSERVATIONS FOR ORIGINAL
-// STRINGBUFFER PRINTS THE SAME DEADLOCK TWICE FOR SPD
-// DBCP1 PRINTS THE SAME DEADLOCK TWICE FOR SPD
-// MYSQL4: SAME
-// HASHMAP: SAME
-// WEAKHASHMAP: SAME
-// LINKEDHASHMAP: SAME
-// TREEMAP: SAME
-
-// JIGSAW PRINTS THE SAME DEADLOCK MULTIPLE TIMES
-// WORSE: JIGSAW DOESN'T PRINT ANYTHING
-// WEIRD, WHY: sharedLocks = new boolean[numEvents]; ?
-
 // OPTIMIZATIONS
 // TODO: IGNORE VARIABLES THAT ARE NEVER READ 
 // Note: Using thread ids and resource ids as indexes in vectors can be quite fragile so be careful
 // Note: No more thread clean-up is done which might not be desirable!
-// Change LocksetT to be a sorted vector
 
 // COMPARE:
 // NOTIFY AND NOTIFYALL MERGE THEIR TS INTO ALL SLEEPING THREADS (AS ANYONE COULD WAKE UP)
@@ -133,7 +119,7 @@
 using namespace std::chrono_literals;
 namespace fs = std::filesystem;
 
-#include "../include/trace_parser.hpp"
+#include "../include/bin_trace_parser.hpp"
 #include "../include/event_handler.hpp"
 #include "../include/logger.hpp"
 #include "../include/util.hpp"
@@ -153,10 +139,6 @@ int main(int argc, char *argv[]) {
     std::string trace_file_path = argv[1];
     std::string out_summ_path = argv[2];
 
-    // Logger::print(LogType::DBG, "Input path: {}", trace_file_path);
-    // Logger::print(LogType::DBG, "Out summary path: {}", out_summ_path);
-    // Logger::print(LogType::DBG, "Trace meta path: {}", trace_meta_file_path);
-
     std::FILE* trace_file(std::fopen(trace_file_path.c_str(), "rb"));
     if(!trace_file) {
         Logger::print(LogType::ERR, "In file not found: {}", trace_file_path);
@@ -172,9 +154,7 @@ int main(int argc, char *argv[]) {
     // Test stuff
     // TestVectorClock::test();
     // TestPredictor::test();
-
-    // THIS NEEDS TO BE FIRST
-    // meta::init(trace_meta_file);
+    
     auto start = std::chrono::steady_clock::now();
     
     // Preprocess trace file(fill metadata, determine events to be ignored etc...)
