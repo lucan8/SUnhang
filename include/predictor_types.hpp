@@ -10,6 +10,7 @@
 #include <cassert>
 #include <variant>
 #include <map>
+#include <set>
 #include "vectorclock.hpp"
 #include "common_types.hpp"
 #include "util.hpp"
@@ -409,16 +410,23 @@ struct AbsDependency{
 // The explicit std::less<> is necesssary to allow transparent lookup 
 // typedef std::map<AbsDependency, std::vector<Event>, std::less<>> NodeContainerT;
 typedef std::set<AbsDependency, std::less<>> NodeContainerT;
-typedef NodeContainerT::const_iterator NodeConstItT;
-typedef std::unordered_map<NodeConstItT, std::unordered_map<SrcLocT, std::vector<Event>>, IteratorHasher> NodeLocToEvMapT;
-typedef std::unordered_map<SrcLocT, std::vector<Event>>::const_iterator LocEntryT;
+typedef std::set<AbsDependency, std::less<>> AbsDepContainerT;
 
-struct NodeConstItTComp {
+typedef NodeContainerT::const_iterator NodeConstItT;
+typedef AbsDepContainerT::const_iterator AbsDepConstItT;
+
+typedef std::unordered_map<AbsDepConstItT, std::unordered_map<SrcLocT, std::vector<Event>>, IteratorHasher> DepLocToEvMapT;
+
+struct NodeConstItComp {
     bool operator()(const NodeConstItT& a, const NodeConstItT& b) const {
 
         return *a < *b;
     }
 };
+typedef NodeConstItComp AbsDepConstItComp;
+
+typedef std::unordered_map<ResourceIdT, SortedVector<AbsDepConstItT, AbsDepConstItComp>> LockDepMapT;
+
 
 // Format for AbsDependency
 template <>

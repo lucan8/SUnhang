@@ -6,12 +6,12 @@
 #include "ord_dep_graph.hpp"
 
 // Information about the dependency that is needed whilst computing the strongly connected component
-struct AbsDepInfo{
+struct NodeInfo{
     int index;
     int low_index;
     bool on_stack;
 
-    AbsDepInfo(int index, int low_index, bool on_stack)
+    NodeInfo(int index, int low_index, bool on_stack)
         : index(index), low_index(low_index), on_stack(on_stack){}
 };
 
@@ -54,9 +54,11 @@ struct std::formatter<MinSCC> : std::formatter<std::string> {
 
 // Helper class that takes a dependency graph and gives the strongly connected component that has the smallest node
 struct SCCEnumerator{
+    // INPUT
     // Read only graph view
     OrdDepGraphView& graph_view;
 
+    // OUTPUT
     // The strongest connected component that contains the minimum node
     MinSCC res_min_scc;
 
@@ -64,14 +66,14 @@ struct SCCEnumerator{
     std::vector<MinSCC> res_scc_vec;
 
     // Structure holding metadata about each node that is needed by the get_min_strong_conn_comp functions
-    std::unordered_map<NodeConstItT, AbsDepInfo, IteratorHasher, IteratorHasher> dep_info_map;
+    std::unordered_map<NodeConstItT, NodeInfo, IteratorHasher, IteratorHasher> node_info_map;
     
+    // INTERNAL
     // Also needed by get_min_strong_conn_comp
     int max_index;
     NodeChainT stack;
 
-    SCCEnumerator(OrdDepGraphView& graph_view)
-        : graph_view(graph_view), max_index(0), res_min_scc(graph_view.get_nodes_end()){}
+    SCCEnumerator(OrdDepGraphView& graph_view);
 
     // Returns the SCC with the smallest node overall
     MinSCC get_min_strong_conn_comp();

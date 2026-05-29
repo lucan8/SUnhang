@@ -25,7 +25,7 @@ struct std::formatter<NodeChainT> : std::formatter<std::string> {
 };
 
 // less on NodeConstItT
-// sentinel_node should be a valid sentinel for both nodes otherwise you will undefined behaviour
+// sentinel_node should be a valid sentinel for both nodes otherwise you will get undefined behaviour
 struct NodeItLess{
     NodeConstItT sentinel_node;
     NodeItLess(NodeConstItT sentinel_node): sentinel_node(sentinel_node){}
@@ -47,19 +47,44 @@ struct NodeItLess{
 // Struct that just holds together nodes and edges
 struct OrdDepGraph{
     // AbsDependency represents a node the graph
-    NodeContainerT abs_deps_map;
+    NodeContainerT nodes;
 
     // The vector in neigh list is ordered
     NeighListT neigh_list;
 
+    OrdDepGraph(AbsDepContainerT&& abs_deps, const LockDepMapT& lock_dep_map) : nodes(std::move(abs_deps)){
+        _build_neigh_list(lock_dep_map);
+    }
+
+    void _build_neigh_list(const LockDepMapT& lock_dep_map) {
+         for (auto node_it = nodes.begin(); node_it != nodes.end(); ++node_it){
+            // Get candidate neighbours
+            auto lock_dep_it = lock_dep_map.find(node_it->resource_id);
+            if (lock_dep_it == lock_dep_map.end())
+                continue;
+            
+            // Add valid candidates to the neigbour list of dep
+            for (auto cand : lock_dep_it->second._vec)
+                if (node_it->is_valid_neigh_cand_soft(*cand))
+                    neigh_list[node_it].push_back(cand);
+        }
+
+        // Sort the neighbour list of each node, this will be needed later
+        auto sentinel_node = NodeItLess(nodes.end());
+        for (auto& [dep, _neigh_list] : neigh_list){
+            std::sort(_neigh_list.begin(), _neigh_list.end(), sentinel_node);
+        }
+    }
+
+    
     size_t get_dep_count() const{
-        return abs_deps_map.size();
+        return nodes.size();
     }
 
     size_t get_lock_dep_count() const{
         size_t lock_dep_count = 0;
 
-        for (const auto& dep: abs_deps_map){
+        for (const auto& dep: nodes){
             if (dep.is_lock_dep()){
                 lock_dep_count += 1;
             }
@@ -86,6 +111,11 @@ struct OrdDepGraphView{
     // Map that gives the valid start neighbour of each node
     std::unordered_map<NodeConstItT, NodeChainConstItT, IteratorHasher> start_neigh_map;
 
+    OrdDepGraphView(AbsDepContainerT&& abs_deps, const LockDepMapT& lock_dep_map)
+        : graph(std::move(abs_deps), lock_dep_map){
+        init_start_structs();
+    }
+    
     // Initializes start_node_it and start_neigh_map
     void init_start_structs();
 

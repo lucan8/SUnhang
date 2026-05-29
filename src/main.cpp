@@ -1,9 +1,5 @@
-//TODO: WHEN PRINTING THE NUMBER OF EVENTS TO THE META FILE IGNORE THE INVALID EVENTS
-//TODO: LOAD THE IGNORED EVENTS DIRECTLY FROM A FILE 
-// you even have simple serialization/deserialization for dynamic_bitset
+// TODO: WHY DO WE NEED SORTED STUFF FOR GRAPH BASED COMPUTATIONS?
 // TODO: DEFINE SOME KIND OF EVENT NAMESPACE
-// TODO: LOOK INTO ENDIANESS
-// BIG QUESTION: SHOULD' READS ALSO BE ORDERED BEFORE WRITES?
 // LOGICAL BUG FOUND BY RUNNING src_code_loc_test1/src_code_loc_bug1_dlf
 // TODO: See if you can use SortedVector anywhere else
 // OPTIMIZATION: Make a normal VectorClock class and a OwnedVectorClock class(fighting agains branch pred?)
@@ -179,11 +175,11 @@ int main(int argc, char *argv[]) {
     auto millis_passed_handle_events = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
     // Logger::print(LogType::INFO, "Finished event handling");
-    event_handler.build_neigh_list();
     end = std::chrono::steady_clock::now();
     auto millis_passed_build_neigh_list = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
-    CycleEnumerator cycle_enumerator(event_handler.graph_view);
+    OrdDepGraphView graph_view(std::move(event_handler.abs_deps), event_handler.lock_dep_map);
+    CycleEnumerator cycle_enumerator(graph_view);
     cycle_enumerator.enum_cycles();
     
     Logger::print(log_file, "num cycles: {}", cycle_enumerator.res_cycles.size());
@@ -192,7 +188,7 @@ int main(int argc, char *argv[]) {
     end = std::chrono::steady_clock::now();
     auto millis_passed_cycle_enum = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
-    DeadlockChecker dlk_checker(event_handler.cs_hist, event_handler.dep_loc_map);
+    DeadlockChecker dlk_checker(event_handler.cs_hist, event_handler.dep_loc_ev_map);
 
     // Each cycle might have multiple abstract deadlock patterns
     std::vector<AbsDlkPattern> all_abs_dlk_patterns;

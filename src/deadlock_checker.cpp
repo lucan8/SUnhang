@@ -26,7 +26,7 @@ bool DeadlockChecker::is_abs_dlk_pattern_gen(const NodeChainT& cycle) const{
     return true;
 }
 
-void DeadlockChecker::_cartesian_prod_loc(const NodeLocToEvMapT& dep_loc_map, const NodeChainT& cycle, int curr_node_idx, AbsDlkPattern curr_res, std::vector<AbsDlkPattern>& res) const{
+void DeadlockChecker::_cartesian_prod_loc(const DepLocToEvMapT& dep_loc_ev_map, const NodeChainT& cycle, int curr_node_idx, AbsDlkPattern curr_res, std::vector<AbsDlkPattern>& res) const{
     if (curr_node_idx == cycle.size()){
         assert(curr_res.nodes.size() == curr_res.events.size()); // Sanity check
         res.push_back(std::move(curr_res));
@@ -36,10 +36,10 @@ void DeadlockChecker::_cartesian_prod_loc(const NodeLocToEvMapT& dep_loc_map, co
     auto node = cycle[curr_node_idx];
     AbsDlkPattern next_res(std::move(curr_res));
 
-    for (const auto& [src_loc, evts] : dep_loc_map.at(node)) {
+    for (const auto& [src_loc, evts] : dep_loc_ev_map.at(node)) {
         next_res.nodes[curr_node_idx] = SimpleNode(node->thread_id, node->resource_id, src_loc);
         next_res.events[curr_node_idx] = ViewLazyQueue(evts);
-        _cartesian_prod_loc(dep_loc_map, cycle, curr_node_idx + 1, next_res, res);
+        _cartesian_prod_loc(dep_loc_ev_map, cycle, curr_node_idx + 1, next_res, res);
     }
 }
 
@@ -49,7 +49,7 @@ std::vector<AbsDlkPattern> DeadlockChecker::get_abs_dlk_patterns(const NodeChain
     }
 
     std::vector<AbsDlkPattern> res;
-    _cartesian_prod_loc(dep_loc_map, cycle, 0, AbsDlkPattern(cycle.size()), res);
+    _cartesian_prod_loc(dep_loc_ev_map, cycle, 0, AbsDlkPattern(cycle.size()), res);
     return res;
 }
 

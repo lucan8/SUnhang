@@ -4,6 +4,31 @@
 #include <numeric>
 #include <memory>
 
+void CVInfo::sleep_thread(){
+    to_notify_count += 1;
+}
+
+void CVInfo::notify_thread(const VectorClock& notif_vc, bool notif_all){
+    if (to_notify_count == 0){
+        return;
+    }
+
+    size_t notified_th_count = notif_all ? to_notify_count : 1;
+    notif_queue.emplace(notif_vc, notified_th_count);
+    to_notify_count -= notified_th_count;
+}
+
+void CVInfo::wake_thread(){
+    if (notif_queue.empty()){
+        return;
+    }
+
+    notif_queue.front().second -= 1;
+    if (notif_queue.front().second == 0){
+        notif_queue.pop();
+    }
+}
+
 EventHandler::EventHandler(size_t thread_count, size_t var_count) 
     : alive_th_count(1), last_write(var_count){
     // Initialize thread_map
@@ -109,11 +134,11 @@ void EventHandler::notify_event(const EventInfo& evt_info, bool notify_all) {
         //     lockset.insert(evt_info.target);
             
         //     // Add the new dependency to the new recent statuses array
-        //     NodeConstItT new_dep = create_dep(evt_info.thread_id, res_id, lockset, evt);
+        //     AbsDepConstItT new_dep = create_dep(evt_info.thread_id, res_id, lockset, evt);
         //     new_rec_sync_status_cont.push(new_dep);
-        // } else if (std::holds_alternative<NodeConstItT>(sync_status)) { // Sync status is a dep
-            NodeConstItT old_dep = std::get<NodeConstItT>(sync_status);
-            NodeConstItT new_dep = update_dep(old_dep, evt_info.target);
+        // } else if (std::holds_alternative<AbsDepConstItT>(sync_status)) { // Sync status is a dep
+            AbsDepConstItT old_dep = std::get<AbsDepConstItT>(sync_status);
+            AbsDepConstItT new_dep = update_dep(old_dep, evt_info.target);
 
             new_rec_sync_status_cont.push(new_dep);
         //}
@@ -171,52 +196,52 @@ void EventHandler::join_event(const EventInfo& evt_info) {
     th_info.vec_clock.merge_into(target_info.vec_clock);
 }
 
-NodeConstItT EventHandler::update_dep(NodeConstItT old_dep, ResourceIdT new_res){ 
+AbsDepConstItT EventHandler::update_dep(AbsDepConstItT old_dep, ResourceIdT new_res){ 
     // Nothing to update here
     if (old_dep->lockset.contains(new_res)){
         return old_dep;
     }
 
     // Get old dep
-    auto dep_graph_nh = graph_view.graph.abs_deps_map.extract(old_dep);
+    auto dep_graph_nh = abs_deps.extract(old_dep);
 
     // Remove old entries
     for (auto res : old_dep->lockset._vec){
         lock_dep_map[res].erase(old_dep);
     }
-    auto dep_loc_map_nh = dep_loc_map.extract(old_dep);
+    auto dep_loc_ev_map_nh = dep_loc_ev_map.extract(old_dep);
     
     // Add the new resource to the lockset and re-insert
     dep_graph_nh.value().lockset.insert(new_res);
-    auto new_dep = graph_view.graph.abs_deps_map.insert(std::move(dep_graph_nh));
+    auto new_dep = abs_deps.insert(std::move(dep_graph_nh));
     auto new_dep_it = new_dep.position;
 
     // Dependency already exists? Add the new events to the list
     if (!new_dep.inserted){
-        for (const auto& entry : dep_loc_map_nh.mapped()){
-           dep_loc_map[new_dep_it][entry.first].append_range(entry.second);
+        for (const auto& entry : dep_loc_ev_map_nh.mapped()){
+           dep_loc_ev_map[new_dep_it][entry.first].append_range(entry.second);
         }
     }
     else{ // Update lock_dep_map with the new iterator
         for (auto res : new_dep_it->lockset._vec){
             lock_dep_map[res].insert(new_dep_it);
         }
-        dep_loc_map[new_dep_it] = std::move(dep_loc_map_nh.mapped());
+        dep_loc_ev_map[new_dep_it] = std::move(dep_loc_ev_map_nh.mapped());
     }
 
     return new_dep_it;
 }
 
-NodeConstItT EventHandler::create_dep(ThreadIdT tid, ResourceIdT desired_res, const LocksetT& lockset,
+AbsDepConstItT EventHandler::create_dep(ThreadIdT tid, ResourceIdT desired_res, const LocksetT& lockset,
                                const Event& evt){
 
     // Search for entry using a view(less overhead)
-    auto it = graph_view.graph.abs_deps_map.find(AbsDepView{tid, desired_res, lockset});
+    auto it = abs_deps.find(AbsDepView{tid, desired_res, lockset});
     
     // Create the object and insert only if found
-    if (it == graph_view.graph.abs_deps_map.end()) {
+    if (it == abs_deps.end()) {
         AbsDependency dep(tid, desired_res, lockset);
-        auto [inserted_it, inserted] = graph_view.graph.abs_deps_map.emplace(std::move(dep));
+        auto [inserted_it, inserted] = abs_deps.emplace(std::move(dep));
         it = inserted_it;
 
         // Locks from lockset should point to this dependency
@@ -225,32 +250,10 @@ NodeConstItT EventHandler::create_dep(ThreadIdT tid, ResourceIdT desired_res, co
                 lock_dep_map[lock].insert(it);
     }
 
-    dep_loc_map[it][evt.src_loc].push_back(evt);
+    dep_loc_ev_map[it][evt.src_loc].push_back(evt);
     
     return it;
 }
-
-void EventHandler::build_neigh_list() {
-    for (auto node_it = graph_view.get_real_nodes_start(); node_it != graph_view.get_nodes_end(); ++node_it){
-        // Get candidate neighbours
-        auto lock_dep_it = lock_dep_map.find(node_it->resource_id);
-        if (lock_dep_it == lock_dep_map.end())
-            continue;
-        
-        // Add valid candidates to the neigbour list of dep
-        for (auto cand : lock_dep_it->second._vec)
-            if (node_it->is_valid_neigh_cand_soft(*cand))
-                graph_view.graph.neigh_list[node_it].push_back(cand);
-    }
-
-    // Sort the neighbour list of each node, this will be needed later
-    for (auto&[dep, neigh_list] : graph_view.graph.neigh_list){
-        std::sort(neigh_list.begin(), neigh_list.end(), NodeItLess(graph_view.get_nodes_end()));
-    }
-
-    graph_view.init_start_structs();
-}
-
 
 void EventHandler::handle_sleepness(ThreadInfo& th_info, ResourceIdT ass_lock_id){
     if (th_info.is_asleep){
@@ -276,7 +279,7 @@ void EventHandler::handle_sleepness(ThreadInfo& th_info, ResourceIdT ass_lock_id
 void EventHandler::handle_dep_creation(ThreadInfo& th_info, const EventInfo& evt_info, const Event& evt){
     // Create dep and store in recent statuses if this is a notifying thread
     if (!meta_info.NOTIF_THREADS.empty() && meta_info.NOTIF_THREADS[evt_info.thread_id]){
-        NodeConstItT dep = create_dep(evt_info.thread_id, evt_info.target, th_info.u_reen_lockset.to_lockset(), evt);
+        AbsDepConstItT dep = create_dep(evt_info.thread_id, evt_info.target, th_info.u_reen_lockset.to_lockset(), evt);
         th_info.recent_sync_status_cont.push(dep);
     }
     else if(!th_info.u_reen_lockset.empty()){ // otherwise just create the dep if lockset is not empty
@@ -288,11 +291,11 @@ void EventHandler::handle_dep_creation(ThreadInfo& th_info, const EventInfo& evt
 //     Logger::print(LogType::INFO, "ABSTRACT DEPENDENCIES");
 //     Logger::print(LogType::INFO, "------------------------------------");
 
-//     for (const auto& dep : graph_view.graph.abs_deps_map){
+//     for (const auto& dep : abs_deps){
 //         Logger::print(LogType::DBG, "{}", *dep);
 //     }
 
-//     Logger::print(LogType::INFO, "Num deps: {}", graph_view.graph.abs_deps_map.size());
+//     Logger::print(LogType::INFO, "Num deps: {}", abs_deps.size());
 //     Logger::print(LogType::INFO, "------------------------------------");
 // }
 
@@ -328,11 +331,11 @@ void EventHandler::handle_dep_creation(ThreadInfo& th_info, const EventInfo& evt
 //     Logger::print(out_file, "ABSTRACT DEPENDENCIES");
 //     Logger::print(out_file, "------------------------------------");
 
-//     for (const auto& dep : graph_view.graph.abs_deps_map){
+//     for (const auto& dep : abs_deps){
 //         Logger::print(out_file, "{}: {}", *dep);
 //     }
 
-//     Logger::print(out_file, "Num deps: {}", graph_view.graph.abs_deps_map.size());
+//     Logger::print(out_file, "Num deps: {}", abs_deps.size());
 //     Logger::print(out_file, "------------------------------------");
 // }
 
@@ -341,7 +344,7 @@ void EventHandler::handle_dep_creation(ThreadInfo& th_info, const EventInfo& evt
 //     Logger::print(LogType::DBG, "------------------------------------");
 
 //     size_t count = 0;
-//     for (const auto& dep : graph_view.graph.abs_deps_map){
+//     for (const auto& dep : abs_deps){
 //         if (is_cond_var(dep.resource_id)){
 //             Logger::print(LogType::DBG, "{}", *dep);
 //             count += 1;
@@ -368,7 +371,7 @@ void EventHandler::handle_dep_creation(ThreadInfo& th_info, const EventInfo& evt
 
 void EventHandler::print_summary(std::FILE* log_file) const{
     Logger::print(log_file, "num acq/req: {}", acq_count);
-    Logger::print(log_file, "num deps: {}", graph_view.graph.abs_deps_map.size());
+    Logger::print(log_file, "num deps: {}", abs_deps.size());
 }
 
 // void EventHandler::print_summary() const{

@@ -1,48 +1,53 @@
 #include "../include/scc_enumerator.hpp"
 #include "../include/logger.hpp"
 
+
+SCCEnumerator::SCCEnumerator(OrdDepGraphView& graph_view)
+    : graph_view(graph_view), max_index(0), res_min_scc(graph_view.get_nodes_end()){}
+
 MinSCC SCCEnumerator::get_min_strong_conn_comp(){
     for (auto node_it = graph_view.start_node_it; node_it != graph_view.get_nodes_end(); ++node_it){
-        if (dep_info_map.find(node_it) == dep_info_map.end()) // Only look at unvisited nodes
+        if (node_info_map.find(node_it) == node_info_map.end()) // Only look at unvisited nodes
             _get_min_strong_conn_comp(node_it);
     }
 
     return res_min_scc;
 }
 
-void SCCEnumerator::_get_min_strong_conn_comp(NodeConstItT dep){
-    // Visit dep and check that it was not visited before
-    auto dep_info_entry = dep_info_map.insert({dep, AbsDepInfo(max_index, max_index, true)});
-    // assert(dep_info_entry.second == true);
+void SCCEnumerator::_get_min_strong_conn_comp(NodeConstItT node){
+    // Visit node and check that it was not visited before
+    auto node_info_entry = node_info_map.insert({node, NodeInfo(max_index, max_index, true)});
+    // assert(node_info_entry.second == true);
 
     // Alias only for the relevant part
-    AbsDepInfo& dep_info = (dep_info_entry.first)->second;
+    NodeInfo& node_info = (node_info_entry.first)->second;
 
     // Update max_index and stack
     max_index++;
-    stack.push_back(dep);
+    stack.push_back(node);
 
-    // Get the valid neighbour list of dep
-    auto neigh_list = graph_view.get_and_update_neigh_list_range(dep);
+    // Get the valid neighbour list of node
+    // TODO: WHAT ARE YOU EVEN UPDATING
+    auto neigh_list = graph_view.get_and_update_neigh_list_range(node);
 
     if (neigh_list.has_value()){
         // DFS on the valid neighbours
         for (auto neigh : neigh_list.value()){
-            auto neigh_info_entry = dep_info_map.find(neigh);
+            auto neigh_info_entry = node_info_map.find(neigh);
 
-            // Recurse on unvisited dep
-            if (neigh_info_entry == dep_info_map.end()){
+            // Recurse on unvisited node
+            if (neigh_info_entry == node_info_map.end()){
                 _get_min_strong_conn_comp(neigh);
 
-                auto neigh_info_it =  dep_info_map.find(neigh);
-                // assert(neigh_info_it != dep_info_map.end()); // Remove in release mode
+                auto neigh_info_it =  node_info_map.find(neigh);
+                // assert(neigh_info_it != node_info_map.end()); // Remove in release mode
                 
-                dep_info.low_index = std::min(dep_info.low_index, neigh_info_it->second.low_index);
+                node_info.low_index = std::min(node_info.low_index, neigh_info_it->second.low_index);
             }
             else{ // Update the low index if the neighbour is already visited and on the stack
-                AbsDepInfo& neigh_info = neigh_info_entry->second;
+                NodeInfo& neigh_info = neigh_info_entry->second;
                 if (neigh_info.on_stack){
-                    dep_info.low_index = std::min(dep_info.low_index, neigh_info.index);
+                    node_info.low_index = std::min(node_info.low_index, neigh_info.index);
                 }
             }
         }
@@ -50,23 +55,23 @@ void SCCEnumerator::_get_min_strong_conn_comp(NodeConstItT dep){
     MinSCC scc(graph_view.get_nodes_end());
 
     // Every node after this one(inclusive) will be part of the same new scc
-    if (dep_info.low_index == dep_info.index){
-        NodeConstItT curr_dep;
-        AbsDepInfo* curr_dep_info;
+    if (node_info.low_index == node_info.index){
+        NodeConstItT curr_node;
+        NodeInfo* curr_node_info;
 
         do{
             // Remove from stack
-            curr_dep = stack.back();
-            curr_dep_info = &dep_info_map.find(curr_dep)->second;
-            curr_dep_info->on_stack = false;
+            curr_node = stack.back();
+            curr_node_info = &node_info_map.find(curr_node)->second;
+            curr_node_info->on_stack = false;
             stack.pop_back();
             
             // Add to the resulted scc
-            scc.nodes.insert(curr_dep);
+            scc.nodes.insert(curr_node);
             
             // Update the min node if needed
-            scc.min_node = std::min(scc.min_node, curr_dep, NodeItLess(scc.sentinel_node));
-        }while (curr_dep_info->index != dep_info.index);
+            scc.min_node = std::min(scc.min_node, curr_node, NodeItLess(scc.sentinel_node));
+        }while (curr_node_info->index != node_info.index);
 
         // Update res_min_scc if the current scc has more than one node
         if  (scc.nodes.size() > 1){
@@ -74,7 +79,7 @@ void SCCEnumerator::_get_min_strong_conn_comp(NodeConstItT dep){
         }
         
         // DEBUG: Track all SCCs created by tarjan's algorithm
-        res_scc_vec.push_back(scc);
+        // res_scc_vec.push_back(scc);
     }
 }
 

@@ -6,7 +6,7 @@ void OrdDepGraphView::init_start_structs(){
 }
 
 void OrdDepGraphView::set_start_node(){
-    start_node_it = graph.abs_deps_map.begin();
+    start_node_it = graph.nodes.begin();
 }
 
 void OrdDepGraphView::set_start_node(NodeConstItT node){
@@ -18,8 +18,9 @@ void OrdDepGraphView::advance_start_node(){
 }
 
 void OrdDepGraphView::set_start_neigh_map(){
-    for (const auto& [dep, neigh_list] : graph.neigh_list)
+    for (const auto& [dep, neigh_list] : graph.neigh_list){
         start_neigh_map.emplace(dep, neigh_list.begin());
+    }
 }
 
 std::optional<NodeChainRangeT> OrdDepGraphView::get_and_update_neigh_list_range(NodeConstItT node) {
@@ -37,17 +38,16 @@ std::optional<NodeChainRangeT> OrdDepGraphView::get_and_update_neigh_list_range(
     return {NodeChainRangeT(new_start, end_opt.value())};
 }
 
-
 NodeConstItT OrdDepGraphView::get_real_nodes_start() const{
-    return graph.abs_deps_map.begin();
+    return graph.nodes.begin();
 }
 
 NodeConstItT OrdDepGraphView::get_sentinel_node() const{
-    return graph.abs_deps_map.end();
+    return graph.nodes.end();
 }
 
 NodeConstItT OrdDepGraphView::get_nodes_end() const{
-    return graph.abs_deps_map.end();
+    return graph.nodes.end();
 }
 
 std::optional<NodeChainConstItT> OrdDepGraphView::get_neigh_list_end(NodeConstItT dep) const{
