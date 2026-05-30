@@ -1,6 +1,7 @@
-#include "../include/vectorclock.hpp"
-#include "../include/util.hpp"
 #include <algorithm>
+#include <vector>
+
+#include "../include/vectorclock.hpp"
 
 VectorClock::VectorClock() {}
 

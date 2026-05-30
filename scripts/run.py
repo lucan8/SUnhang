@@ -7,7 +7,7 @@ import time
 import psutil
 from enum import Enum
 import settings
-#TODO: UNCOMMENT std_to_bin_trace FUNCTION
+
 class PLang(Enum):
     CPP = 1
     JAVA = 2
@@ -147,8 +147,6 @@ def conv_trace(bench_name: str, predictor: str) -> Path:
         bin_trace_path = settings.trace_bin_loc_enc_dir / (bench_name + f".data")
         cmd = [settings.sunhang_conv_exe_path, std_trace_path, bin_trace_path]
     
-    print(f"Converting Trace for: {predictor}, {bench_name}")
-    run_cmd(cmd)
     if not bin_trace_path.exists():
         print(f"Converting Trace for: {predictor}, {bench_name}")
         run_cmd(cmd)
@@ -173,6 +171,8 @@ def main():
         benchmarks = get_benchmarks()
     else:
         benchmarks = options.benchmarks.split(",")
+    
+    # ignored_bench = []
 
     for bench in benchmarks:
         # run_predictor(bench, settings.spdoffline_name)

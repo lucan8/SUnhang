@@ -3,47 +3,66 @@
 #include <unordered_map>
 #include <map>
 #include <vector>
-#include <fstream>
-#include "predictor_types.hpp"
-#include "ord_dep_graph.hpp"
-#include "vectorclock.hpp"
+#include <queue>
 
+#include "abstract_dependency.hpp"
+#include "ord_dep_graph.hpp"
+#include "event.hpp"
+#include "critical_section_history.hpp"
+#include "lockset.hpp"
+#include "lru.hpp"
+
+// HELPER STRUCTURES
+using SyncStatusT = std::variant<NodeConstItT, ResourceIdT>;
+
+// Custom hasher for SyncStatus
+//TODO: Can't this have collisions?
+struct SyncStatusHash {
+  std::size_t operator()(const SyncStatusT& sync_status) const {
+    if (std::holds_alternative<ResourceIdT>(sync_status)) {
+        return std::hash<ResourceIdT>{}(std::get<ResourceIdT>(sync_status));
+    }
+
+    return IteratorHasher()(std::get<NodeConstItT>(sync_status));
+  }
+};
+
+using RecentSyncStatusContT = CircularLRU<SyncStatusT, 8, SyncStatusHash>;
+
+struct ThreadInfo{
+  UReentrantLocksetT u_reen_lockset;
+  RecentSyncStatusContT recent_sync_status_cont;
+  VectorClock vec_clock;
+  bool is_asleep = false;
+
+  ThreadInfo(ThreadIdT tid, size_t lock_depth) : vec_clock(tid), u_reen_lockset(lock_depth){};
+};
+
+// Contains: Timestamp of notify event and the number of threads that should receive the notif
+using NotifQueue = std::queue<std::pair<VectorClock, uint32_t>>;
 
 struct CVInfo{
   NotifQueue notif_queue;
   size_t to_notify_count = 0; // The number of threads that still need to be notified
 
-  void sleep_thread(){
-    to_notify_count += 1;
-  }
-
-  void notify_thread(const VectorClock& notif_vc, bool notif_all){
-    if (to_notify_count == 0){
-      return;
-    }
-
-    size_t notified_th_count = notif_all ? to_notify_count : 1;
-    notif_queue.emplace(notif_vc, notified_th_count);
-    to_notify_count -= notified_th_count;
-  }
-
-  void wake_thread(){
-    if (notif_queue.empty()){
-      return;
-    }
-
-    notif_queue.front().second -= 1;
-    if (notif_queue.front().second == 0){
-      notif_queue.pop();
-    }
-  }
+  void sleep_thread();
+  void notify_thread(const VectorClock& notif_vc, bool notif_all);
+  void wake_thread();
 };
 
+// ACTUAL EVENT HANDLER
 struct EventHandler{
-  // RESULTS
-  OrdDepGraphView graph_view;
+  // OUTPUT
+
+  // GRAPH RELATED OUTPUT
+  AbsDepContainerT abs_deps;
+
+  // Intermediary step that helps to build the neighbour list of the graph
+  LockDepMapT lock_dep_map;
+  
+  // DEADLOCK CHECKING RELATED OUPUT
   CSHist cs_hist;
-  NodeLocToEvMapT dep_loc_map;
+  DepLocToEvMapT dep_loc_ev_map;
 
   // INTERNAL STUFF
 
@@ -53,14 +72,11 @@ struct EventHandler{
   std::vector<VectorClock> last_write;
   std::unordered_map<ResourceIdT, CVInfo> cv_map;
 
-  // Intermediary step that helps to build the neighbour list of the graph
-  // std::unordered_map<ResourceIdT, NodeUSetT> lock_dep_map;
-  std::unordered_map<ResourceIdT, SortedVector<NodeConstItT, NodeConstItTComp>> lock_dep_map;
-
   // Statistical info
   uint32_t acq_count = 0;
 
   EventHandler(size_t thread_count, size_t var_count);
+
   // Calls handler associated with evt_info.event_type
   // Return true if event if valid, false otherwise
   bool handle_event(const EventInfo& evt_info);
@@ -77,11 +93,12 @@ struct EventHandler{
   void fork_event(const EventInfo& evt_info);
   void join_event(const EventInfo& evt_info);
 
-  // Helper function that creates (and adds) a new dependency to the graph
-  NodeConstItT create_dep(ThreadIdT tid, ResourceIdT desired_res, const LocksetT& lockset, const Event& evt);
-  NodeConstItT update_dep(NodeConstItT old_dep, ResourceIdT new_res);
-
-  void build_neigh_list();
+  // Helper function that creates (and adds) a new dependency to the contaianer
+  AbsDepConstItT create_dep(ThreadIdT tid, ResourceIdT desired_res, const LocksetT& lockset,
+                            SrcLocT src_loc, const Event& evt);
+  
+  // Helper function that updates old_dep to contain new_res in it's lockset
+  AbsDepConstItT update_dep(AbsDepConstItT old_dep, ResourceIdT new_res);
 
   // Wakes up the thread if asleep and merges the corresponding notify event timestamp
   void handle_sleepness(ThreadInfo& th_info, ResourceIdT ass_lock_id);
@@ -92,10 +109,6 @@ struct EventHandler{
   void print_abs_deps() const;
   void print_comm_abs_deps() const;
   void print_lock_deps_map() const;
-  void print_neigh_list() const;
-
-  void print_abs_deps(std::FILE* out_file) const;
-  void print_neigh_list(std::FILE* out_file) const;
 
   void print_summary(std::FILE* log_file) const;
   void print_summary() const;

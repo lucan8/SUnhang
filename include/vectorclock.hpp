@@ -1,18 +1,9 @@
 #pragma once
 
-#include <unordered_map>
-#include <string>
-#include <format>
-#include <queue>
-#include <flat_map>
-#include "comm_types.hpp"
-
-struct VectorClock;
+#include <optional>
+#include "common_types.hpp"
 
 using VCValueT = EventIdT;
-
-// Contains: Timestamp of notify event and the number of threads that should receive the notif
-using NotifQueue = std::queue<std::pair<VectorClock, uint32_t>>;
 
 struct ThEpoch{
     ThreadIdT tid;
@@ -54,13 +45,3 @@ struct VectorClock {
     
     bool empty() const;
 };
-
-// template <>
-// struct std::formatter<VectorClock> : std::formatter<std::string> {
-//     auto format(const VectorClock& vc, format_context& ctx) const {
-//         auto out = ctx.out();
-//         for (const auto& [tid, vc_val] : vc._vector_clock)
-//           std::format_to(out, "{}:{}, ", tid, vc_val);
-//         return out;
-//     }
-// };

@@ -15,7 +15,7 @@ ignored_bench = set([])
 ignored_pred = set([])
 
 def from_log_file_SPD(file_path: Path) -> list:
-    print(file_path)
+    # print(file_path)
     file = open(file_path, 'r')
     dic = {}
     empty_res = [0] * (len(mini_columns))
@@ -57,6 +57,7 @@ def from_log_file_SPD(file_path: Path) -> list:
     return list(dic.values())
 
 def from_log_file_SUnhang(file_path: Path) -> list:
+    # print(file_path)
     file = open(file_path, 'r')
     dic = {}
     empty_res = [0] * (len(common_columns) + len(mini_columns) - 1)

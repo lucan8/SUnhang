@@ -2,8 +2,7 @@
 #include <string>
 #include <vector>
 #include "../include/logger.hpp"
-#include "../include/util.hpp"
-#include "../include/trace_parser.hpp"
+#include "../include/std_trace_parser.hpp"
 
 int main(int argc, char* argv[]){
     const uint8_t exp_args = 3;
@@ -15,8 +14,8 @@ int main(int argc, char* argv[]){
     std::string in_file_path = argv[1];
     std::string out_file_path = argv[2];
 
-    Logger::print(LogType::DBG, "Input path: {}", in_file_path);
-    Logger::print(LogType::DBG, "Output path: {}", out_file_path);
+    // Logger::print(LogType::DBG, "Input path: {}", in_file_path);
+    // Logger::print(LogType::DBG, "Output path: {}", out_file_path);
 
     std::FILE* in_file(std::fopen(in_file_path.c_str(), "r"));
     if(!in_file) {

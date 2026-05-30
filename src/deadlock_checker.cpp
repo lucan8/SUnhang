@@ -1,4 +1,3 @@
-#include "../include/formatters.hpp"
 #include "../include/deadlock_checker.hpp"
 #include "../include/logger.hpp"
 
@@ -26,7 +25,7 @@ bool DeadlockChecker::is_abs_dlk_pattern_gen(const NodeChainT& cycle) const{
     return true;
 }
 
-void DeadlockChecker::_cartesian_prod_loc(const NodeLocToEvMapT& dep_loc_map, const NodeChainT& cycle, int curr_node_idx, AbsDlkPattern curr_res, std::vector<AbsDlkPattern>& res) const{
+void DeadlockChecker::_cartesian_prod_loc(const DepLocToEvMapT& dep_loc_ev_map, const NodeChainT& cycle, int curr_node_idx, AbsDlkPattern curr_res, std::vector<AbsDlkPattern>& res) const{
     if (curr_node_idx == cycle.size()){
         assert(curr_res.nodes.size() == curr_res.events.size()); // Sanity check
         res.push_back(std::move(curr_res));
@@ -36,10 +35,10 @@ void DeadlockChecker::_cartesian_prod_loc(const NodeLocToEvMapT& dep_loc_map, co
     auto node = cycle[curr_node_idx];
     AbsDlkPattern next_res(std::move(curr_res));
 
-    for (const auto& [src_loc, evts] : dep_loc_map.at(node)) {
+    for (const auto& [src_loc, evts] : dep_loc_ev_map.at(node)) {
         next_res.nodes[curr_node_idx] = SimpleNode(node->thread_id, node->resource_id, src_loc);
-        next_res.events[curr_node_idx] = ViewLazyQueue(evts);
-        _cartesian_prod_loc(dep_loc_map, cycle, curr_node_idx + 1, next_res, res);
+        next_res.events[curr_node_idx] = EventLazyQueue(evts);
+        _cartesian_prod_loc(dep_loc_ev_map, cycle, curr_node_idx + 1, next_res, res);
     }
 }
 
@@ -49,7 +48,7 @@ std::vector<AbsDlkPattern> DeadlockChecker::get_abs_dlk_patterns(const NodeChain
     }
 
     std::vector<AbsDlkPattern> res;
-    _cartesian_prod_loc(dep_loc_map, cycle, 0, AbsDlkPattern(cycle.size()), res);
+    _cartesian_prod_loc(dep_loc_ev_map, cycle, 0, AbsDlkPattern(cycle.size()), res);
     return res;
 }
 
@@ -80,11 +79,11 @@ void DeadlockChecker::_get_sync_pres_closure(VectorClock& vc){
     do{
         for (auto& [res_id, th_cs_umap] : cs_hist._cs_hist){
             std::vector<const CSInfo*> lock_crit_sections;
-            lock_crit_sections.reserve(th_cs_umap.size());
+            lock_crit_sections.reserve(th_cs_umap._vec.size());
 
             int max_cs_ind = -1; // Using index instead of iterator as it is more stable
 
-            for (auto& [th_id, cs_queue] : th_cs_umap){
+            for (auto& [th_id, cs_queue] : th_cs_umap._vec){
                 auto cs_opt = cs_queue.pop_until(vc, CSInfoComp(), false).first;
                 if (cs_opt.has_value()){
                     // Add critical section to vector

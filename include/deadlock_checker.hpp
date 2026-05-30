@@ -1,6 +1,10 @@
 # pragma once
 
+#include <cassert>
+
 #include "ord_dep_graph.hpp"
+#include "critical_section_history.hpp"
+
 
 
 // Helper struct that holds only the relevant info about a node for output 
@@ -42,11 +46,11 @@ struct std::formatter<SimpleNode> : std::formatter<std::string> {
 };
 
 struct DeadlockChecker{
-    CSHist& cs_hist;
-    NodeLocToEvMapT& dep_loc_map;
+    CSHist cs_hist;
+    DepLocToEvMapT dep_loc_ev_map;
     
-    DeadlockChecker(CSHist& cs_hist, NodeLocToEvMapT& dep_loc_map)
-        : cs_hist(cs_hist), dep_loc_map(dep_loc_map){}
+    DeadlockChecker(CSHist&& cs_hist, DepLocToEvMapT&& dep_loc_ev_map)
+        : cs_hist(std::move(cs_hist)), dep_loc_ev_map(std::move(dep_loc_ev_map)){}
 
     // Answers the question: Can cycle generate abstract deadlock patterns?
     bool is_abs_dlk_pattern_gen(const NodeChainT& cycle) const;
@@ -67,5 +71,5 @@ struct DeadlockChecker{
 
     // Helper function to calculate cartesian product
     // TODO: Generalize and move in util
-    void _cartesian_prod_loc(const NodeLocToEvMapT& dep_loc_map, const NodeChainT& cycle, int curr_node_idx, AbsDlkPattern curr_res, std::vector<AbsDlkPattern>& res) const;
+    void _cartesian_prod_loc(const DepLocToEvMapT& dep_loc_ev_map, const NodeChainT& cycle, int curr_node_idx, AbsDlkPattern curr_res, std::vector<AbsDlkPattern>& res) const;
 };
