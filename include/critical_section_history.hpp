@@ -41,23 +41,30 @@ struct CSInfoComp{
     }
 };
 
-
-// Groups the thread ID with its queue continuously in memory
 struct ThreadCSHist {
     ThreadIdT tid;
     OwnedLazyQueue<std::vector<CSInfo>> queue;
 
-    ThreadCSHist(ThreadIdT tid) : tid(tid) {
-      queue.queue.reserve(10);
+    auto operator<=>(const ThreadCSHist& other) const {
+        return tid <=> other.tid;
     }
+
+    auto operator==(const ThreadCSHist& other) const{
+        return tid == other.tid;
+    }
+
+    ThreadCSHist(ThreadIdT tid) : tid(tid) {}
 };
 
+// THE POINTERS MIGHT BECOME DANGLING AS THE PROGRAM EXECUTES
+// THEIR SOLE PURPOSE IS TO GIVE A VIEW ON THE INTERNAL OBJECTS(TO AVOID COPYING)
+// VERY NOT THREAD SAFE
 struct CSHist {
-    std::unordered_map<ResourceIdT, std::vector<ThreadCSHist>> _cs_hist;
+    std::unordered_map<ResourceIdT, SortedVector<ThreadCSHist>> _cs_hist;
 
     void reset() {
         for (auto& [res_id, th_vec] : _cs_hist) {
-            for (auto& th_hist : th_vec) {
+            for (auto& th_hist : th_vec._vec) {
                 th_hist.queue.reset();
             }
         }
@@ -65,47 +72,33 @@ struct CSHist {
 
     CSInfo& add_lock_ev(ResourceIdT res_id, ThreadIdT tid, Event&& lock_ev) {
         auto& th_vec = _cs_hist[res_id];
+        auto& th_hist = th_vec.unique_insert(tid);    
+        th_hist.queue.emplace(std::move(lock_ev));
+
+        return th_hist.queue.back();
+    }
+
+    std::optional<const CSInfo*> add_unlock_ev(ResourceIdT res_id, ThreadIdT tid, Event&& unlock_ev) {
+        auto cs_opt = get_back(res_id, tid);
+        if (!cs_opt.has_value()) return {};
+
+        CSInfo* cs = const_cast<CSInfo*>(cs_opt.value());
+        cs->unlock_ev = std::move(unlock_ev);
+        return cs;
+    }
+
+    std::optional<const CSInfo*> get_back(ResourceIdT res_id, ThreadIdT tid) const {
+        auto umap_it = _cs_hist.find(res_id);
+
+        // Are you releasing without locking first?
+        if (umap_it == _cs_hist.end()) return {};
         
-        // Linearly search for the thread
-        for (auto& th_hist : th_vec) {
-            if (th_hist.tid == tid) {
-                th_hist.queue.emplace(std::move(lock_ev));
-                return th_hist.queue.back();
-            }
-        }
+        auto& th_vec = umap_it->second;
+        auto th_hist_it = th_vec.find(tid);
 
-        // If thread hasn't used this lock yet, add it
-        th_vec.emplace_back(tid);
-        th_vec.back().queue.emplace(std::move(lock_ev));
-        return th_vec.back().queue.back();
-    }
+        // Are you releasing without locking first?
+        if (th_hist_it == th_vec._vec.end() || th_hist_it->queue.empty()) return {};
 
-    std::optional<CSInfo*> add_unlock_ev(ResourceIdT res_id, ThreadIdT tid, Event&& unlock_ev) {
-        auto umap_it = _cs_hist.find(res_id);
-        if (umap_it == _cs_hist.end()) return {};
-
-        for (auto& th_hist : umap_it->second) {
-            if (th_hist.tid == tid) {
-                if (th_hist.queue.empty()) return {};
-                
-                CSInfo& cs = th_hist.queue.back();
-                cs.unlock_ev = std::move(unlock_ev);
-                return &cs;
-            }
-        }
-        return {};
-    }
-
-    std::optional<CSInfo*> get_back(ResourceIdT res_id, ThreadIdT tid) {
-        auto umap_it = _cs_hist.find(res_id);
-        if (umap_it == _cs_hist.end()) return {};
-
-        for (auto& th_hist : umap_it->second) {
-            if (th_hist.tid == tid) {
-                if (th_hist.queue.empty()) return {};
-                return &th_hist.queue.back();
-            }
-        }
-        return {};
+        return &th_hist_it->queue.back();
     }
 };

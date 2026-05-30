@@ -6,9 +6,11 @@
 #include <unordered_map>
 #include "logger.hpp"
 
-// Fixed size, double ended circular linked list
+// Fixed size, double ended linked list with lru behaviour
+// The linked list is actually implemented as a fixed size array to avoid the heap
+// It allows pushing which might overwrite the oldest element and updating which sets the newest element
 template <typename T, size_t Capacity>
-struct CircularList {
+struct LRUList {
     struct Node {
         std::optional<T> data;
         int prev = -1;
@@ -59,7 +61,7 @@ struct CircularList {
     int free_head = 0;  // Points to the first available empty slot
     size_t size = 0;
 
-    CircularList() {
+    LRUList() {
         // Initialize the free list to chain all empty slots together
         for (int i = 0; i < Capacity - 1; ++i) {
             nodes[i].next = i + 1;
@@ -73,6 +75,8 @@ struct CircularList {
         int new_node_idx;
         std::optional<T> erased_elem;
 
+        // Remove the oldest(head) element and put value in it's place
+        // The head will be the next element
         if (full()) {
             erased_elem = nodes[head].data;
             new_node_idx = head;
@@ -106,50 +110,6 @@ struct CircularList {
         return {erased_elem, new_node_idx};
     }
 
-    // Remove from anywhere using index
-    // Doesn't check for a valid index
-    T unsafe_erase(int target_idx) {
-        Node& target = nodes[target_idx];
-
-        // Unlink from the active list
-        if (target.prev != -1) {
-            nodes[target.prev].next = target.next;
-        } else {
-            head = target.next;
-        }
-
-        if (target.next != -1) {
-            nodes[target.next].prev = target.prev;
-        } else {
-            tail = target.prev;
-        }
-
-        T result = std::move(target.data.value());
-
-        // Clear the data and push the slot back onto the free list
-        target.data.reset();
-        target.prev = -1;
-        target.next = free_head;
-        free_head = target_idx;
-
-        size--;
-        
-        // Reset list if it becomes empty
-        if (empty()) {
-            head = -1;
-            tail = -1;
-        }
-
-        return result;
-    }
-
-    // Remove from anywhere using iterator
-    // Doesn't check for a valid iterator
-    T unsafe_erase(iterator target_it) {
-        int target_idx = target_it.to_ind();
-        return unsafe_erase(target_idx);
-    }
-
     // Makes the element at target_idx be the newest
     // Assumes target_idx is valid
     void unsafe_update(int target_idx){
@@ -178,6 +138,52 @@ struct CircularList {
         nodes[tail].next = target_idx;
         tail = target_idx;
     }
+
+     // // Remove from anywhere using index
+    // // Doesn't check for a valid index
+    // T unsafe_erase(int target_idx) {
+    //     Node& target = nodes[target_idx];
+
+    //     // Unlink from the active list
+    //     if (target.prev != -1) {
+    //         nodes[target.prev].next = target.next;
+    //     } else {
+    //         head = target.next;
+    //     }
+
+    //     if (target.next != -1) {
+    //         nodes[target.next].prev = target.prev;
+    //     } else {
+    //         tail = target.prev;
+    //     }
+
+    //     T result = std::move(target.data.value());
+
+    //     // Clear the data and push the slot back onto the free list
+    //     target.data.reset();
+    //     target.prev = -1;
+    //     target.next = free_head;
+    //     free_head = target_idx;
+
+    //     size--;
+        
+    //     // Reset list if it becomes empty
+    //     if (empty()) {
+    //         head = -1;
+    //         tail = -1;
+    //     }
+
+    //     return result;
+    // }
+
+    // // Remove from anywhere using iterator
+    // // Doesn't check for a valid iterator
+    // T unsafe_erase(iterator target_it) {
+    //     int target_idx = target_it.to_ind();
+    //     return unsafe_erase(target_idx);
+    // }
+
+    //These functions are templated to create a version that returns a const iterator and one that is not const
 
     template <typename Self>
     auto begin(this Self&& self) {
@@ -209,7 +215,7 @@ struct CircularList {
 // Fixed size, circular LRU cache
 template <typename T, size_t Capacity, typename Hash>
 struct CircularLRU{
-    using container_t = CircularList<T, Capacity>;
+    using container_t = LRUList<T, Capacity>;
     using iterator = container_t::iterator;
     using const_iterator = container_t::const_iterator;
 

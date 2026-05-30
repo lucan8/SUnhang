@@ -80,18 +80,18 @@ struct EventInfo{
   ThreadIdT thread_id;
   EventsT event_type;
   ResourceIdT target;
-  SrcLocT src_loc;
-  EventIdT line; // line in trace file 
+  SrcLocT src_loc; // line of source code that generated the events
+  EventIdT tr_pos; // line in trace file 
 
   EventInfo(){}
-  EventInfo(ThreadIdT thread_id, EventsT event_type, ResourceIdT target, SrcLocT src_loc, EventIdT line = 0)
-    : thread_id(thread_id), event_type(event_type), target(target), src_loc(src_loc), line(line){}
+  EventInfo(ThreadIdT thread_id, EventsT event_type, ResourceIdT target, SrcLocT src_loc, EventIdT tr_pos = 0)
+    : thread_id(thread_id), event_type(event_type), target(target), src_loc(src_loc), tr_pos(tr_pos){}
 };
 
 template <>
 struct std::formatter<EventInfo> : std::formatter<std::string> {
   auto format(const EventInfo& e, format_context& ctx) const {
-      return std::format_to(ctx.out(), "Line {}: {}|{}({})|{}", e.line, e.thread_id, e.event_type, e.target, e.src_loc);
+      return std::format_to(ctx.out(), "Line {}: {}|{}({})|{}", e.tr_pos, e.thread_id, e.event_type, e.target, e.src_loc);
   }
 };
 
@@ -99,10 +99,9 @@ struct std::formatter<EventInfo> : std::formatter<std::string> {
 struct Event{
   VectorClock vc;
   EventIdT tr_pos;
-  SrcLocT src_loc;
   
-  Event(const VectorClock& vc, EventIdT tr_pos, SrcLocT src_loc) 
-    : vc(vc), tr_pos(tr_pos), src_loc(src_loc) {}
+  Event(const VectorClock& vc, EventIdT tr_pos) 
+    : vc(vc), tr_pos(tr_pos) {}
   
   Event(){}
 

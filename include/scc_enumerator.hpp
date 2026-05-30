@@ -7,8 +7,8 @@
 
 // Information about the dependency that is needed whilst computing the strongly connected component
 struct NodeInfo{
-    int index;
-    int low_index;
+    int index; // Just an identifier for the node based on the order of traversal
+    int low_index; // The index of the leftmost node in the sequence that this has a path to
     bool on_stack;
 
     NodeInfo(int index, int low_index, bool on_stack)

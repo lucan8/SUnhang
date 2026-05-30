@@ -33,7 +33,9 @@ bool CycleEnumerator::_enum_cycles(NodeConstItT node){
     stack.push_back(node);
     bool cycle_on_curr_path = false;
     
-    // Get the neigh list valid range
+    // Get the valid neighbour list of nodes
+    // This is a must especially if running together with the cycle enumerator which "kills" nodes
+    // by moving the start pointer of the graph
     auto neigh_list = graph_view.get_and_update_neigh_list_range(node);
 
     if (neigh_list.has_value()){

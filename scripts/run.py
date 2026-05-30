@@ -172,12 +172,9 @@ def main():
     else:
         benchmarks = options.benchmarks.split(",")
     
-    ignored_bench = []
+    # ignored_bench = []
 
     for bench in benchmarks:
-        if bench in ignored_bench:
-            print(f"Skipping {bench}")
-            continue
         # run_predictor(bench, settings.spdoffline_name)
         run_predictor(bench, settings.sunhang_name)
 

@@ -1,3 +1,16 @@
+// TODO: Let sorted vector unsafely return a non-const reference to the internal objects
+
+// GRAPH OBSERVATIONS:
+
+// CURRENTLY USING ORDER GIVEN BY NORMAL COMPARISON BETWEEN THE VALUES THE ITERATORS POINT TO
+// THIS IS NOT A NECESSITY, WE COULD HAVE SOMETHING LIKE A MAP THAT MAPS THE ITERATORS TO NUMBERS
+// THIS WOULD SAVE SOME TIME AS IT AVOIDS COMPARING THE NODES EVERYTIME WHICH CAN GET HEAVY 
+// ESPECIALLY IF LOCKSETS ARE BIG
+// ADDING SUCH A MAPPING WILL INCREASE THE MEMORY USAGE AND SLIGHTLY (HOPEFULLY) DECREASE RUNTIME
+// THE COMPARISON IS NEEDED BECAUSE WE NEED TO KNOW WHAT NODES NOT TO CHECK AGAIN WHEN DOING CYCLE ENUMERATION
+// JOHNSON'S ALGORITHM EFFECTIVELY "KILLS" NODES AT EACH ITERATION, DECIDING THAT THEY CAN NEVER
+// CREATE A SCC IN THE FUTURE. THIS KILLING NEEDS THE CONCEPT OF ORDERING BETWEEN NODES
+
 // TODO: WHY DO WE NEED SORTED STUFF FOR GRAPH BASED COMPUTATIONS?
 // TODO: WHY DOES DERBY2 FAIL WHEN MOVING THE GRAPH VIEW IN THE CYCLE ENUMERATOR?
 
@@ -5,7 +18,6 @@
 
 // OPTIMIZATION: Make a normal VectorClock class and a OwnedVectorClock class(fighting agains branch pred?)
 
-// TODO: Event probably doesn't need src_loc anymore
 // TODO: See why the big runtime for sor
 
 // OPTIMIZATIONS
@@ -42,31 +54,14 @@
 // if t1 waits and let's say another 2 threads keep executing stuff, upon waking t1 should
 // be aware that the other 2 threads executed before it to avoid creating fake deadlocks
 
-//IMPORTANT: Generic formatter for iterators
-//TODO: Cleanup the parsers
-//TODO: Events don't need the src_loc, only lock events do
-//TODO: Should we actually print cycles that only differ by source code location?
-//TODO: Reentrant locks for cshist
-//TODO: Look into implementing the binary trace
-//TODO: Remove notifyAll(leave only broadcast)
-//TODO: Add the hand-made tests for multi-notif situations
-//TODO: Change LRU to be normal instead of circular
-//TODO: COMPARE THE RUNTIME OF THE SECOND RELEASE WHEN USING VECTOR CLOCKS TO THE UNORDERED_MAP VERSION
 //TODO: ERR REPORT FILE FOR BAD TRACES
 //TODO: Rename the comparison operators as they are actually biased toward the first argument
 //TODO: How does this handle nested cycles?
 //TODO: Add automatic formatting for your code
-//TODO: Create namespace for util
-//TODO: Think where to put your typedefs
-//TODO: Rethink the graph situation
-//TODO: Renames dependencies to nodes
 //TODO: Think about the sentinel pattern
-//TODO: Remove all asserts in release
-//TODO: Use ranges instead of start and end iterators
 //TODO: Template formater for vectors(YOU HAVE IT, USE IT)
 //TODO: Pack the comparison operators of VectorClock together in one
 //TODO: Timer function
-//TODO: Circular array range based for loop
 //TODO: Resources would benefit from a enum
 //TODO: Differentiating between the locksets that contains cond_vars and locks and those that only locks
 // would be useful
@@ -74,8 +69,6 @@
 // TODO: Bensalem asserts!
 // Graph info for bensalem: 12 nodes, only 3 with outgoing neighbours, graph on the second to last page of your notebook
 
-// ENCHANCEMENT:
-// Don't stop at the first deadlock instance you find
 
 // BIG QUESTION: Shouldn't the nodes(deps) be sorted based on when they appear in the trace?
 // As keeping them in a mere map does not guarantee that ordering.
@@ -84,6 +77,7 @@
 // OPTIMIZATION:
 // Currently the dep map and CSHist keep events but in most of the situations they refer to the same
 // thing, using shared_ptr would probably be the go here or a master vector of pointers
+// RESULT OF MASTER VECTOR OF POINTERS: PERFORMANCE WAS NOT IMPROVED SIGNIFICANTLY
 
 //OPTIMIZATION:
 // Instead of recomputing the SCCs everytime on the subgraph, take only the SCC from which the node was removed

@@ -26,8 +26,9 @@ void SCCEnumerator::_get_min_strong_conn_comp(NodeConstItT node){
     max_index++;
     stack.push_back(node);
 
-    // Get the valid neighbour list of node
-    // TODO: WHAT ARE YOU EVEN UPDATING
+    // Get the valid neighbour list of nodes
+    // This is a must especially if running together with the cycle enumerator which "kills" nodes
+    // by moving the start pointer of the graph
     auto neigh_list = graph_view.get_and_update_neigh_list_range(node);
 
     if (neigh_list.has_value()){
@@ -42,10 +43,15 @@ void SCCEnumerator::_get_min_strong_conn_comp(NodeConstItT node){
                 auto neigh_info_it =  node_info_map.find(neigh);
                 // assert(neigh_info_it != node_info_map.end()); // Remove in release mode
                 
+                // There might be a path from our neighbour to an earlier node
+                // This means we also have a path to that node(low_index is the id of that smaller node)
                 node_info.low_index = std::min(node_info.low_index, neigh_info_it->second.low_index);
             }
             else{ // Update the low index if the neighbour is already visited and on the stack
                 NodeInfo& neigh_info = neigh_info_entry->second;
+                // If visited and on the stack it is part of the same dfs sequence
+                // Which means there is a path from this neighbour to us
+                // If before us, we are part of the same scc
                 if (neigh_info.on_stack){
                     node_info.low_index = std::min(node_info.low_index, neigh_info.index);
                 }

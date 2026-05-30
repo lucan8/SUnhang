@@ -1,35 +1,34 @@
 #include "../include/bin_trace_parser.hpp"
 #include "../include/meta_info.hpp"
 
-SharedObjTracker::SharedObjTracker(size_t obj_count) 
-    : _is_shared(obj_count), _shared_count(0), _shared_cand_map(obj_count, INVALID_TID){}
+SharedObjTracker::SharedObjTracker(size_t res_count) 
+    : _shared_count(0), _shared_cand_map(res_count, INVALID_TID){}
 
-void  SharedObjTracker::reset(size_t obj_count){
-    _is_shared = std::vector<uint8_t>(obj_count, 0);
+void  SharedObjTracker::reset(size_t res_count){
     _shared_count = 0;
-    _shared_cand_map = std::vector<ThreadIdT>(obj_count, INVALID_TID);
+    _shared_cand_map = std::vector<ThreadIdT>(res_count, INVALID_TID);
 }
 
-void SharedObjTracker::update(ThreadIdT tid, ResourceIdT obj_id){
-    if (_is_shared[obj_id]){
+void SharedObjTracker::update(ThreadIdT tid, ResourceIdT res_id){
+    if (is_shared(res_id)){
         return;
     }
 
-    if (_shared_cand_map[obj_id] == INVALID_TID){
-        _shared_cand_map[obj_id] = tid;
+    if (_shared_cand_map[res_id] == INVALID_TID){
+        _shared_cand_map[res_id] = tid;
     }
-    else if (_shared_cand_map[obj_id] != tid){
+    else if (_shared_cand_map[res_id] != tid){
         _shared_count += 1;
-        _is_shared[obj_id] = 1;
+        _shared_cand_map[res_id] = IS_SHARED;
     }
 }
 
 bool SharedObjTracker::is_shared(ResourceIdT res_id) const{
-    return _is_shared[res_id];
+    return _shared_cand_map[res_id] == IS_SHARED;
 }
 
 size_t SharedObjTracker::get_unshared_count() const{
-    return _is_shared.size() - _shared_count;
+    return _shared_cand_map.size() - _shared_count;
 }
 
 BinParser::BinParser(std::FILE* trace_file) : trace_file(trace_file){

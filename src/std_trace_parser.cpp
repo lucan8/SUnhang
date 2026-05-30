@@ -69,7 +69,7 @@ EventInfo StdParser::_from_std(const std::string& tid, EventsT ev_type, const st
     
     // Set src code location and the trace id
     result.src_loc = std::stoi(src_loc);
-    result.line = line_index;
+    result.tr_pos = line_index;
 
     return result;
 }

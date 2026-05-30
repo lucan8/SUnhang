@@ -9,18 +9,22 @@
 
 // Helper structure that answers the question: "Is this resource used by two or more threads?"
 struct SharedObjTracker{
-    inline const static int8_t INVALID_TID = -1; 
-    // ResourceIdT is used as index both both
-    //TODO: COULD USE A DYNAMIC BITSET OR AT LEAST COMBINE THE TWO STRUCTURES INTO ONE
-    std::vector<uint8_t> _is_shared;
+    inline const static int8_t INVALID_TID = -1;
+    inline const static int8_t IS_SHARED = -2;
+    
     size_t _shared_count;
+
+    // Compressed vector that either has the value of 
+    // the id of the thread that first accessed this
+    // INVALID_TID : no thread accessed yet
+    // IS_SHARED : two threads accessed it
     std::vector<ThreadIdT> _shared_cand_map;
 
-    SharedObjTracker(size_t obj_count = 0);
+    SharedObjTracker(size_t res_count = 0);
 
-    void reset(size_t obj_count);
+    void reset(size_t res_count);
 
-    void update(ThreadIdT tid, ResourceIdT obj_id);
+    void update(ThreadIdT tid, ResourceIdT res_id);
 
     bool is_shared(ResourceIdT res_id) const;
 

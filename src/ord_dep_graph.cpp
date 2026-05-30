@@ -1,4 +1,66 @@
 #include "../include/ord_dep_graph.hpp"
+#include "../include/logger.hpp"
+
+OrdDepGraph::OrdDepGraph(AbsDepContainerT&& abs_deps, const LockDepMapT& lock_dep_map) 
+    : nodes(std::move(abs_deps)){
+    _build_neigh_list(lock_dep_map);
+}
+
+void OrdDepGraph::_build_neigh_list(const LockDepMapT& lock_dep_map) {
+        for (auto node_it = nodes.begin(); node_it != nodes.end(); ++node_it){
+        // Get candidate neighbours
+        auto lock_dep_it = lock_dep_map.find(node_it->resource_id);
+        if (lock_dep_it == lock_dep_map.end())
+            continue;
+        
+        // Add valid candidates to the neigbour list of dep
+        for (auto cand : lock_dep_it->second._vec)
+            if (node_it->is_valid_neigh_cand_soft(*cand))
+                neigh_list[node_it].push_back(cand);
+    }
+
+    // Sort the neighbour list of each node, this will be needed later
+    auto sentinel_node = NodeItLess(nodes.end());
+    for (auto& [dep, _neigh_list] : neigh_list){
+        std::sort(_neigh_list.begin(), _neigh_list.end(), sentinel_node);
+    }
+}
+
+void OrdDepGraph::print_neigh_list(std::FILE* out_file) const{
+    Logger::print(out_file, "NEIGHBOUR LIST");
+    Logger::print(out_file, "------------------------------------");
+
+    for (const auto& [dep, neigh_list] : neigh_list){
+        Logger::print(out_file, "{}(dep): {}(neigh count)", *dep, neigh_list.size());
+        for (const auto neigh : neigh_list)
+            Logger::print(out_file, "{}", *neigh);
+    }
+
+    Logger::print(out_file, "Num deps that have neigh: {}", neigh_list.size());
+    Logger::print(out_file, "------------------------------------");
+}
+
+size_t OrdDepGraph::get_dep_count() const{
+    return nodes.size();
+}
+
+size_t OrdDepGraph::get_lock_dep_count() const{
+    size_t lock_dep_count = 0;
+
+    for (const auto& dep: nodes){
+        if (dep.is_lock_dep()){
+            lock_dep_count += 1;
+        }
+    }
+    
+    return lock_dep_count;
+}
+
+std::pair<size_t, size_t> OrdDepGraph::get_split_dep_counts() const{
+    size_t lock_dep_count = get_lock_dep_count();
+    size_t cond_dep_count = get_dep_count() - lock_dep_count;
+    return {lock_dep_count, cond_dep_count};
+}
 
 void OrdDepGraphView::init_start_structs(){
     set_start_node();

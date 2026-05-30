@@ -94,7 +94,8 @@ struct EventHandler{
   void join_event(const EventInfo& evt_info);
 
   // Helper function that creates (and adds) a new dependency to the contaianer
-  AbsDepConstItT create_dep(ThreadIdT tid, ResourceIdT desired_res, const LocksetT& lockset, const Event& evt);
+  AbsDepConstItT create_dep(ThreadIdT tid, ResourceIdT desired_res, const LocksetT& lockset,
+                            SrcLocT src_loc, const Event& evt);
   
   // Helper function that updates old_dep to contain new_res in it's lockset
   AbsDepConstItT update_dep(AbsDepConstItT old_dep, ResourceIdT new_res);
@@ -108,10 +109,6 @@ struct EventHandler{
   void print_abs_deps() const;
   void print_comm_abs_deps() const;
   void print_lock_deps_map() const;
-  void print_neigh_list() const;
-
-  void print_abs_deps(std::FILE* out_file) const;
-  void print_neigh_list(std::FILE* out_file) const;
 
   void print_summary(std::FILE* log_file) const;
   void print_summary() const;

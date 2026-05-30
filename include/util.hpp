@@ -50,7 +50,6 @@ struct std::formatter<T*> :  std::formatter<std::string>{
   }
 };
 
-
 template <typename Iter>
 bool is_valid_iter(Iter iter, Iter sentinel){
     return iter != sentinel;
