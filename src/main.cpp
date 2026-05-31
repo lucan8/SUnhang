@@ -1,7 +1,6 @@
 // TODO: Let sorted vector unsafely return a non-const reference to the internal objects
-// ECLIPSE HALTS AT CYCLE ENUMERATION
-// JIGSAW HALTS AT CYCLE ENUMERATION
-// tradebeans fails too
+
+// BAD OPTIONAL ACCESS ON ECLIPSE
 
 // ONE IMPORTANT ASSUMPTION: SIZEOF(THREAD_ID) < SIZEOF(RESOURCE_ID)
 // GRAPH OBSERVATIONS:

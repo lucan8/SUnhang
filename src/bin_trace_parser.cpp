@@ -2,11 +2,11 @@
 #include "../include/meta_info.hpp"
 
 SharedObjTracker::SharedObjTracker(size_t res_count) 
-    : _shared_count(0), _shared_cand_map(res_count, INVALID_TID){}
+    : _shared_count(0), _shared_cand_map(res_count, INVALID){}
 
 void  SharedObjTracker::reset(size_t res_count){
     _shared_count = 0;
-    _shared_cand_map = std::vector<ThreadIdT>(res_count, INVALID_TID);
+    _shared_cand_map = std::vector<ResourceIdT>(res_count, INVALID);
 }
 
 void SharedObjTracker::update(ThreadIdT tid, ResourceIdT res_id){
@@ -14,17 +14,46 @@ void SharedObjTracker::update(ThreadIdT tid, ResourceIdT res_id){
         return;
     }
 
-    if (_shared_cand_map[res_id] == INVALID_TID){
+    if (_shared_cand_map[res_id] == INVALID){
         _shared_cand_map[res_id] = tid;
     }
     else if (_shared_cand_map[res_id] != tid){
         _shared_count += 1;
-        _shared_cand_map[res_id] = IS_SHARED;
+        set_shared(res_id);
+    }
+}
+
+void SharedObjTracker::set_shared(ResourceIdT res_id){
+    _shared_cand_map[res_id] = IS_SHARED;
+}
+
+void SharedObjTracker::ignore_unshared_objects(){
+    // It's important that the counter starts from 1 and not 0
+    // for locks as cond vars identify using -lock_id, which might result in them having the same id
+    ResourceIdT id_cnt = 1;
+    
+    for (ResourceIdT id = 0; id < _shared_cand_map.size(); ++id){
+        if (is_shared(id)){
+            _shared_cand_map[id] = id_cnt;
+            id_cnt++;
+        }
+        else{
+            _shared_cand_map[id] = INVALID;
+        }
+
+        _shared_count = id_cnt;
     }
 }
 
 bool SharedObjTracker::is_shared(ResourceIdT res_id) const{
     return _shared_cand_map[res_id] == IS_SHARED;
+}
+
+std::optional<ResourceIdT> SharedObjTracker::get_new_id(ResourceIdT res_id) const{
+    ResourceIdT new_res_id = _shared_cand_map[res_id];
+    if (new_res_id == INVALID) return {};
+
+    return new_res_id;
 }
 
 size_t SharedObjTracker::get_unshared_count() const{
@@ -44,7 +73,6 @@ BinParser::BinParser(std::FILE* trace_file) : trace_file(trace_file){
     meta_info.resize_notif_threads();
     ignored_events.resize(meta_info.header.EVENT_COUNT, 0);
 }
-
 
 // Helper function for parse_full_trace. Should not be used anywhere else
 void BinParser::_update_last_write(std::vector<uint8_t>& ignored_events, EventIdT event_idx, EventsT event_type,
@@ -92,16 +120,25 @@ void BinParser::preprocess_trace() {
                 _update_last_write(ignored_events, curr_ev_id, event_type, target, last_write);
             } else if (is_notif_type(event_type)) {
                 meta_info.NOTIF_THREADS[thread_id] = 1;
+                // Calling wait/notify on an object makes the object shared
+                // This is conservative as this is not necessarily true, but rare to be false
+                shared_locks.set_shared(get_ass_sync_obj(target));
             }
         }
     } while(read_ev_cnt == EV_BLOCK_CNT);
+
+    ignore_unshared_objects();
 
     // Restore the file's position
     std::fseek(trace_file, start_file_pos, SEEK_SET);
 }
 
-
-void BinParser::parse_and_handle_trace(EventHandler& event_handler) {       
+void BinParser::parse_and_handle_trace(EventHandler& event_handler) {
+    // There is no deadlock if we have less than 2 locks   
+    if (meta_info.header.LOCK_COUNT <= 1){
+        return;
+    } 
+    
     std::array<BinEvT, EV_BLOCK_CNT> bin_ev_block;
     size_t read_ev_cnt = 0;
     EventIdT curr_ev_id = -1;
@@ -122,18 +159,29 @@ void BinParser::parse_and_handle_trace(EventHandler& event_handler) {
             // Only extract what's necessary to check the conditions
             EventsT event_type = TraceBinFormatter::unsafe_extract_ev_type(bin_ev); 
             ResourceIdT target = TraceBinFormatter::extract_target(bin_ev);
+            
+            // Get the new id of the target
+            std::optional<ResourceIdT> target_new_id_opt = target;
 
-            if (is_lock_type(event_type) && !shared_locks.is_shared(target)) {
-                continue;
+            if (is_lock_type(event_type)) {
+                target_new_id_opt = shared_locks.get_new_id(target);
+            } else if (is_access_type(event_type)) {
+                target_new_id_opt = shared_vars.get_new_id(target);
+            } else if (is_cv_type(event_type)){
+                // Transform from cv id to associated lock id, map it to it's new id and get
+                // the associated cv of that
+                target_new_id_opt = get_ass_sync_obj(shared_locks.get_new_id(get_ass_sync_obj(target)).value());
             }
-            if (is_access_type(event_type) && !shared_vars.is_shared(target)) {
+
+            // Invalid id? Unshared lock/variable, ignore
+            if (!target_new_id_opt.has_value()){
                 continue;
             }
 
             // Fetch the rest afterwards
             EventInfo ev_info(TraceBinFormatter::extract_tid(bin_ev),
                                 event_type,
-                                target,
+                                target_new_id_opt.value(),
                                 TraceBinFormatter::extract_src_loc(bin_ev),
                                 curr_ev_id
                                 );
@@ -141,6 +189,14 @@ void BinParser::parse_and_handle_trace(EventHandler& event_handler) {
             event_handler.handle_event(ev_info);
         }
     } while(read_ev_cnt == EV_BLOCK_CNT);
+}
+
+void BinParser::ignore_unshared_objects() {
+    shared_locks.ignore_unshared_objects();
+    shared_vars.ignore_unshared_objects();
+
+    meta_info.header.VAR_COUNT = shared_vars._shared_count;
+    meta_info.header.LOCK_COUNT = shared_locks._shared_count;
 }
 
 void BinParser::print_summary(FILE* log_file) const {

@@ -16,18 +16,18 @@ struct std::formatter<LocksetT> : std::formatter<std::string> {
 };
 
 struct LocksetEntry{
-  ThreadIdT tid;
+  ResourceIdT res_id;
   size_t count;
 
   auto operator<=>(const LocksetEntry& other) const {
-    return tid <=> other.tid;
+    return res_id <=> other.res_id;
   }
 
   bool operator==(const LocksetEntry& other) const {
-    return tid == other.tid;
+    return res_id == other.res_id;
   }
 
-  LocksetEntry(ThreadIdT tid) : tid(tid), count(0){}
+  LocksetEntry(ResourceIdT res_id) : res_id(res_id), count(0){}
 };
 
 struct UReentrantLocksetT{
@@ -68,7 +68,7 @@ struct UReentrantLocksetT{
     LocksetT to_lockset() const{
       LocksetT lockset(_active_locks._vec.size());
       for (int i = 0; i < lockset._vec.size(); ++i){
-        lockset._vec[i] = _active_locks._vec[i].tid;
+        lockset._vec[i] = _active_locks._vec[i].res_id;
       }
       return lockset;
     }

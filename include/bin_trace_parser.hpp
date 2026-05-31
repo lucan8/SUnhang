@@ -9,7 +9,7 @@
 
 // Helper structure that answers the question: "Is this resource used by two or more threads?"
 struct SharedObjTracker{
-    inline const static int8_t INVALID_TID = -1;
+    inline const static int8_t INVALID = -1;
     inline const static int8_t IS_SHARED = -2;
     
     size_t _shared_count;
@@ -18,15 +18,24 @@ struct SharedObjTracker{
     // the id of the thread that first accessed this
     // INVALID_TID : no thread accessed yet
     // IS_SHARED : two threads accessed it
-    std::vector<ThreadIdT> _shared_cand_map;
+    std::vector<ResourceIdT> _shared_cand_map;
 
     SharedObjTracker(size_t res_count = 0);
 
     void reset(size_t res_count);
-
     void update(ThreadIdT tid, ResourceIdT res_id);
+    void set_shared(ResourceIdT res_id);
+
+    // After this, _shared_cand_map[res_id] will give an updated id for res_id
+    // For the resources that are not shared, the value will be INVALID
+    // get_new_id should be used to retrieve the updated ids safely
+    void ignore_unshared_objects();
 
     bool is_shared(ResourceIdT res_id) const;
+
+    // Returns the new id correspondent to res_id
+    // Requires ignore_unshared_objects to be run beforehand
+    std::optional<ResourceIdT> get_new_id(ResourceIdT res_id) const;
 
     size_t get_unshared_count() const;
 };
@@ -49,8 +58,8 @@ struct BinParser{
   void _update_last_write(std::vector<uint8_t>& ignored_events, EventIdT event_idx, EventsT event_type,
                                 ResourceIdT target, std::vector<EventIdT>& last_write) const;
   void preprocess_trace();
-
   void parse_and_handle_trace(EventHandler& event_handler);
 
+  void ignore_unshared_objects();
   void print_summary(FILE* log_file) const;
 };
