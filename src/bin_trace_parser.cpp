@@ -32,17 +32,17 @@ size_t SharedObjTracker::get_unshared_count() const{
 }
 
 BinParser::BinParser(std::FILE* trace_file) : trace_file(trace_file){
-    std::fread(&meta_info, meta_info.load_sizeof(), 1, trace_file);
+    meta_info.load_header(trace_file);
 
-    meta_info.THREAD_COUNT = TraceBinFormatter::mask_th_count(meta_info.THREAD_COUNT);
-    meta_info.LOCK_COUNT = TraceBinFormatter::mask_lock_count(meta_info.LOCK_COUNT);
-    meta_info.VAR_COUNT = TraceBinFormatter::mask_var_count(meta_info.VAR_COUNT);
-    meta_info.EVENT_COUNT = TraceBinFormatter::mask_ev_count(meta_info.EVENT_COUNT);
+    meta_info.header.THREAD_COUNT = TraceBinFormatter::mask_th_count(meta_info.header.THREAD_COUNT);
+    meta_info.header.LOCK_COUNT = TraceBinFormatter::mask_lock_count(meta_info.header.LOCK_COUNT);
+    meta_info.header.VAR_COUNT = TraceBinFormatter::mask_var_count(meta_info.header.VAR_COUNT);
+    meta_info.header.EVENT_COUNT = TraceBinFormatter::mask_ev_count(meta_info.header.EVENT_COUNT);
 
-    shared_locks.reset(meta_info.LOCK_COUNT);
-    shared_vars.reset(meta_info.VAR_COUNT);
+    shared_locks.reset(meta_info.header.LOCK_COUNT);
+    shared_vars.reset(meta_info.header.VAR_COUNT);
     meta_info.resize_notif_threads();
-    ignored_events.resize(meta_info.EVENT_COUNT, 0);
+    ignored_events.resize(meta_info.header.EVENT_COUNT, 0);
 }
 
 
@@ -68,7 +68,7 @@ void BinParser::preprocess_trace() {
     long start_file_pos = std::ftell(trace_file);
 
     std::array<BinEvT, EV_BLOCK_CNT> bin_ev_block;
-    std::vector<EventIdT> last_write(meta_info.VAR_COUNT, -1);
+    std::vector<EventIdT> last_write(meta_info.header.VAR_COUNT, -1);
 
     size_t read_ev_cnt = 0;
     EventIdT curr_ev_id = -1;
@@ -144,10 +144,10 @@ void BinParser::parse_and_handle_trace(EventHandler& event_handler) {
 }
 
 void BinParser::print_summary(FILE* log_file) const {
-    Logger::print(log_file, "num threads: {}", meta_info.THREAD_COUNT);
-    Logger::print(log_file, "num events: {}", meta_info.EVENT_COUNT);
-    Logger::print(log_file, "num locations: {}", meta_info.VAR_COUNT);
-    Logger::print(log_file, "num locks: {}", meta_info.LOCK_COUNT);
+    Logger::print(log_file, "num threads: {}", meta_info.header.THREAD_COUNT);
+    Logger::print(log_file, "num events: {}", meta_info.header.EVENT_COUNT);
+    Logger::print(log_file, "num locations: {}", meta_info.header.VAR_COUNT);
+    Logger::print(log_file, "num locks: {}", meta_info.header.LOCK_COUNT);
 
     // Logger::print(LogType::DBG, "unshared lock count: {}", shared_locks.get_unshared_count());
     // Logger::print(LogType::DBG, "unshared var count: {}", shared_vars.get_unshared_count());

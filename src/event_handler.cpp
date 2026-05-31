@@ -31,8 +31,8 @@ void CVInfo::wake_thread(){
     }
 }
 
-EventHandler::EventHandler(size_t thread_count, size_t var_count) 
-    : alive_th_count(1), last_write(var_count){
+EventHandler::EventHandler(size_t thread_count, size_t var_count, size_t lock_count) 
+    : alive_th_count(1), last_write(var_count), cs_hist(lock_count, thread_count){
     // Initialize thread_map
     thread_map.reserve(thread_count);
     for (int i = 0; i < thread_count; ++i){
@@ -159,13 +159,14 @@ void EventHandler::acquire_event(const EventInfo& evt_info) {
 
     // Order matters: First call handle_dep_creation then move the event in cs_hist
     Event evt = Event(th_info.vec_clock, evt_info.tr_pos);
-
+    
     // Only create dependency (BEFORE acquiring the lock) if thread is not alone.
     if (alive_th_count > 1){
+        // Order matters: First call handle_dep_creation then move the event in cs_hist
         handle_dep_creation(th_info, evt_info, evt);
     }
 
-    // Add lock to lockset and if it's the first time acquiring, add the event to cs_hist as well(reentrant behaviour)
+    // // Add lock to lockset and if it's the first time acquiring, add the event to cs_hist as well(reentrant behaviour)
     if (th_info.u_reen_lockset.acquire(evt_info.target)){
         cs_hist.add_lock_ev(evt_info.target, evt_info.thread_id, std::move(evt));
     }

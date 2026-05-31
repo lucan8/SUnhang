@@ -7,6 +7,8 @@ import time
 import psutil
 from enum import Enum
 import settings
+from conv_trace import conv_trace
+from util import get_benchmarks
 
 class PLang(Enum):
     CPP = 1
@@ -90,22 +92,6 @@ def run_and_profile_cmd(cmd: list[str], lang:PLang, stdout: str|None=None, timeo
     
     return peak_mem_usage
 
-# Just runs the command and waits
-def run_cmd(cmd: list[str], stdout: str|None=None, timeout: int|None=None):
-    # print(f"Running cmd: {cmd}")
-
-    if stdout is not None:
-        stdout = open(stdout, 'w')
-
-    process = subprocess.Popen(cmd, shell=False, stdout=stdout, stderr=subprocess.STDOUT)
-
-    err = process.wait(timeout=timeout)
-    if err:
-        print(f"[ERROR]: {cmd}: {err}")
-
-    if stdout is not None:
-        stdout.close()
-
 def get_paths(bench_name: str, predictor: str):
     out_path = (settings.out_files_base / bench_name / predictor / "log.txt")
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
@@ -135,36 +121,14 @@ def run_predictor(bench_name: str, predictor: str):
     open(out_path, 'a').write(f"Peak memory usage = {peak_mem_usage} MB")
     print()
 
-# Converts trace from std format. Returns the path to the binary trace
-# TODO: Do conversions only if needed
-def conv_trace(bench_name: str, predictor: str) -> Path:
-    std_trace_path = settings.trace_std_dir / (f"{bench_name}.std")
-
-    if predictor == settings.spdoffline_name:
-        bin_trace_path = settings.trace_bin_java_enc_dir / (bench_name + f".data")
-        cmd = ['java', '-jar', settings.spd_trace_conv_jar_path, f"-p={std_trace_path}", "-f=std", f"-q={bin_trace_path}"]
-    else:
-        bin_trace_path = settings.trace_bin_loc_enc_dir / (bench_name + f".data")
-        cmd = [settings.sunhang_conv_exe_path, std_trace_path, bin_trace_path]
-    
-    if not bin_trace_path.exists():
-        print(f"Converting Trace for: {predictor}, {bench_name}")
-        run_cmd(cmd)
-    else:
-        print(f"Skipping Trace Conversion for: {predictor}, {bench_name}")
-
-
-    return bin_trace_path
-
-def get_benchmarks():
-    return [path.stem for path in settings.trace_std_dir.iterdir()]
-
 def main():
     parser = optparse.OptionParser()
     parser.add_option("-b", "--benchmarks", dest="benchmarks", default="all",
-                    help="run the script on a selected group of benchmarks. " \
+                      help="run the script on a selected group of benchmarks. " \
                             "Specify the names of the benchmarks and seperate them with a comma " \
                             "(e.g., Bensalem,Account) (Default: all).")
+    parser.add_option("-i", "--ignore", dest="ignored_bench", default="",
+                      help="ignores the specified benchmarks")
     
     (options, args) = parser.parse_args()
     if options.benchmarks == "all":
@@ -172,9 +136,12 @@ def main():
     else:
         benchmarks = options.benchmarks.split(",")
     
-    # ignored_bench = []
-
+    ignored_bench = options.ignored_bench.split(",")
+    print(f"Benchmarks to ignore: {ignored_bench}")
     for bench in benchmarks:
+        if bench in ignored_bench:
+            print(f"Ignoring bench {bench}")
+            continue
         # run_predictor(bench, settings.spdoffline_name)
         run_predictor(bench, settings.sunhang_name)
 

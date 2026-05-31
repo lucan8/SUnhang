@@ -77,13 +77,13 @@ void DeadlockChecker::_get_sync_pres_closure(VectorClock& vc){
     bool changed = false;
     
     do{
-        for (auto& [res_id, th_cs_umap] : cs_hist._cs_hist){
+        for (auto& th_cs_umap : cs_hist._cs_hist){
             std::vector<const CSInfo*> lock_crit_sections;
-            lock_crit_sections.reserve(th_cs_umap._vec.size());
+            lock_crit_sections.reserve(th_cs_umap.size());
 
             int max_cs_ind = -1; // Using index instead of iterator as it is more stable
 
-            for (auto& [th_id, cs_queue] : th_cs_umap._vec){
+            for (auto& cs_queue : th_cs_umap){
                 auto cs_opt = cs_queue.pop_until(vc, CSInfoComp(), false).first;
                 if (cs_opt.has_value()){
                     // Add critical section to vector

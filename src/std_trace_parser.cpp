@@ -127,10 +127,10 @@ void StdParser::to_bin_fmt(FILE* out_bin_file){
 }
 
 void StdParser::print_metadata(FILE* out_bin_file) const{
-    meta tmp_meta_info(TraceBinFormatter::mask_th_count(th_id_map._map.size()),
-                        TraceBinFormatter::mask_ev_count(line_index),
-                        TraceBinFormatter::mask_var_count(var_id_map._map.size()),
-                        TraceBinFormatter::mask_lock_count(lock_id_map._map.size())
-                        );
-    fwrite(&tmp_meta_info, tmp_meta_info.load_sizeof(), 1 , out_bin_file);
+    MetaHeader meta_header(TraceBinFormatter::mask_th_count(th_id_map._map.size()),
+                           TraceBinFormatter::mask_ev_count(line_index),
+                           TraceBinFormatter::mask_var_count(var_id_map._map.size()),
+                           TraceBinFormatter::mask_lock_count(lock_id_map._map.size())
+                          );
+    fwrite(&meta_header, sizeof(meta_header), 1 , out_bin_file);
 }
