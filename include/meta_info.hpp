@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdio>
 #include "common_types.hpp"
 
 struct MetaHeader{

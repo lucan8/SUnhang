@@ -354,7 +354,7 @@ void EventHandler::print_th_exit_with_locks() const{
 void EventHandler::print_th_vc_info() const{
     uint64_t sum = 0;
     for (const auto& [tid, th_info] : std::views::enumerate(thread_map)){
-        sum += th_info.vec_clock._vector_clock.size();
+        sum += th_info.vec_clock.size();
     }
     Logger::print(LogType::DBG, "mean={}, count={}", sum / thread_map.size(), thread_map.size());
 }
