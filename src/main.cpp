@@ -1,5 +1,8 @@
 // TODO: Let sorted vector unsafely return a non-const reference to the internal objects
 
+// BAD OPTIONAL ACCESS ON ECLIPSE
+
+// ONE IMPORTANT ASSUMPTION: SIZEOF(THREAD_ID) < SIZEOF(RESOURCE_ID)
 // GRAPH OBSERVATIONS:
 
 // CURRENTLY USING ORDER GIVEN BY NORMAL COMPARISON BETWEEN THE VALUES THE ITERATORS POINT TO
@@ -145,6 +148,7 @@ int main(int argc, char *argv[]) {
     
     // Preprocess trace file(fill metadata, determine events to be ignored etc...)
     BinParser trace_parser(trace_file);
+    // MetaInfo& meta_info1 = meta_info;
     trace_parser.preprocess_trace();
 
     Logger::print(log_file, "----Trace info----");
@@ -154,7 +158,7 @@ int main(int argc, char *argv[]) {
     auto millis_passed_parse_trace = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
     // Read and handle events
-    EventHandler event_handler(meta_info.THREAD_COUNT, meta_info.VAR_COUNT);
+    EventHandler event_handler(meta_info.header.THREAD_COUNT, meta_info.header.VAR_COUNT, meta_info.header.LOCK_COUNT);
     trace_parser.parse_and_handle_trace(event_handler);
 
     // Print summary

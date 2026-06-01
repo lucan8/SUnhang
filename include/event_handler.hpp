@@ -75,7 +75,7 @@ struct EventHandler{
   // Statistical info
   uint32_t acq_count = 0;
 
-  EventHandler(size_t thread_count, size_t var_count);
+  EventHandler(size_t thread_count, size_t var_count, size_t lock_count);
 
   // Calls handler associated with evt_info.event_type
   // Return true if event if valid, false otherwise
