@@ -1,7 +1,11 @@
+// IMPORTANT: USING ACTUAL ORIGINAL TRACES
+// Transfer, Deadlock and HashMap have deadlocks that the authors could not find
+// TODO: Why did biojava initially give peak memory usage 6GB and now is 4GB???
+
 // TODO: Let sorted vector unsafely return a non-const reference to the internal objects
-
-// BAD OPTIONAL ACCESS ON ECLIPSE
-
+// TODO: Micro Optimization: Allocate recent statuses only to notifying threads
+// TODO: AFTER YOU SPLIT COND_VARS AND LOCKS, Use std::vector instead of std::unordered_map for lock_dep_map
+// TODO: CANT WE ALSO IGNORE THREADS? Unshared locks vars should take into consideration thread lifetimes
 // ONE IMPORTANT ASSUMPTION: SIZEOF(THREAD_ID) < SIZEOF(RESOURCE_ID)
 // GRAPH OBSERVATIONS:
 
@@ -57,6 +61,8 @@
 // if t1 waits and let's say another 2 threads keep executing stuff, upon waking t1 should
 // be aware that the other 2 threads executed before it to avoid creating fake deadlocks
 
+//TODO: Handle the java event types situation better! And also the trace converter one
+//TODO: Add better trace conversion from the python script. Add more fmt conversion(from bin to std)
 //TODO: ERR REPORT FILE FOR BAD TRACES
 //TODO: Rename the comparison operators as they are actually biased toward the first argument
 //TODO: How does this handle nested cycles?
@@ -71,7 +77,6 @@
 
 // TODO: Bensalem asserts!
 // Graph info for bensalem: 12 nodes, only 3 with outgoing neighbours, graph on the second to last page of your notebook
-
 
 // BIG QUESTION: Shouldn't the nodes(deps) be sorted based on when they appear in the trace?
 // As keeping them in a mere map does not guarantee that ordering.
@@ -148,40 +153,22 @@ int main(int argc, char *argv[]) {
     
     // Preprocess trace file(fill metadata, determine events to be ignored etc...)
     BinParser trace_parser(trace_file);
-    // MetaInfo& meta_info1 = meta_info;
-    trace_parser.preprocess_trace();
-
     Logger::print(log_file, "----Trace info----");
     trace_parser.print_summary(log_file);
+    trace_parser.preprocess_trace();
 
-    auto end = std::chrono::steady_clock::now();
-    auto millis_passed_parse_trace = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-
-    // Read and handle events
+    // Re-Read and handle events
     EventHandler event_handler(meta_info.header.THREAD_COUNT, meta_info.header.VAR_COUNT, meta_info.header.LOCK_COUNT);
     trace_parser.parse_and_handle_trace(event_handler);
-
-    // Print summary
     event_handler.print_summary(log_file);
-    fflush(log_file);
 
-    end = std::chrono::steady_clock::now();
-    auto millis_passed_handle_events = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-
-    // Logger::print(LogType::INFO, "Finished event handling");
-    end = std::chrono::steady_clock::now();
-    auto millis_passed_build_neigh_list = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-
+    // Build the abstract dependency graph and enumerate cycles
     OrdDepGraphView graph_view(std::move(event_handler.abs_deps), event_handler.lock_dep_map);
     CycleEnumerator cycle_enumerator(graph_view);
     cycle_enumerator.enum_cycles();
-    
     Logger::print(log_file, "num cycles: {}", cycle_enumerator.res_cycles.size());
-    fflush(log_file);
-
-    end = std::chrono::steady_clock::now();
-    auto millis_passed_cycle_enum = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-
+    
+    // Identify abstract deadlock pattern
     DeadlockChecker dlk_checker(std::move(event_handler.cs_hist), std::move(event_handler.dep_loc_ev_map));
 
     // Each cycle might have multiple abstract deadlock patterns
@@ -198,16 +185,13 @@ int main(int argc, char *argv[]) {
 
     Logger::print(log_file, "num abstract: {}", abs_dlk_pattern_count);
     Logger::print(log_file, "num concrete: -1\n"); // Just to match the format
-    fflush(log_file);
     
-    end = std::chrono::steady_clock::now();
-    auto millis_passed_abs_dlk_check = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-    
+    // Check if patterns are sync preserving
     uint32_t real_dlk_count = 0;
-    std::vector<int> real_dlk_ind;
-
     std::set<std::vector<SimpleNode>> verified_patterns;
+
     for (auto& abs_dlk_pattern : all_abs_dlk_patterns){
+        // Don't look at already verified patterns
         if (verified_patterns.find(abs_dlk_pattern.nodes) != verified_patterns.end()){
             continue;
         }
@@ -219,18 +203,11 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    end = std::chrono::steady_clock::now();
-    auto millis_passed_sync_pres_check = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    auto end = std::chrono::steady_clock::now();
+    auto millis_passed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
     
     Logger::print(log_file, "\nnum deadlocks: {}", real_dlk_count);
-
-    Logger::print(log_file, "Time for parsing = {} milliseconds", millis_passed_parse_trace);
-    Logger::print(log_file, "Time for event handling = {} milliseconds", millis_passed_handle_events - millis_passed_parse_trace);
-    Logger::print(log_file, "Time for neight list building = {} milliseconds", millis_passed_build_neigh_list - millis_passed_handle_events);
-    Logger::print(log_file, "Time for cycle enumeration = {} milliseconds", millis_passed_cycle_enum - millis_passed_build_neigh_list);
-    Logger::print(log_file, "Time for abs deadlock checks = {} milliseconds", millis_passed_abs_dlk_check - millis_passed_cycle_enum);
-    Logger::print(log_file, "Time for sync pres check = {} milliseconds", millis_passed_sync_pres_check - millis_passed_abs_dlk_check);
-    Logger::print(log_file, "Total Time = {} milliseconds", millis_passed_sync_pres_check);
+    Logger::print(log_file, "Time for analysis = {} milliseconds", millis_passed);
     
     // Cleanup
     std::fclose(log_file);

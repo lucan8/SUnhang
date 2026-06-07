@@ -9,21 +9,29 @@
 
 // TODO: TRY USING INT8_T
 // NOTE: IF ADDING MORE OR REMOVING ALWAYS BE MIDNFULL OF UPDATING from_int16
-// Event stuff
 enum class EventsT : int16_t {
+  // Common in our and the author's implementation
   LK = 0,
   UK = 1,
   RD = 2,
   WR = 3,
   FORK = 4,
   JOIN = 5,
-  WAIT = 6,
-  NOTIFY = 7,
-  NOTIFYALL = 8
+
+  // These are not used in our implementation, except for REQ
+  BEGIN = 6,
+  END = 7,
+  REQ = 8,
+  BRANCH = 9,
+
+  // These are only in our implementation
+  WAIT = 10,
+  NOTIFY = 11,
+  NOTIFYALL = 12
 };
 
 inline bool is_lock_type(EventsT ev_type){
-  return ev_type == EventsT::LK || ev_type == EventsT::UK;
+  return ev_type == EventsT::REQ || ev_type == EventsT::LK || ev_type == EventsT::UK;
 }
 
 inline bool is_access_type(EventsT ev_type){
@@ -42,12 +50,15 @@ inline bool is_cv_type(EventsT ev_type){
   return ev_type == EventsT::WAIT || is_notif_type(ev_type);
 }
 
+inline bool is_unused_type(EventsT ev_type) {
+  return ev_type == EventsT::BEGIN || ev_type == EventsT::END || ev_type == EventsT::BRANCH;
+}
+
 inline std::optional<EventsT> from_int16(int16_t val){
-  if (val >= static_cast<int>(EventsT::LK) && 
-        val <= static_cast<int>(EventsT::NOTIFYALL)) {
-        return static_cast<EventsT>(val);
-    }
-    return std::nullopt;
+  if (val >= static_cast<int>(EventsT::LK) && val <= static_cast<int>(EventsT::NOTIFYALL)) {
+    return static_cast<EventsT>(val);
+  }
+  return std::nullopt;
 }
 
 inline EventsT unsafe_from_int16(int16_t val){
@@ -61,12 +72,16 @@ struct std::formatter<EventsT> : std::formatter<std::string> {
     auto format(EventsT e, format_context& ctx) const {
         std::string name;
         switch (e) {
-            case EventsT::RD: name = "r"; break;
-            case EventsT::WR:  name = "w"; break;
-            case EventsT::FORK: name = "fork"; break;
-            case EventsT::JOIN: name = "join"; break;
             case EventsT::LK: name = "acq"; break;
             case EventsT::UK: name = "rel"; break;
+            case EventsT::RD: name = "r"; break;
+            case EventsT::WR: name = "w"; break;
+            case EventsT::FORK: name = "fork"; break;
+            case EventsT::JOIN: name = "join"; break;
+            case EventsT::BEGIN: name = "begin"; break;
+            case EventsT::END: name = "end"; break;
+            case EventsT::BRANCH: name = "branch"; break;
+            case EventsT::REQ: name = "req"; break;
             case EventsT::WAIT: name = "wait"; break;
             case EventsT::NOTIFY: name = "notify"; break;
             case EventsT::NOTIFYALL: name = "notifyAll"; break;
@@ -91,7 +106,10 @@ struct EventInfo{
 template <>
 struct std::formatter<EventInfo> : std::formatter<std::string> {
   auto format(const EventInfo& e, format_context& ctx) const {
-      return std::format_to(ctx.out(), "Line {}: {}|{}({})|{}", e.tr_pos, e.thread_id, e.event_type, e.target, e.src_loc);
+      if (is_th_type(e.event_type)){
+        return std::format_to(ctx.out(), "T{}|{}(T{})|{}", e.thread_id, e.event_type, e.target, e.src_loc);
+      }
+      return std::format_to(ctx.out(), "T{}|{}({})|{}", e.thread_id, e.event_type, e.target, e.src_loc);
   }
 };
 
@@ -119,26 +137,30 @@ struct std::formatter<Event> : std::formatter<std::string> {
 };
 
 // Comparator between Event and VectorClock
-// The order matters! Always put vc to the right as it usually is the sync preserving closure
-struct EventComp{
+// The order of the arguments matters
+struct EventLess{
+    // ev.vc < vc
     bool operator()(const Event& ev, const VectorClock& vc) const {
         return ev.vc < vc;
     }
 
+    // !(ev.vc <= vc)
     bool operator()(const VectorClock& vc, const Event& ev) const {
-        return ev.vc > vc;
+        return !(ev.vc <= vc);
     }
 };
 
 // Comparator between Event pointer and VectorClock
-// The order matters! Always put vc to the right as it usually is the sync preserving closure
-struct EventPtrComp{
+// The order of the arguments matters
+struct EventPtrLess{
+    // ev.vc < vc
     bool operator()(const Event* ev, const VectorClock& vc) const {
         return ev->vc < vc;
     }
-
+    
+    // !(ev.vc <= vc)
     bool operator()(const VectorClock& vc, const Event* ev) const {
-        return ev->vc > vc;
+        return !(ev->vc <= vc);
     }
 };
 

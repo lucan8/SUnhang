@@ -8,7 +8,8 @@ import psutil
 from enum import Enum
 import settings
 from conv_trace import conv_trace
-from util import get_benchmarks
+from util import get_benchmarks, run_cmd
+from compile_benchmarks import from_log_file, compile_rows
 
 class PLang(Enum):
     CPP = 1
@@ -58,7 +59,7 @@ def pool_proc_mem(process: subprocess.Popen, lang: PLang) -> float:
             except psutil.NoSuchProcess:
                 break # Program finished exactly between the checks
     except Exception as e:
-        print(f"Error profiling process: {e}")
+        print(f"[ERROR]: Error profiling process: {e}")
         process.kill()
     
     return peak_mem_kb
@@ -96,17 +97,15 @@ def get_paths(bench_name: str, predictor: str):
     out_path = (settings.out_files_base / bench_name / predictor / "log.txt")
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     
-    # meta_path = settings.trace_meta_dir / (bench_name + ".meta")
     input_path = conv_trace(bench_name, predictor)
 
     return input_path, out_path
 
-def run_predictor(bench_name: str, predictor: str):
-    print(f"Running predictor: {predictor}")
+def run_predictor(bench_name: str, predictor: str, should_profile: bool):
     input_path, out_path = get_paths(bench_name, predictor)
 
-    print("Input path: ", input_path)
-    print("Output path: ", out_path)
+    # print("Input path: ", input_path)
+    # print("Output path: ", out_path)
 
     stdout = None
     if predictor == settings.sunhang_name:
@@ -114,12 +113,58 @@ def run_predictor(bench_name: str, predictor: str):
         cmd = [settings.sunhang_exe_path, input_path, out_path]
     else:
         lang = PLang.JAVA
-        cmd = ["java", "-Xmx8g", "-jar", settings.spdoffline_jar_path, f"-p={input_path}"]
+        jvm_max_mem_flag = "-Xmx8g"
+
+        # This needs more memory. I would make -Xmx10g the default
+        # But it prints 0 mem usage for the small benchmarks(WHY???)
+        if bench_name in ["graphchi", "biojava"]:
+            jvm_max_mem_flag = "-Xmx10g"
+
+        cmd = ["java", jvm_max_mem_flag, "-jar", settings.spdoffline_jar_path, f"-p={input_path}"]
         stdout = out_path
     
-    peak_mem_usage = run_and_profile_cmd(cmd, lang, stdout)
-    open(out_path, 'a').write(f"Peak memory usage = {peak_mem_usage} MB")
-    print()
+    if should_profile:
+        peak_mem_usage = run_and_profile_cmd(cmd, lang, stdout)
+        open(out_path, 'a').write(f"Peak memory usage = {peak_mem_usage} MB")
+    else:
+        run_cmd(cmd, stdout)
+
+def benchmark(all_benchmarks: set[str], user_benchmarks: list[str], predictor: str):
+    WARMUP_IT_COUNT = 0
+    RUN_IT_COUNT = 1
+    rows = {}
+
+    print(f"Predictor: {predictor}")
+    for bench in user_benchmarks:
+        if bench not in all_benchmarks:
+            print(f"    Skipping invalid benchmark: {bench}")
+            continue
+        print(f"    Benchmark: {bench}")
+        avg_mem = 0
+        avg_time = 0
+        for i in range(WARMUP_IT_COUNT):
+            print(f"        Warm-up: {i + 1} / {WARMUP_IT_COUNT}")
+            run_predictor(bench, predictor, False)
+
+        for i in range(RUN_IT_COUNT):
+            print(f"        Run: {i + 1} / {RUN_IT_COUNT}", end=": ")
+            run_predictor(bench, predictor, True)
+            data = from_log_file(settings.out_files_base / bench / predictor / "log.txt", predictor)
+            avg_mem += data[-1]
+            avg_time += data[-2]
+
+            print(f"            {data[-2]:.2f} sec, {data[-1]:.2f} MB")
+        
+        data[-1] = avg_mem / RUN_IT_COUNT
+        data[-2] = avg_time / RUN_IT_COUNT
+
+        print(f"Avg: {data[-2]:.2f} sec, {data[-1]:.2f} MB")
+        rows[bench] = data
+    
+    print(f"[INFO]: Compiled {len(rows)} rows for {predictor}")
+
+    return rows
+
 
 def main():
     parser = optparse.OptionParser()
@@ -128,22 +173,48 @@ def main():
                             "Specify the names of the benchmarks and seperate them with a comma " \
                             "(e.g., Bensalem,Account) (Default: all).")
     parser.add_option("-i", "--ignore", dest="ignored_bench", default="",
-                      help="ignores the specified benchmarks")
+                      help="ignores the specified benchmarks. Default None")
+    
+    parser.add_option("-p", "--predictor", dest="predictors", default="all",
+                      help="runs only the desired predictors." \
+                           "Specify the names of the predictors and seperate them with a comma " \
+                           "For correct table construction, always specify SUnhang, and put it first" \
+                           "(e.g SUnhang,SPDOffline) (Default: all)")
     
     (options, args) = parser.parse_args()
-    if options.benchmarks == "all":
-        benchmarks = get_benchmarks()
-    else:
-        benchmarks = options.benchmarks.split(",")
     
+    # Get bennchmarks
+    all_benchmarks = set(get_benchmarks())
+    if options.benchmarks != "all":
+        user_benchmarks = options.benchmarks.split(",")
+    else:
+        user_benchmarks = list(all_benchmarks)
+
+    # Get predictors
+    # Order matters: The first one to run should be SUnhang
+    all_predictors = set(settings.predictors)
+    if options.predictors == "all":
+        user_predictors = settings.predictors
+    else:
+        user_predictors = options.predictors.split(",")
+
+    if not user_predictors or user_predictors[0] != "SUnhang":
+        print("[WARNING]: SUnhang should be the first predictor for correct table construction!")
+    
+    # Ignore undesired benchmarks
     ignored_bench = options.ignored_bench.split(",")
     print(f"Benchmarks to ignore: {ignored_bench}")
-    for bench in benchmarks:
-        if bench in ignored_bench:
-            print(f"Ignoring bench {bench}")
+
+    rows = []
+    for pred in user_predictors:
+        if pred not in all_predictors:
+            print(f"Skipping invalid predictor: {pred}")
             continue
-        # run_predictor(bench, settings.spdoffline_name)
-        run_predictor(bench, settings.sunhang_name)
+
+        rows.append(benchmark(all_benchmarks, user_benchmarks, pred))
+    
+    
+    compile_rows(rows, user_predictors)
 
 if __name__ == "__main__":
     main()

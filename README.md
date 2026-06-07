@@ -1,1 +1,1 @@
-# SUnhang - Sound generalized deadlock prediction in polynomial time
+# SUnhang - Sound generalized deadlock prediction in time

@@ -50,13 +50,10 @@ struct BinParser{
 
   // Results coming from preprocessing(1st pass) that will be used for the actual run(2nd pass)
   SharedObjTracker shared_locks, shared_vars;
-  std::vector<uint8_t> ignored_events;
 
   // Initializes meta_info
   BinParser(std::FILE* trace_file);
 
-  void _update_last_write(std::vector<uint8_t>& ignored_events, EventIdT event_idx, EventsT event_type,
-                                ResourceIdT target, std::vector<EventIdT>& last_write) const;
   void preprocess_trace();
   void parse_and_handle_trace(EventHandler& event_handler);
 

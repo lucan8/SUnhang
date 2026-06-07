@@ -18,6 +18,19 @@ inline std::vector<std::string> split(const std::string& str, char sep){
     return result;
 }
 
+// Removes elem from vec by swaping elem with the last element and poping
+// O(n) because we have to search for elem, swapping and popping is O(1)
+template <typename T>
+void swap_and_pop(std::vector<T>&vec, const T& elem){
+    for (int i = 0; i < vec.size(); ++i){
+        if (vec[i] == elem){
+            std::swap(vec[i], vec.back());
+            vec.pop_back();
+            return;
+        }
+    }
+}
+
 
 // Generic struct used for pointer comparison
 // Note: Nullptr is treated as infinity

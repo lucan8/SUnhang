@@ -6,7 +6,7 @@ from copy import deepcopy
 import settings
 
 # TODO: MAKE COMMON COLUMNS INDEPENDENT OF PREDICTOR ORDER
-common_columns = [("Benchmark", ""), ("N", ""), ("T", ""), ("V", ""), ("L", ""), ("A", "")]
+common_columns = [("Benchmark", ""), ("N", ""), ("T", ""), ("V", ""), ("L", ""), ("A/R", "")]
 mini_columns = ["dep", "cyc", "abs", "dlk", "time(s)", "mem(MB)"]
 
 # ignored_bench = set(["eclipse", "jigsaw"])
@@ -20,40 +20,23 @@ def from_log_file_SPD(file_path: Path) -> list:
     dic = {}
     empty_res = [0] * (len(mini_columns))
 
-    line = file.readline().strip()
-    if not line:
+    lines = file.readlines()
+    if not lines:
         return empty_res
     
     # Skip first lines
-    for i in range(5):
-        file.readline()
+    lines = lines[6:]
 
     # Next 3 lines are actually relevant
     for i in range(3):
-        split_line = file.readline().strip().split(": ")
+        split_line = lines[i].strip().split(": ")
         dic[split_line[0].split()[1][:4]] = int(split_line[1])
     
-    # Skip until we see num_deadlocks
-    last_tell = 0
-    while True:
-        line = file.readline().strip()
+    # Deaadlocks, time and memory
+    dic['dlk'] = int(lines[-3].strip().split(": ")[1])
+    dic['time'] = float(lines[-2].strip().split('=')[1].split()[0]) / 1000
+    dic['mem'] = float(lines[-1].strip().split('=')[1].split()[0])
 
-        if file.tell() == last_tell:
-            print("[WARN]: EOF early for {}", file_path)
-            return empty_res
-        
-        last_tell = file.tell()
-        
-        split_line = line.split(": ")
-        if split_line[0] == "num deadlocks":
-            dic["dlk"] = int(split_line[1])
-            break
-    
-    # Time and memory
-    dic['time'] = float(file.readline().strip().split('=')[1].split()[0]) / 1000
-    dic['mem'] = float(file.readline().strip().split('=')[1].split()[0])
-
-    # print(file_path, dic)
     return list(dic.values())
 
 def from_log_file_SUnhang(file_path: Path) -> list:
@@ -62,42 +45,24 @@ def from_log_file_SUnhang(file_path: Path) -> list:
     dic = {}
     empty_res = [0] * (len(common_columns) + len(mini_columns) - 1)
     
-    line = file.readline()
-    if not line:
+    lines = file.readlines()
+    if not lines:
         return empty_res
     
     # Common columns
     for i in range(1, len(common_columns)):
-        split_line = file.readline().strip().split(": ")
-        dic[common_columns[i][0]] = int(split_line[1])
+        split_line = lines[i].strip().split(": ")
+        dic[split_line[0].split()[1][:4]] = int(split_line[1])
     
     # Specific columns
     for i in range(3):
-        split_line = file.readline().strip().split(": ")
+        split_line = lines[len(common_columns) + i].strip().split(": ")
         dic[split_line[0].split()[1][:3]] = int(split_line[1])
-    
-    last_tell = 0
-    # Skip until we see num_deadlocks
-    while True:
-        line = file.readline().strip()
 
-        if file.tell() == last_tell:
-            print("[WARN]: EOF early for {}", file_path)
-            return empty_res
-        
-        last_tell = file.tell()
-        split_line = line.split(": ")
-        if split_line[0] == "num deadlocks":
-            dic["dlk"] = int(split_line[1])
-            break
-    
-    # Skip the next 4
-    for i in range(6):
-        file.readline()
-
-    # Time and memory
-    dic['time'] = float(file.readline().strip().split('=')[1].split()[0]) / 1000
-    dic['mem'] = float(file.readline().strip().split('=')[1].split()[0])
+    # Deadlocks, time and memory
+    dic['dlk'] = int(lines[-3].strip().split(": ")[1])
+    dic['time'] = float(lines[-2].strip().split('=')[1].split()[0]) / 1000
+    dic['mem'] = float(lines[-1].strip().split('=')[1].split()[0])
 
     # Swap the places of N and T
     res = list(dic.values())
@@ -111,8 +76,8 @@ log_conv_func = {settings.spdoffline_name : from_log_file_SPD, settings.sunhang_
 def from_log_file(file_path: Path, pred: str) -> list:
     return log_conv_func[pred](file_path)
 
-def get_df_col():
-    tuples = common_columns + list(itertools.product(settings.predictors, mini_columns))
+def get_df_col(predictors:list[str]=settings.predictors):
+    tuples = common_columns + list(itertools.product(predictors, mini_columns))
     columns = pd.MultiIndex.from_tuples(tuples)
     # print(columns)
 
@@ -139,12 +104,12 @@ def get_df_rows(pred: str) -> dict[str, list[int]]:
     
     return rows
 
-def format_df(df: pd.DataFrame):
+def format_df(df: pd.DataFrame, predictors: list[str]=settings.predictors):
     sep = r"\textbackslash{}" 
     sub_header = sep.join(mini_columns)
     
     # Set new dataframe with only one concatenated subcolumn
-    new_tuples = common_columns + [(p, sub_header) for p in settings.predictors]
+    new_tuples = common_columns + [(p, sub_header) for p in predictors]
     res_df = pd.DataFrame(columns=pd.MultiIndex.from_tuples(new_tuples))
 
     # Copy over the common stuff and apply formatting
@@ -153,7 +118,7 @@ def format_df(df: pd.DataFrame):
         res_df[col] = df[col].astype(int).apply(format_suffix)
 
     # Convert the types of predictor columns and add the separator between them
-    for p in settings.predictors:
+    for p in predictors:
         info = [
             df[(p, "dep")].astype(int).apply(format_suffix),
             df[(p, "cyc")].astype(int).apply(format_suffix),
@@ -201,6 +166,12 @@ def merge_rows(rows1: dict[str, list[int]], rows2: dict[str, list[int]]) -> dict
     return merged_rows
 
 def merge_rows_list(row_list: list[dict[str, list[int]]]) -> dict[str, list[int]]:
+    if len(row_list) == 0:
+        return {}
+    
+    if len(row_list) == 1:
+        return row_list[0]
+    
     rows = merge_rows(row_list[0], row_list[1])
     
     for i in range(2, len(row_list)):
@@ -231,26 +202,28 @@ def format_suffix(num):
     
     return f"{num_new:.2f}{prefix}"
     
- 
-def main():
-    cols = get_df_col()
 
-    rows = [get_df_rows(pred) for pred in settings.predictors]
+def compile_rows(rows, predictors:list[str]=settings.predictors):
+    if not rows:
+        print("[INFO] Empty rows, nothing to compile!")
+        return
+    
+    cols = get_df_col(predictors)
     rows = from_row_dict_to_row_list(merge_rows_list(rows))
-
-    # print(rows)
-    # print(cols)
-
+    
     df = pd.DataFrame(rows, columns=cols).sort_values('N')
-    # print(df)
-
 
     # Aggregate results into a "Total" column
     total_row = ["Total"] + df.select_dtypes(include='number').sum().to_list()
     df.loc[len(df)] = total_row
 
-    df = format_df(df)
-    # print(df)
+    df = format_df(df, predictors)
     save_latex(df)
 
-main()
+def main():
+    rows = [get_df_rows(pred) for pred in settings.predictors]
+
+    compile_rows(rows)
+
+if __name__ == "__main__":
+    main()

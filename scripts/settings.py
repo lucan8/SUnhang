@@ -18,10 +18,10 @@ os.makedirs(trace_bin_loc_enc_dir, exist_ok=True)
 os.makedirs(trace_bin_java_enc_dir, exist_ok=True)
 
 # Predictor names
-sunhang_pred_extra_title = "-1-lvl-locks-as-deps"
+sunhang_pred_extra_title = ""
 sunhang_base_name = "SUnhang"
 
-spdoffline_name, sunhang_name = "spdoffline", sunhang_base_name + sunhang_pred_extra_title
+spdoffline_name, sunhang_name = "SPDOffline", sunhang_base_name + sunhang_pred_extra_title
 predictors = [sunhang_name, spdoffline_name]
 
 # Executables

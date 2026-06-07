@@ -29,15 +29,17 @@ struct CSInfo{
   }
 };
 
-// Comparator between CSInfo and VectorClock'
-// The order matters! Always put vc to the right as it usually is the sync preserving closure
-struct CSInfoComp{
+// Comparator between CSInfo and VectorClock.
+// The order matters
+struct CSInfoLess{
+    // cs.lock_ev.vc < vc
     bool operator()(const CSInfo& cs, const VectorClock& vc) const {
         return cs.lock_ev.vc < vc;
     }
 
+    // !(cs.lock_ev.vc <= vc)
     bool operator()(const VectorClock& vc, const CSInfo& cs) const {
-        return cs.lock_ev.vc > vc;
+        return !(cs.lock_ev.vc <= vc);
     }
 };
 
@@ -57,7 +59,7 @@ struct ThreadCSHist {
 };
 
 struct CSHist {
-    // Index is lock id
+    // Index in the first is lock id, index in the second is thread id
     std::vector<std::vector<OwnedLazyQueue<std::vector<CSInfo>>>> _cs_hist;
 
     CSHist(size_t lock_count, size_t thread_count) 
@@ -93,93 +95,3 @@ struct CSHist {
         return &th_vec.back();
     }
 };
-
-// THE POINTERS MIGHT BECOME DANGLING AS THE PROGRAM EXECUTES
-// THEIR SOLE PURPOSE IS TO GIVE A VIEW ON THE INTERNAL OBJECTS(TO AVOID COPYING)
-// VERY NOT THREAD SAFE
-
-// struct CSHist {
-//     // Index is lock id
-//     std::vector<SortedVector<ThreadCSHist>> _cs_hist;
-
-//     CSHist(size_t lock_count) : _cs_hist(lock_count){}
-
-//     void reset() {
-//         for (auto& th_vec : _cs_hist) {
-//             for (auto& th_hist : th_vec._vec) {
-//                 th_hist.queue.reset();
-//             }
-//         }
-//     }
-
-//     CSInfo& add_lock_ev(ResourceIdT res_id, ThreadIdT tid, Event&& lock_ev) {
-//         auto& th_vec = _cs_hist[res_id];
-//         auto& th_hist = th_vec.unique_insert(tid);    
-//         th_hist.queue.emplace(std::move(lock_ev));
-
-//         return th_hist.queue.back();
-//     }
-
-//     std::optional<const CSInfo*> add_unlock_ev(ResourceIdT res_id, ThreadIdT tid, Event&& unlock_ev) {
-//         auto cs_opt = get_back(res_id, tid);
-//         if (!cs_opt.has_value()) return {};
-
-//         CSInfo* cs = const_cast<CSInfo*>(cs_opt.value());
-//         cs->unlock_ev = std::move(unlock_ev);
-//         return cs;
-//     }
-
-//     std::optional<const CSInfo*> get_back(ResourceIdT res_id, ThreadIdT tid) const {
-//         auto& th_vec = _cs_hist[res_id];
-//         auto th_hist_it = th_vec.find(tid);
-
-//         // Are you releasing without locking first?
-//         if (th_hist_it == th_vec._vec.end() || th_hist_it->queue.empty()) return {};
-
-//         return &th_hist_it->queue.back();
-//     }
-// };
-
-// struct CSHist {
-//     std::unordered_map<ResourceIdT, SortedVector<ThreadCSHist>> _cs_hist;
-
-//     void reset() {
-//         for (auto& [res_id, th_vec] : _cs_hist) {
-//             for (auto& th_hist : th_vec._vec) {
-//                 th_hist.queue.reset();
-//             }
-//         }
-//     }
-
-//     CSInfo& add_lock_ev(ResourceIdT res_id, ThreadIdT tid, Event&& lock_ev) {
-//         auto& th_vec = _cs_hist[res_id];
-//         auto& th_hist = th_vec.unique_insert(tid);    
-//         th_hist.queue.emplace(std::move(lock_ev));
-
-//         return th_hist.queue.back();
-//     }
-
-//     std::optional<const CSInfo*> add_unlock_ev(ResourceIdT res_id, ThreadIdT tid, Event&& unlock_ev) {
-//         auto cs_opt = get_back(res_id, tid);
-//         if (!cs_opt.has_value()) return {};
-
-//         CSInfo* cs = const_cast<CSInfo*>(cs_opt.value());
-//         cs->unlock_ev = std::move(unlock_ev);
-//         return cs;
-//     }
-
-//     std::optional<const CSInfo*> get_back(ResourceIdT res_id, ThreadIdT tid) const {
-//         auto umap_it = _cs_hist.find(res_id);
-
-//         // Are you releasing without locking first?
-//         if (umap_it == _cs_hist.end()) return {};
-        
-//         auto& th_vec = umap_it->second;
-//         auto th_hist_it = th_vec.find(tid);
-
-//         // Are you releasing without locking first?
-//         if (th_hist_it == th_vec._vec.end() || th_hist_it->queue.empty()) return {};
-
-//         return &th_hist_it->queue.back();
-//     }
-// };

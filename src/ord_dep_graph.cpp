@@ -7,14 +7,14 @@ OrdDepGraph::OrdDepGraph(AbsDepContainerT&& abs_deps, const LockDepMapT& lock_de
 }
 
 void OrdDepGraph::_build_neigh_list(const LockDepMapT& lock_dep_map) {
-        for (auto node_it = nodes.begin(); node_it != nodes.end(); ++node_it){
+    for (auto node_it = nodes.begin(); node_it != nodes.end(); ++node_it){
         // Get candidate neighbours
         auto lock_dep_it = lock_dep_map.find(node_it->resource_id);
         if (lock_dep_it == lock_dep_map.end())
             continue;
         
         // Add valid candidates to the neigbour list of dep
-        for (auto cand : lock_dep_it->second._vec)
+        for (auto cand : lock_dep_it->second)
             if (node_it->is_valid_neigh_cand_soft(*cand))
                 neigh_list[node_it].push_back(cand);
     }

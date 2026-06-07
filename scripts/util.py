@@ -18,5 +18,6 @@ def run_cmd(cmd: list[str], stdout: str|None=None, timeout: int|None=None):
         stdout.close()
 
 
-def get_benchmarks():
-    return [path.stem for path in settings.trace_std_dir.iterdir()]
+def get_benchmarks() -> list[str]:
+    return [path.stem for path in settings.trace_bin_java_enc_dir.iterdir()]
+

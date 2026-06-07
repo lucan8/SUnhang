@@ -32,7 +32,8 @@ void CVInfo::wake_thread(){
 }
 
 EventHandler::EventHandler(size_t thread_count, size_t var_count, size_t lock_count) 
-    : alive_th_count(1), last_write(var_count), cs_hist(lock_count, thread_count){
+    : alive_th_count(1), last_write(var_count), cs_hist(lock_count, thread_count), 
+      lock_dep_map(lock_count) {
     // Initialize thread_map
     thread_map.reserve(thread_count);
     for (int i = 0; i < thread_count; ++i){
@@ -47,6 +48,9 @@ bool EventHandler::handle_event(const EventInfo& evt_info){
             break;
         case EventsT::WR:
             write_event(evt_info);
+            break;
+        case EventsT::REQ:
+            request_event(evt_info);
             break;
         case EventsT::LK:
             acquire_event(evt_info);
@@ -102,9 +106,7 @@ void EventHandler::wait_event(const EventInfo& evt_info) {
     th_info.is_asleep = true;
     cv_map[evt_info.target].sleep_thread();
 
-    //TODO: Unnecessary copy in handle_dep_creation
-    Event evt = Event(th_info.vec_clock, evt_info.tr_pos);
-    handle_dep_creation(th_info, evt_info, evt);
+    handle_dep_creation(th_info, evt_info, Event(th_info.vec_clock, evt_info.tr_pos));
 }
 
 void EventHandler::notify_event(const EventInfo& evt_info, bool notify_all) {
@@ -150,25 +152,23 @@ void EventHandler::notify_event(const EventInfo& evt_info, bool notify_all) {
     cv_map[evt_info.target].notify_thread(th_info.vec_clock, notify_all);
 }
 
+void EventHandler::request_event(const EventInfo& evt_info) {
+    acq_req_count++;
+    if (alive_th_count <= 1) return;
+
+    ThreadInfo& th_info = thread_map[evt_info.thread_id];
+    
+    handle_sleepness(th_info, evt_info.target);
+    handle_dep_creation(th_info, evt_info, Event(th_info.vec_clock, evt_info.tr_pos));
+}
+
 void EventHandler::acquire_event(const EventInfo& evt_info) {
-    acq_count++;
+    acq_req_count++;
     ThreadInfo& th_info = thread_map[evt_info.thread_id];
 
-    // TODO: This shouldn't really be executed if the thread is alone
-    handle_sleepness(th_info, evt_info.target);
-
-    // Order matters: First call handle_dep_creation then move the event in cs_hist
-    Event evt = Event(th_info.vec_clock, evt_info.tr_pos);
-    
-    // Only create dependency (BEFORE acquiring the lock) if thread is not alone.
-    if (alive_th_count > 1){
-        // Order matters: First call handle_dep_creation then move the event in cs_hist
-        handle_dep_creation(th_info, evt_info, evt);
-    }
-
-    // // Add lock to lockset and if it's the first time acquiring, add the event to cs_hist as well(reentrant behaviour)
+    // Add lock to lockset and if it's the first time acquiring, add the event to cs_hist as well(reentrant behaviour)
     if (th_info.u_reen_lockset.acquire(evt_info.target)){
-        cs_hist.add_lock_ev(evt_info.target, evt_info.thread_id, std::move(evt));
+        cs_hist.add_lock_ev(evt_info.target, evt_info.thread_id, std::move(Event(th_info.vec_clock, evt_info.tr_pos)));
     }
 }
 
@@ -210,8 +210,9 @@ AbsDepConstItT EventHandler::update_dep(AbsDepConstItT old_dep, ResourceIdT new_
 
     // Remove old entries
     for (auto res : old_dep->lockset._vec){
-        lock_dep_map[res].erase(old_dep);
+        swap_and_pop(lock_dep_map[res], old_dep);
     }
+
     auto dep_loc_ev_map_nh = dep_loc_ev_map.extract(old_dep);
     
     // Add the new resource to the lockset and re-insert
@@ -227,7 +228,7 @@ AbsDepConstItT EventHandler::update_dep(AbsDepConstItT old_dep, ResourceIdT new_
     }
     else{ // Update lock_dep_map with the new iterator
         for (auto res : new_dep_it->lockset._vec){
-            lock_dep_map[res].insert(new_dep_it);
+            lock_dep_map[res].push_back(new_dep_it);
         }
         dep_loc_ev_map[new_dep_it] = std::move(dep_loc_ev_map_nh.mapped());
     }
@@ -236,7 +237,7 @@ AbsDepConstItT EventHandler::update_dep(AbsDepConstItT old_dep, ResourceIdT new_
 }
 
 AbsDepConstItT EventHandler::create_dep(ThreadIdT tid, ResourceIdT desired_res, const LocksetT& lockset,
-                                        SrcLocT src_loc, const Event& evt){
+                                        SrcLocT src_loc, Event&& evt){
 
     // Search for entry using a view(less overhead)
     auto it = abs_deps.find(AbsDepView{tid, desired_res, lockset});
@@ -250,7 +251,7 @@ AbsDepConstItT EventHandler::create_dep(ThreadIdT tid, ResourceIdT desired_res, 
         // Locks from lockset should point to this dependency
         if (inserted)
             for (const auto lock : lockset._vec)
-                lock_dep_map[lock].insert(it);
+                lock_dep_map[lock].push_back(it);
     }
 
     dep_loc_ev_map[it][src_loc].push_back(evt);
@@ -279,14 +280,14 @@ void EventHandler::handle_sleepness(ThreadInfo& th_info, ResourceIdT ass_lock_id
     }
 }
 
-void EventHandler::handle_dep_creation(ThreadInfo& th_info, const EventInfo& evt_info, const Event& evt){
+void EventHandler::handle_dep_creation(ThreadInfo& th_info, const EventInfo& evt_info, Event&& evt){
     // Create dep and store in recent statuses if this is a notifying thread
     if (!meta_info.NOTIF_THREADS.empty() && meta_info.NOTIF_THREADS[evt_info.thread_id]){
-        AbsDepConstItT dep = create_dep(evt_info.thread_id, evt_info.target, th_info.u_reen_lockset.to_lockset(), evt_info.src_loc, evt);
+        AbsDepConstItT dep = create_dep(evt_info.thread_id, evt_info.target, th_info.u_reen_lockset.to_lockset(), evt_info.src_loc, std::move(evt));
         th_info.recent_sync_status_cont.push(dep);
     }
     else if(!th_info.u_reen_lockset.empty()){ // otherwise just create the dep if lockset is not empty
-        create_dep(evt_info.thread_id, evt_info.target, th_info.u_reen_lockset.to_lockset(), evt_info.src_loc, evt);
+        create_dep(evt_info.thread_id, evt_info.target, th_info.u_reen_lockset.to_lockset(), evt_info.src_loc, std::move(evt));
     }
 }
 
@@ -307,8 +308,8 @@ void EventHandler::print_lock_deps_map() const{
     Logger::print(LogType::INFO, "------------------------------------");
 
     for (const auto& [lock, dep_vec] : lock_dep_map){
-        Logger::print(LogType::DBG, "(Lock){}: {}(Dep count)", lock, dep_vec._vec.size());
-        for (const auto dep : dep_vec._vec)
+        Logger::print(LogType::DBG, "(Lock){}: {}(Dep count)", lock, dep_vec.size());
+        for (const auto dep : dep_vec)
             Logger::print(LogType::DBG, "{}", *dep);
     }
 
@@ -334,12 +335,12 @@ void EventHandler::print_comm_abs_deps() const{
 
 
 void EventHandler::print_summary(std::FILE* log_file) const{
-    Logger::print(log_file, "num acq/req: {}", acq_count);
+    Logger::print(log_file, "num acq/req: {}", acq_req_count);
     Logger::print(log_file, "num deps: {}", abs_deps.size());
 }
 
 void EventHandler::print_summary() const{
-    Logger::print(LogType::DBG, "num acq/req: {}", acq_count);
+    Logger::print(LogType::DBG, "num acq/req: {}", acq_req_count);
 }
 
 void EventHandler::print_th_exit_with_locks() const{

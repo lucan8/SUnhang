@@ -84,7 +84,7 @@ void DeadlockChecker::_get_sync_pres_closure(VectorClock& vc){
             int max_cs_ind = -1; // Using index instead of iterator as it is more stable
 
             for (auto& cs_queue : th_cs_umap){
-                auto cs_opt = cs_queue.pop_until(vc, CSInfoComp(), false).first;
+                auto cs_opt = cs_queue.pop_until(vc, CSInfoLess(), false).first;
                 if (cs_opt.has_value()){
                     // Add critical section to vector
                     const CSInfo* cs = cs_opt.value();
@@ -132,7 +132,7 @@ void DeadlockChecker::_update_vc_with_curr_cycle(const std::vector<EventLazyQueu
 // False is early returned, meaning not all nodes were updated!
 bool DeadlockChecker::_update_abs_dep_start_ev(std::vector<EventLazyQueue>& cycle_evt, const VectorClock& vc) const{
     for (auto& ev_lazy_q : cycle_evt){
-        ev_lazy_q.pop_until(vc, EventComp(), true);
+        ev_lazy_q.pop_until(vc, EventLess(), true);
 
         if (ev_lazy_q.empty())
             return false;

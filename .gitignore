@@ -14,4 +14,7 @@ bin/
 *.data
 benchmarks/vendor
 __pycache__/
+old_implementations/
+original_zenodo/
+benchmarks.zip
 !CMakeLists.txt
