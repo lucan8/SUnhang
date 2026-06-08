@@ -9,7 +9,8 @@ from enum import Enum
 import settings
 from conv_trace import conv_trace
 from util import get_benchmarks, run_cmd
-from compile_benchmarks import from_log_file, compile_rows
+from compile_benchmarks import from_log_file, create_table_from_rows
+import compile_benchmarks
 
 class PLang(Enum):
     CPP = 1
@@ -115,7 +116,7 @@ def run_predictor(bench_name: str, predictor: str, should_profile: bool):
         lang = PLang.JAVA
         jvm_max_mem_flag = "-Xmx8g"
 
-        # This needs more memory. I would make -Xmx10g the default
+        # These need more memory. I would make -Xmx10g the default
         # But it prints 0 mem usage for the small benchmarks(WHY???)
         if bench_name in ["graphchi", "biojava"]:
             jvm_max_mem_flag = "-Xmx10g"
@@ -129,9 +130,8 @@ def run_predictor(bench_name: str, predictor: str, should_profile: bool):
     else:
         run_cmd(cmd, stdout)
 
-def benchmark(all_benchmarks: set[str], user_benchmarks: list[str], predictor: str):
-    WARMUP_IT_COUNT = 0
-    RUN_IT_COUNT = 1
+def benchmark(all_benchmarks: set[str], user_benchmarks: list[str], predictor: str, first:bool):
+    RUN_IT_COUNT = 10
     rows = {}
 
     print(f"Predictor: {predictor}")
@@ -139,29 +139,42 @@ def benchmark(all_benchmarks: set[str], user_benchmarks: list[str], predictor: s
         if bench not in all_benchmarks:
             print(f"    Skipping invalid benchmark: {bench}")
             continue
+
         print(f"    Benchmark: {bench}")
         avg_mem = 0
         avg_time = 0
-        for i in range(WARMUP_IT_COUNT):
-            print(f"        Warm-up: {i + 1} / {WARMUP_IT_COUNT}")
-            run_predictor(bench, predictor, False)
 
+        # Used to hold the row representing the current benchmark
+        comm_col_res, pred_col_res = [], []
+
+        # Run for RUN_IT_COUNT and compute average time and memory
         for i in range(RUN_IT_COUNT):
-            print(f"        Run: {i + 1} / {RUN_IT_COUNT}", end=": ")
+            # Run predictor
+            print(f"        Run: {i} / {RUN_IT_COUNT}", end=": ")
             run_predictor(bench, predictor, True)
-            data = from_log_file(settings.out_files_base / bench / predictor / "log.txt", predictor)
-            avg_mem += data[-1]
-            avg_time += data[-2]
+            
+            # Load log file
+            comm_col, pred_col = from_log_file(settings.out_files_base / bench / predictor / "log.txt")
+            comm_col_res, pred_col_res = comm_col, pred_col
 
-            print(f"            {data[-2]:.2f} sec, {data[-1]:.2f} MB")
+            # Update sum
+            avg_mem += pred_col[-1]
+            avg_time += pred_col[-2]
+
+            print(f"            {pred_col[-2]:.2f} sec, {pred_col[-1]:.2f} MB")
         
-        data[-1] = avg_mem / RUN_IT_COUNT
-        data[-2] = avg_time / RUN_IT_COUNT
+        pred_col_res[-1] = avg_mem / RUN_IT_COUNT
+        pred_col_res[-2] = avg_time / RUN_IT_COUNT
 
-        print(f"Avg: {data[-2]:.2f} sec, {data[-1]:.2f} MB")
-        rows[bench] = data
+        print(f"        Avg: {pred_col_res[-2]:.2f} sec, {pred_col_res[-1]:.2f} MB")
+       
+        # If this is the first predictor, also use it's common columns, otherwise just it's specific ones
+        if first:
+            rows[bench] = comm_col_res + pred_col_res
+        else:
+            rows[bench] = pred_col_res
     
-    print(f"[INFO]: Compiled {len(rows)} rows for {predictor}")
+    print(f"[TABLE INFO]: Compiled {len(rows)} rows for {predictor}")
 
     return rows
 
@@ -180,6 +193,9 @@ def main():
                            "Specify the names of the predictors and seperate them with a comma " \
                            "For correct table construction, always specify SUnhang, and put it first" \
                            "(e.g SUnhang,SPDOffline) (Default: all)")
+
+    parser.add_option("--vt", "--verbose_table", dest="verbose_table", default="N",
+                      help="Specifies whether the table should be verbose(Y) or not(N). Default is N")
     
     (options, args) = parser.parse_args()
     
@@ -205,16 +221,31 @@ def main():
     ignored_bench = options.ignored_bench.split(",")
     print(f"Benchmarks to ignore: {ignored_bench}")
 
+    # Set the verbosity level for table construction
+    verbose_table = False
+    if options.verbose_table == "Y":
+        verbose_table = True
+    elif options.verbose_table != "N":
+        print("[ERROR]: Invalid option for verbose_table. Should be Y or N")
+        return
+    
+    print(F"Table Verbosity: {verbose_table}")
+    compile_benchmarks.set_verbosity(verbose_table)
+
+    # Benchmarks predictors
     rows = []
+    valid_pred = []
     for pred in user_predictors:
         if pred not in all_predictors:
             print(f"Skipping invalid predictor: {pred}")
             continue
-
-        rows.append(benchmark(all_benchmarks, user_benchmarks, pred))
+        
+        valid_pred.append(pred)
+        first = len(valid_pred) == 1
+        rows.append(benchmark(all_benchmarks, user_benchmarks, pred, first))
     
-    
-    compile_rows(rows, user_predictors)
+    # Build table
+    create_table_from_rows(rows, valid_pred)
 
 if __name__ == "__main__":
     main()

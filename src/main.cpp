@@ -1,7 +1,7 @@
 // IMPORTANT: USING ACTUAL ORIGINAL TRACES
 // Transfer, Deadlock and HashMap have deadlocks that the authors could not find
-// TODO: Why did biojava initially give peak memory usage 6GB and now is 4GB???
-
+// TODO: Check why lusearch and TSP are so small in comparison to the initial paper's results
+// TODO: REDO THE TRACES FOR COND_VAR TO ACTUALLY GIVE THE CORRECT NUMBER OF THREADS
 // TODO: Let sorted vector unsafely return a non-const reference to the internal objects
 // TODO: Micro Optimization: Allocate recent statuses only to notifying threads
 // TODO: AFTER YOU SPLIT COND_VARS AND LOCKS, Use std::vector instead of std::unordered_map for lock_dep_map

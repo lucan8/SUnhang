@@ -18,3 +18,4 @@ old_implementations/
 original_zenodo/
 benchmarks.zip
 !CMakeLists.txt
+*.df

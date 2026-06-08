@@ -2,14 +2,16 @@ from pathlib import Path
 import os
 
 root_dir = Path(os.path.dirname(os.path.dirname(__file__)))
-bench_suite = "generated"
+bench_suite = "cond_var"
 bench_dir = root_dir / "benchmarks" / bench_suite
 
 out_files_base = bench_dir / "output"
+table_out_dir = bench_dir / "tables"
+table_out_path = table_out_dir / "main.tex"
+table_df_out_path = table_out_dir / "table.df"
 
 # Trace stuff
 trace_dir = bench_dir / "traces"
-# trace_meta_dir = trace_dir / "meta"
 trace_std_dir = trace_dir / "std"
 trace_bin_dir = trace_dir / "bin"
 trace_bin_loc_enc_dir = trace_bin_dir / "local_enc"
