@@ -3,7 +3,7 @@ import pandas as pd
 import itertools
 import os
 from copy import deepcopy
-import settings
+from settings import settings
 import optparse
 
 #TODO: Somehow save the verbosity when saving the dataframe 

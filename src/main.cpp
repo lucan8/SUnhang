@@ -1,5 +1,6 @@
 // IMPORTANT: USING ACTUAL ORIGINAL TRACES
 // Transfer, Deadlock and HashMap have deadlocks that the authors could not find
+// TODO: Clean-up help
 // TODO: Check why lusearch and TSP are so small in comparison to the initial paper's results
 // TODO: REDO THE TRACES FOR COND_VAR TO ACTUALLY GIVE THE CORRECT NUMBER OF THREADS
 // TODO: Let sorted vector unsafely return a non-const reference to the internal objects
@@ -109,6 +110,18 @@
 #include <cassert>
 #include <filesystem>
 
+
+#include <cstring>
+#include <cerrno>
+
+// For memory usage query
+#if defined(_WIN32)
+    #include <windows.h>
+    #include <psapi.h>
+    #elif defined(__linux__) || defined(__APPLE__)
+    #include <sys/resource.h>
+#endif
+
 using namespace std::chrono_literals;
 namespace fs = std::filesystem;
 
@@ -122,6 +135,29 @@ namespace fs = std::filesystem;
 #include "../include/scc_enumerator.hpp"
 #include "../include/cycle_enumerator.hpp"
 #include "../include/deadlock_checker.hpp"
+
+// Prints peak memory usage to log_file in a cross-platform way
+void print_peak_memory(std::FILE* log_file) {
+    #if defined(_WIN32)
+        PROCESS_MEMORY_COUNTERS pmc;
+        if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc))) {
+            Logger::print(log_file, "Peak memory usage = {} MB", pmc.PeakWorkingSetSize / (1024.0 * 1024.0));
+        } else {
+            DWORD err = GetLastError();
+            Logger::print(log_file, LogType::ERR, "GetProcessMemoryInfo failed. Windows Error Code: {}", err);
+        }
+    #elif defined(__linux__) || defined(__APPLE__)
+        struct rusage usage;
+        if (getrusage(RUSAGE_SELF, &usage) == 0) {
+            Logger::print(log_file, "Peak memory usage = {} MB", usage.ru_maxrss / 1024.0);
+        } else {
+            // getrusage sets the global errno variable on failure
+            Logger::print(log_file, LogType::ERR, "getrusage failed. System Error: {}", std::strerror(errno));
+        }
+    #else
+        Logger::print(log_file, LogType::WARN, "Memory profiling not supported on this platform.");
+    #endif
+}
 
 int main(int argc, char *argv[]) {
     const uint8_t exp_args = 3;
@@ -149,6 +185,7 @@ int main(int argc, char *argv[]) {
     // TestVectorClock::test();
     // TestPredictor::test();
     
+    // Start timer
     auto start = std::chrono::steady_clock::now();
     
     // Preprocess trace file(fill metadata, determine events to be ignored etc...)
@@ -208,7 +245,8 @@ int main(int argc, char *argv[]) {
     
     Logger::print(log_file, "\nnum deadlocks: {}", real_dlk_count);
     Logger::print(log_file, "Time for analysis = {} milliseconds", millis_passed);
-    
+    print_peak_memory(log_file);
+
     // Cleanup
     std::fclose(log_file);
     std::fclose(trace_file);

@@ -1,5 +1,5 @@
 import subprocess
-import settings
+from settings import settings
 
 # Just runs the command and waits
 def run_cmd(cmd: list[str], stdout: str|None=None, timeout: int|None=None):

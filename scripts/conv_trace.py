@@ -1,6 +1,6 @@
 import optparse
 from pathlib import Path
-import settings
+from settings import settings
 import numpy as np
 from util import run_cmd, get_benchmarks
 
