@@ -3,7 +3,10 @@ import os
 
 class Settings:
     root_dir = Path(os.path.dirname(os.path.dirname(__file__)))
-    available_bench_suites = ["cond_var", "original", "generated"]
+    available_bench_suites = ["cond_var", "generated", "hand_made", "original"]
+    # Predictor names
+    spdoffline_name, sunhang_name = "SPDOffline","SUnhang"
+    available_predictors = [sunhang_name, spdoffline_name]
 
     # Creates the settings object based on the chosen benchmarks suite
     # If an invalid benchmark is passed, self.bench_name is "" and the assoicated structures are badly defined
@@ -24,21 +27,20 @@ class Settings:
         self._set_output_paths()
         self._set_trace_paths()
 
+    def get_cond_var_suites(self) -> list[str]:
+        return self.available_bench_suites[:3]
+    
+    def has_cond_var_suite(self) -> bool:
+        return self.bench_suite in self.get_cond_var_suites()
+     
     # Just sets to default values for now
     # It also sets the paths to their executables
     def _set_predictors(self):
-        # Predictor names
-        self.sunhang_pred_extra_title = ""
-        self.sunhang_base_name = "SUnhang"
-
-        self.spdoffline_name, self.sunhang_name = "SPDOffline", self.sunhang_base_name + self.sunhang_pred_extra_title
-        self.predictors = [self.sunhang_name, self.spdoffline_name]
-
         # Executables
-        self.spdoffline_dir = Settings.root_dir / "vendor" / self.spdoffline_name
+        self.spdoffline_dir = Settings.root_dir / "vendor" / Settings.spdoffline_name
         self.bin_dir = Settings.root_dir / "bin"
 
-        self.sunhang_exe_path = self.bin_dir / self.sunhang_base_name
+        self.sunhang_exe_path = self.bin_dir / Settings.sunhang_name
         self.sunhang_conv_exe_path = self.bin_dir / "conv_trace"
 
         self.spdoffline_jar_path = self.spdoffline_dir / "fat_spdoffline1.jar"
@@ -59,4 +61,4 @@ class Settings:
         os.makedirs(self.trace_bin_loc_enc_dir, exist_ok=True)
         os.makedirs(self.trace_bin_java_enc_dir, exist_ok=True)
 
-settings = Settings("conv_var")
+settings = Settings("cond_var")

@@ -1,12 +1,15 @@
+// TODO: CHANGE THE NAME OF THE REPO
 // IMPORTANT: USING ACTUAL ORIGINAL TRACES
 // Transfer, Deadlock and HashMap have deadlocks that the authors could not find
 // TODO: Clean-up help
-// TODO: Check why lusearch and TSP are so small in comparison to the initial paper's results
 // TODO: REDO THE TRACES FOR COND_VAR TO ACTUALLY GIVE THE CORRECT NUMBER OF THREADS
 // TODO: Let sorted vector unsafely return a non-const reference to the internal objects
 // TODO: Micro Optimization: Allocate recent statuses only to notifying threads
 // TODO: AFTER YOU SPLIT COND_VARS AND LOCKS, Use std::vector instead of std::unordered_map for lock_dep_map
 // TODO: CANT WE ALSO IGNORE THREADS? Unshared locks vars should take into consideration thread lifetimes
+// TODO: There is one more cond var bug you could add: https://bugs.mysql.com/bug.php?id=60682
+// TODO: Could also add https://bugs.mysql.com/bug.php?id=73531 (not communication though)
+// TODO: Number of thereads 2000 > 1024 max for TSP
 // ONE IMPORTANT ASSUMPTION: SIZEOF(THREAD_ID) < SIZEOF(RESOURCE_ID)
 // GRAPH OBSERVATIONS:
 
@@ -18,9 +21,6 @@
 // THE COMPARISON IS NEEDED BECAUSE WE NEED TO KNOW WHAT NODES NOT TO CHECK AGAIN WHEN DOING CYCLE ENUMERATION
 // JOHNSON'S ALGORITHM EFFECTIVELY "KILLS" NODES AT EACH ITERATION, DECIDING THAT THEY CAN NEVER
 // CREATE A SCC IN THE FUTURE. THIS KILLING NEEDS THE CONCEPT OF ORDERING BETWEEN NODES
-
-// TODO: WHY DO WE NEED SORTED STUFF FOR GRAPH BASED COMPUTATIONS?
-// TODO: WHY DOES DERBY2 FAIL WHEN MOVING THE GRAPH VIEW IN THE CYCLE ENUMERATOR?
 
 // LOGICAL BUG FOUND BY RUNNING src_code_loc_test1/src_code_loc_bug1_dlf
 

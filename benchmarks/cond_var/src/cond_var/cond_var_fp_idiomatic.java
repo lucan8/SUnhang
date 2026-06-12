@@ -5,11 +5,9 @@ public class cond_var_fp_idiomatic {
     static final Object l1 = new Object();
     static final Object l2 = new Object();
     static final Object cond_var = new Object();
-    static volatile int var;
     static volatile int cond;
 
     public static void main(String[] args){
-        var = 0;
         cond = 0;
 
         Thread t1 = new T1();
@@ -25,7 +23,6 @@ public class cond_var_fp_idiomatic {
             }
         }
 
-        var = 1;
         Thread t2 = new T2();
         t2.start();
 
@@ -41,14 +38,13 @@ public class cond_var_fp_idiomatic {
     static class T1 extends Thread{
         public void run(){
             synchronized (l1) {
-                if (var == 0){
-                    synchronized (l2) {
-                        synchronized (cond_var) {
-                            cond = 1;
-                            cond_var.notify();
-                        }
+                synchronized (l2) {
+                    synchronized (cond_var) {
+                        cond = 1;
+                        cond_var.notify();
                     }
                 }
+            
             }
             // Do other time consuming tasks...
         }
@@ -58,9 +54,7 @@ public class cond_var_fp_idiomatic {
     static class T2 extends Thread{
         public void run() {
              synchronized (l2) {
-                if (var != 0){
-                    synchronized (l1) {
-                    }
+                synchronized (l1) {
                 }
             }
         }

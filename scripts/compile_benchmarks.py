@@ -68,7 +68,7 @@ def from_log_file(file_path: Path) -> tuple[list, list]:
     comm_l[0], comm_l[1] = comm_l[1], comm_l[0]
     return comm_l, pred_l
 
-def get_df_col(predictors:list[str]=settings.predictors):
+def get_df_col(predictors:list[str]=settings.available_predictors):
     global mini_columns
 
     tuples = common_columns + list(itertools.product(predictors, mini_columns))
@@ -97,7 +97,7 @@ def get_df_rows(pred: str, first:bool) -> dict[str, list[int]]:
     
     return rows
 
-def format_df(df: pd.DataFrame, predictors: list[str]=settings.predictors):
+def format_df(df: pd.DataFrame, predictors: list[str]=settings.available_predictors):
     global verbose
 
     if verbose:
@@ -106,7 +106,7 @@ def format_df(df: pd.DataFrame, predictors: list[str]=settings.predictors):
 
 # This was used to format the tables in the paper.
 # Each predictor only gives the dlk, time and memory
-def format_df_clean(df: pd.DataFrame, predictors: list[str]=settings.predictors):
+def format_df_clean(df: pd.DataFrame, predictors: list[str]=settings.available_predictors):
     global mini_columns, common_columns
 
     # Work on a copy to preserve the original structural layout
@@ -128,7 +128,7 @@ def format_df_clean(df: pd.DataFrame, predictors: list[str]=settings.predictors)
 
 
 # This was used during development
-def format_df_verbose(df: pd.DataFrame, predictors: list[str]=settings.predictors):
+def format_df_verbose(df: pd.DataFrame, predictors: list[str]=settings.available_predictors):
     global mini_columns, common_columns
 
     sep = r"\textbackslash{}" 
@@ -160,7 +160,31 @@ def format_df_verbose(df: pd.DataFrame, predictors: list[str]=settings.predictor
 
     return res_df
 
-def save_latex(df: pd.DataFrame, predictors: list[str] = settings.predictors):
+# Add \midrule and makes each component of the row bolt
+def _format_total_row(latex_table: str):
+    # Find total
+    total_start = latex_table.find("Total")
+    after_total = latex_table[total_start:]
+    before_total = latex_table[:total_start]
+
+    # Add midrule before it
+    before_total += "\\midrule\n"
+
+    # Separate the total row from what comes after
+    total_end = after_total.find("\\\\")
+    total_row = after_total[:total_end]
+    after_total_row = after_total[total_end:]
+
+    # Add bolt to each row element
+    total_row = " & ".join(map(lambda s: f"\\textbf{{{s}}}", total_row.split(" & ")))
+
+    # Stich everything together
+    after_total = total_row + after_total_row
+    latex_table = before_total + after_total
+
+    return latex_table
+
+def save_latex(df: pd.DataFrame, predictors: list[str] = settings.available_predictors):
     num_common = len(common_columns)
     num_sub_cols = len(mini_columns)
 
@@ -185,6 +209,8 @@ def save_latex(df: pd.DataFrame, predictors: list[str] = settings.predictors):
         column_format=column_format,
         multicolumn_format="c|"
     )
+
+    latex_table = _format_total_row(latex_table)
 
     # Replaces the single vertical pipe with a double vertical pipe for intermediate spanning blocks
     for p in predictors[:-1]:
@@ -253,26 +279,28 @@ def format_suffix(num):
     return f"{num_new:.2f}{prefix}"
     
 # Constructs a latex table using rows, formats and saves it
-def create_table_from_rows(rows, predictors:list[str]=settings.predictors):
-    if not rows:
+def create_table_from_rows(rows, predictors:list[str]=settings.available_predictors):
+    if not rows or not rows[0]:
         print("[TABLE INFO] Empty rows, nothing to compile!")
         return
 
     # Construct dataframe
     cols = get_df_col(predictors)
     rows = from_row_dict_to_row_list(merge_rows_list(rows))
+    
     df = pd.DataFrame(rows, columns=cols).sort_values('N')
 
     # Aggregate results into a "Total" column
     total_row = ["Total"] + df.select_dtypes(include='number').sum().to_list()
     df.loc[len(df)] = total_row
 
+    # Save the dataframe object for later
+    df.to_pickle(settings.table_df_out_path)
+
     # Format and save
     df = format_df(df, predictors)
     save_latex(df, predictors)
 
-    # Save the dataframe object for later
-    df.to_pickle(settings.table_df_out_path)
 
 # Using all valid user predictors, builds the latex table from the log files
 def run(user_predictors:list[str], all_predictors:set[str]):
@@ -298,6 +326,7 @@ def run_lazy():
         return
     
     df = pd.read_pickle(settings.table_df_out_path)
+    
     format_df(df)
     save_latex(df)
 
@@ -319,9 +348,9 @@ def main():
     (options, args) = parser.parse_args()
 
     # Get predictors
-    all_predictors = set(settings.predictors)
+    all_predictors = set(settings.available_predictors)
     if options.predictors == "all":
-        user_predictors = settings.predictors
+        user_predictors = settings.available_predictors
     else:
         user_predictors = options.predictors.split(",")
 

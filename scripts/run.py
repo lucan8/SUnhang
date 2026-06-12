@@ -7,7 +7,7 @@ import time
 import psutil
 from enum import Enum
 from settings import settings
-from conv_trace import conv_trace
+from conv_trace import get_fmt_pair_for_pred, conv_trace
 from util import get_benchmarks, run_cmd
 from compile_benchmarks import from_log_file, create_table_from_rows
 import compile_benchmarks
@@ -70,8 +70,9 @@ extract_peak_java_memory.exit_pattern = re.compile(r"used\s(\d+)([KMG])")
 def get_paths(bench_name: str, predictor: str):
     out_path = (settings.out_files_base / bench_name / predictor / "log.txt")
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
-    
-    input_path = conv_trace(bench_name, predictor)
+
+    from_fmt, to_fmt = get_fmt_pair_for_pred(predictor)
+    input_path = conv_trace(bench_name, from_fmt, to_fmt)
 
     return input_path, out_path
 
@@ -105,13 +106,17 @@ def run_predictor(bench_name: str, predictor: str):
         peak_mem_usage = extract_peak_java_memory()
         open(out_path, 'a').write(f"Peak memory usage = {peak_mem_usage} MB")
 
-def benchmark(all_benchmarks: set[str], user_benchmarks: list[str], predictor: str, run_it_count:int, first:bool):
+def benchmark(all_benchmarks: set[str], user_benchmarks: list[str], ignored_bench: set[str], predictor: str, run_it_count:int, first:bool):
     rows = {}
 
     print(f"Predictor: {predictor}")
     for bench in user_benchmarks:
         if bench not in all_benchmarks:
             print(f"    Skipping invalid benchmark: {bench}")
+            continue
+        
+        if bench in ignored_bench:
+            print(f"    Skipping ignored benchmark: {bench}")
             continue
 
         print(f"    Benchmark: {bench}")
@@ -166,8 +171,8 @@ def main():
                             f"Should be one of {settings.available_bench_suites}" \
                             "(Default: cond_var).")
     
-    parser.add_option("-i", "--ignore", dest="ignored_bench", default="",
-                      help="ignores the specified benchmarks. Default None")
+    parser.add_option("-i", "--ignore", dest="ignored_bench", default="Tsp",
+                      help="ignores the specified benchmarks. Default Tsp")
     
     parser.add_option("-p", "--predictor", dest="predictors", default="all",
                       help="runs only the desired predictors." \
@@ -205,9 +210,9 @@ def main():
     print(f"Benchmarks to ignore: {ignored_bench}")
 
     # Set predictors
-    all_predictors = set(settings.predictors)
+    all_predictors = set(settings.available_predictors)
     if options.predictors == "all":
-        user_predictors = settings.predictors
+        user_predictors = settings.available_predictors
     else:
         user_predictors = options.predictors.split(",")
     
@@ -236,7 +241,7 @@ def main():
         
         valid_pred.append(pred)
         first = len(valid_pred) == 1
-        rows.append(benchmark(all_benchmarks, user_benchmarks, pred, run_it_count, first))
+        rows.append(benchmark(all_benchmarks, user_benchmarks, ignored_bench, pred, run_it_count, first))
     
     # Build table
     create_table_from_rows(rows, valid_pred)

@@ -19,5 +19,8 @@ def run_cmd(cmd: list[str], stdout: str|None=None, timeout: int|None=None):
 
 
 def get_benchmarks() -> list[str]:
-    return [path.stem for path in settings.trace_bin_java_enc_dir.iterdir()]
+    bench_java_enc = [path.stem for path in settings.trace_bin_java_enc_dir.iterdir()]
+    bench_std = [path.stem for path in settings.trace_std_dir.iterdir()]
+
+    return list(set(bench_java_enc + bench_std))
 
