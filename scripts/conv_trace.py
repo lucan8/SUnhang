@@ -1,16 +1,20 @@
 import optparse
 from pathlib import Path
 from settings import settings
-import numpy as np
-from util import run_cmd, get_benchmarks
+from util import run_cmd, get_benchmarks, unzip_file, zip_file
+import os
 
-# Converts trace from "from_fmt" to "to_fmt". Returns the path to the binary trace
+# TODO: Use lazy
+# TODO: Make fallback logic for SPDOffline
+
+# Converts trace from "from_fmt" to "to_fmt". Returns the path to trace
+# Additionally zips traces if needed
 def conv_trace(bench_name: str, from_fmt="java_enc", to_fmt="local_enc", lazy:bool=True) -> Path|None:
     trace_path_map = {"std" :  settings.trace_std_dir / (f"{bench_name}.std"),
                      "java_enc" : settings.trace_bin_java_enc_dir / (bench_name + f".data"),
                      "local_enc" : settings.trace_bin_loc_enc_dir / (bench_name + f".data")}
     
-    invalid_comb = {"java_enc":{"std"}, "local_enc":{"java_enc"}}
+    invalid_comb = {"java_enc":{"std"}}
 
     # Input validation
     if from_fmt not in trace_path_map:
@@ -37,33 +41,75 @@ def conv_trace(bench_name: str, from_fmt="java_enc", to_fmt="local_enc", lazy:bo
         return None
     
     # Determine the command to run
-    if to_fmt == "java_enc":
+    if from_fmt == "std" and to_fmt == "java_enc":
         cmd = ['java', '-jar', settings.spd_trace_conv_jar_path, f"-p={from_path}", "-f=std", f"-q={to_path}"]
     else:
         # lazy = False
-        cmd = [settings.sunhang_conv_exe_path, from_path, to_path]
+        cmd = [settings.sunhang_conv_exe_path, from_path, to_path, from_fmt, to_fmt]
 
-    if not lazy or not to_path.exists():
-        # print(f"    Converting trace from {from_fmt} to {to_fmt} for {bench_name}")
+    return _conv_trace(from_path, to_path, cmd)
+
+def conv_trace_pred(bench_name: str, predictor: str) -> Path:
+    from_fmt, to_fmt = get_fmt_pair(bench_name, predictor)
+
+    return conv_trace(bench_name, from_fmt, to_fmt)
+
+def _conv_trace(from_path: Path, to_path: Path, cmd: list[str]) -> Path:
+    to_path_zip = to_path.with_suffix(".zip")
+    from_path_zip = from_path.with_suffix(".zip")
+
+    print(from_path)
+    print(to_path)
+
+    if to_path_zip.exists(): # Unzip already existing zipped trace
+        unzip_file(to_path_zip)
+    elif to_path.exists(): # Zip already existing unzipped trace
+        zip_file(to_path, to_path_zip)
+    else: # Create the trace file, zip, remove trace file
+        # First extract if from_path doesn't exist
+        if not from_path.exists():
+            unzip_file(from_path_zip)
+        elif not from_path_zip.exists():  # Zip if no zip
+            zip_file(from_path, from_path_zip)
+
+        # Run the conversion command and zip
         run_cmd(cmd)
-    else:
-        # print(f"    Skipping trace conversion {from_fmt} to {to_fmt} for {bench_name}")
-        ...
+        zip_file(to_path, to_path_zip)
 
+        # Keep only the zip file
+        os.remove(from_path)
+    
     return to_path
 
-# Converts the trace based on predictor. Returns the path to the binary trace
-def get_fmt_pair_for_pred(predictor: str) -> tuple[str, str]:
-    if predictor == settings.sunhang_name:
-        if settings.has_cond_var_suite():
-            return "std", "local_enc"
-        else:
-            return "java_enc", "local_enc"
-    elif predictor == settings.spdoffline_name:
-        return "std", "java_enc"
+def get_cmd(from_path, to_path, from_fmt, to_fmt):
+    if from_fmt == "std" and to_fmt == "java_enc":
+        return ['java', '-jar', settings.spd_trace_conv_jar_path, f"-p={from_path}", f"-f={from_fmt}", f"-q={to_path}"]
+    return[settings.sunhang_conv_exe_path, from_path, to_path, from_fmt, to_fmt]
+
+def get_fmt_pair(bench_name: str, predictor: str) -> tuple[str, str]:
+    from_fmt, to_fmt = get_bin_fmt_pair(predictor)
+    if from_fmt:
+        from_path = settings.trace_bin_dir / from_fmt / f"{bench_name}.data"
+        from_path_zipped = settings.trace_bin_dir / from_fmt / f"{bench_name}.zip"
+        
+        # Fallback on std for from_fmt
+        if predictor == settings.sunhang_name and \
+           ((not from_path.exists() and not from_path_zipped.exists()) or \
+           settings.has_cond_var_suite()):
+            return "std", to_fmt
     
-    print(f"    [ERROR]: Invalid predictor ({predictor}) should be one of {settings.available_predictors}")
-    return "", ""
+    return from_fmt, to_fmt
+
+# Return the "from" and "to" fmts that should be used for the given predictor
+# Only binary fmts
+def get_bin_fmt_pair(predictor: str) -> tuple[str, str]:
+    if predictor == settings.sunhang_name:
+        return "java_enc", "local_enc"
+    elif predictor == settings.spdoffline_name:
+        return "local_enc", "java_enc"
+    else:
+        print(f"    [ERROR]: Invalid predictor ({predictor}) should be one of {settings.available_predictors}")
+        return "", ""
 
 def main():
     parser = optparse.OptionParser()
@@ -95,12 +141,6 @@ def main():
     # Set the formats and predictor
     from_fmt, to_fmt = options.from_fmt, options.to_fmt
     predictor = options.predictor
-
-    # Calculate the formats based on the predictor
-    if predictor:
-        from_fmt, to_fmt = get_fmt_pair_for_pred(predictor)
-        if not from_fmt:
-            return
     
     # Convert for each benchmark
     for bench in benchmarks:
@@ -108,7 +148,14 @@ def main():
             print(f"Ignoring bench {bench}")
             continue
         print(f"Benchmark: {bench}")
-        conv_trace(bench, from_fmt, to_fmt)
+
+        if predictor:
+            trace_path = conv_trace_pred(bench, predictor)
+        else:
+            trace_path = conv_trace(bench, from_fmt, to_fmt)
+
+        if trace_path is not None:
+            os.remove(trace_path)
     
 if __name__ == "__main__":
     main()

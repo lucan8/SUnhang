@@ -37,11 +37,12 @@ class Settings:
     # It also sets the paths to their executables
     def _set_predictors(self):
         # Executables
-        self.spdoffline_dir = Settings.root_dir / "vendor" / Settings.spdoffline_name
         self.bin_dir = Settings.root_dir / "bin"
+        self.sunhang_dir = self.bin_dir / "SUnhang"
+        self.spdoffline_dir = self.bin_dir / "vendor" / Settings.spdoffline_name
 
-        self.sunhang_exe_path = self.bin_dir / Settings.sunhang_name
-        self.sunhang_conv_exe_path = self.bin_dir / "conv_trace"
+        self.sunhang_exe_path = self.sunhang_dir / Settings.sunhang_name
+        self.sunhang_conv_exe_path = self.sunhang_dir / "conv_trace"
 
         self.spdoffline_jar_path = self.spdoffline_dir / "fat_spdoffline1.jar"
         self.spd_trace_conv_jar_path = self.spdoffline_dir / "fat_convert.jar"
@@ -61,4 +62,4 @@ class Settings:
         os.makedirs(self.trace_bin_loc_enc_dir, exist_ok=True)
         os.makedirs(self.trace_bin_java_enc_dir, exist_ok=True)
 
-settings = Settings("cond_var")
+settings = Settings("hand_made")

@@ -1,4 +1,6 @@
 // TODO: CHANGE THE NAME OF THE REPO
+// TODO: Add the valid combinations to the help of conv_trace.py
+// TODO: Convert from local to java encoding as well
 // IMPORTANT: USING ACTUAL ORIGINAL TRACES
 // Transfer, Deadlock and HashMap have deadlocks that the authors could not find
 // TODO: Clean-up help

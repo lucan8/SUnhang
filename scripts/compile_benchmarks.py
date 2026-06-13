@@ -2,7 +2,6 @@ from pathlib import Path
 import pandas as pd
 import itertools
 import os
-from copy import deepcopy
 from settings import settings
 import optparse
 
@@ -343,7 +342,7 @@ def main():
     
     parser.add_option("--lt", "--lazy_table", dest="lazy_table", default="Y",
                       help="Specifies whether the table should be loaded using the tmp dataframe or built from log files." \
-                           "Options: Y/N. Default Y")
+                           "Options: Y/N. Default N")
     
     (options, args) = parser.parse_args()
 

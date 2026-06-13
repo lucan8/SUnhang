@@ -1,7 +1,6 @@
 *.txt
 *.std
 *.exe
-*.meta
 build/
 resources/
 test.cpp
@@ -10,12 +9,14 @@ test.py
 ideeas/
 *.tex
 *classes/
-bin/
-*.data
-benchmarks/vendor
+bin/SUnhang/
+benchmarks/vendor/
 __pycache__/
 old_implementations/
-original_zenodo/
 benchmarks.zip
 !CMakeLists.txt
 *.df
+.venv/
+trace_generator/
+benchmarks/hand_made
+*.zip

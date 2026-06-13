@@ -54,6 +54,10 @@ inline bool is_unused_type(EventsT ev_type) {
   return ev_type == EventsT::BEGIN || ev_type == EventsT::END || ev_type == EventsT::BRANCH;
 }
 
+inline bool is_spd_type(EventsT ev_type) {
+  return ev_type <= EventsT::BRANCH;
+}
+
 inline std::optional<EventsT> from_int16(int16_t val){
   if (val >= static_cast<int>(EventsT::LK) && val <= static_cast<int>(EventsT::NOTIFYALL)) {
     return static_cast<EventsT>(val);

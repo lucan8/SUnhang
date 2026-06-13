@@ -1,13 +1,8 @@
 import os
-import zipfile
 import optparse
-import subprocess
-from pathlib import Path
-import time
-import psutil
 from enum import Enum
 from settings import settings
-from conv_trace import get_fmt_pair_for_pred, conv_trace
+from conv_trace import conv_trace_pred
 from util import get_benchmarks, run_cmd
 from compile_benchmarks import from_log_file, create_table_from_rows
 import compile_benchmarks
@@ -70,9 +65,8 @@ extract_peak_java_memory.exit_pattern = re.compile(r"used\s(\d+)([KMG])")
 def get_paths(bench_name: str, predictor: str):
     out_path = (settings.out_files_base / bench_name / predictor / "log.txt")
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
-
-    from_fmt, to_fmt = get_fmt_pair_for_pred(predictor)
-    input_path = conv_trace(bench_name, from_fmt, to_fmt)
+    
+    input_path = conv_trace_pred(bench_name, predictor)
 
     return input_path, out_path
 
@@ -105,6 +99,9 @@ def run_predictor(bench_name: str, predictor: str):
     if lang == PLang.JAVA:
         peak_mem_usage = extract_peak_java_memory()
         open(out_path, 'a').write(f"Peak memory usage = {peak_mem_usage} MB")
+    
+    # Remove unzipped version to save memory
+    os.remove(input_path)
 
 def benchmark(all_benchmarks: set[str], user_benchmarks: list[str], ignored_bench: set[str], predictor: str, run_it_count:int, first:bool):
     rows = {}
