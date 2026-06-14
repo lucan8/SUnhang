@@ -23,7 +23,7 @@ struct Logger {
         std::print("\n");
     }
 
-    // Wrapper over print that prepends the output with stuff like [ERR]:, [WARN]: etc...
+    // Wrapper over print that prints to a stream
     template<typename... Args>
     static void print(std::FILE* stream, std::format_string<Args...> fmt, Args&&... args){
         std::print(stream, fmt, std::forward<Args>(args)...);
@@ -31,6 +31,17 @@ struct Logger {
         std::print(stream, "\n");
     }
 
+    // Wrapper over print that prepends the output with stuff like [ERR]:, [WARN]: etc...
+    // Prints to a stream
+    template<typename... Args>
+    static void print(std::FILE* stream, LogType log_type, std::format_string<Args...> fmt, Args&&... args){
+        _print_log_type(log_type, stream);
+
+        std::print(fmt, std::forward<Args>(args)...);
+        
+        std::print("\n");
+    }
+
     static void print_dash_line(std::FILE* out_file = nullptr);
-    static void _print_log_type(LogType log_type);
+    static void _print_log_type(LogType log_type, std::FILE* out_file = nullptr);
 };

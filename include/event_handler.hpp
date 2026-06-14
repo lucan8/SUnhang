@@ -73,7 +73,7 @@ struct EventHandler{
   std::unordered_map<ResourceIdT, CVInfo> cv_map;
 
   // Statistical info
-  uint32_t acq_count = 0;
+  uint32_t acq_req_count = 0;
 
   EventHandler(size_t thread_count, size_t var_count, size_t lock_count);
 
@@ -84,6 +84,7 @@ struct EventHandler{
   void read_event(const EventInfo& evt_info);
   void write_event(const EventInfo& evt_info);
 
+  void request_event(const EventInfo& evt_info);
   void acquire_event(const EventInfo& evt_info);
   void release_event(const EventInfo& evt_info);
   
@@ -95,7 +96,7 @@ struct EventHandler{
 
   // Helper function that creates (and adds) a new dependency to the contaianer
   AbsDepConstItT create_dep(ThreadIdT tid, ResourceIdT desired_res, const LocksetT& lockset,
-                            SrcLocT src_loc, const Event& evt);
+                            SrcLocT src_loc, Event&& evt);
   
   // Helper function that updates old_dep to contain new_res in it's lockset
   AbsDepConstItT update_dep(AbsDepConstItT old_dep, ResourceIdT new_res);
@@ -104,7 +105,7 @@ struct EventHandler{
   void handle_sleepness(ThreadInfo& th_info, ResourceIdT ass_lock_id);
 
   // Helper that creates dependency(if needed) and adds it to the recent status of the thread (if needed)
-  void handle_dep_creation(ThreadInfo& th_info, const EventInfo& evt_info, const Event& evt);
+  void handle_dep_creation(ThreadInfo& th_info, const EventInfo& evt_info, Event&& evt);
 
   void print_abs_deps() const;
   void print_comm_abs_deps() const;

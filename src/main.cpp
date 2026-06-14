@@ -1,7 +1,17 @@
+// TODO: CHANGE THE NAME OF THE REPO
+// TODO: Add the valid combinations to the help of conv_trace.py
+// TODO: Convert from local to java encoding as well
+// IMPORTANT: USING ACTUAL ORIGINAL TRACES
+// Transfer, Deadlock and HashMap have deadlocks that the authors could not find
+// TODO: Clean-up help
+// TODO: REDO THE TRACES FOR COND_VAR TO ACTUALLY GIVE THE CORRECT NUMBER OF THREADS
 // TODO: Let sorted vector unsafely return a non-const reference to the internal objects
-
-// BAD OPTIONAL ACCESS ON ECLIPSE
-
+// TODO: Micro Optimization: Allocate recent statuses only to notifying threads
+// TODO: AFTER YOU SPLIT COND_VARS AND LOCKS, Use std::vector instead of std::unordered_map for lock_dep_map
+// TODO: CANT WE ALSO IGNORE THREADS? Unshared locks vars should take into consideration thread lifetimes
+// TODO: There is one more cond var bug you could add: https://bugs.mysql.com/bug.php?id=60682
+// TODO: Could also add https://bugs.mysql.com/bug.php?id=73531 (not communication though)
+// TODO: Number of thereads 2000 > 1024 max for TSP
 // ONE IMPORTANT ASSUMPTION: SIZEOF(THREAD_ID) < SIZEOF(RESOURCE_ID)
 // GRAPH OBSERVATIONS:
 
@@ -13,9 +23,6 @@
 // THE COMPARISON IS NEEDED BECAUSE WE NEED TO KNOW WHAT NODES NOT TO CHECK AGAIN WHEN DOING CYCLE ENUMERATION
 // JOHNSON'S ALGORITHM EFFECTIVELY "KILLS" NODES AT EACH ITERATION, DECIDING THAT THEY CAN NEVER
 // CREATE A SCC IN THE FUTURE. THIS KILLING NEEDS THE CONCEPT OF ORDERING BETWEEN NODES
-
-// TODO: WHY DO WE NEED SORTED STUFF FOR GRAPH BASED COMPUTATIONS?
-// TODO: WHY DOES DERBY2 FAIL WHEN MOVING THE GRAPH VIEW IN THE CYCLE ENUMERATOR?
 
 // LOGICAL BUG FOUND BY RUNNING src_code_loc_test1/src_code_loc_bug1_dlf
 
@@ -57,6 +64,8 @@
 // if t1 waits and let's say another 2 threads keep executing stuff, upon waking t1 should
 // be aware that the other 2 threads executed before it to avoid creating fake deadlocks
 
+//TODO: Handle the java event types situation better! And also the trace converter one
+//TODO: Add better trace conversion from the python script. Add more fmt conversion(from bin to std)
 //TODO: ERR REPORT FILE FOR BAD TRACES
 //TODO: Rename the comparison operators as they are actually biased toward the first argument
 //TODO: How does this handle nested cycles?
@@ -71,7 +80,6 @@
 
 // TODO: Bensalem asserts!
 // Graph info for bensalem: 12 nodes, only 3 with outgoing neighbours, graph on the second to last page of your notebook
-
 
 // BIG QUESTION: Shouldn't the nodes(deps) be sorted based on when they appear in the trace?
 // As keeping them in a mere map does not guarantee that ordering.
@@ -104,6 +112,18 @@
 #include <cassert>
 #include <filesystem>
 
+
+#include <cstring>
+#include <cerrno>
+
+// For memory usage query
+#if defined(_WIN32)
+    #include <windows.h>
+    #include <psapi.h>
+    #elif defined(__linux__) || defined(__APPLE__)
+    #include <sys/resource.h>
+#endif
+
 using namespace std::chrono_literals;
 namespace fs = std::filesystem;
 
@@ -117,6 +137,29 @@ namespace fs = std::filesystem;
 #include "../include/scc_enumerator.hpp"
 #include "../include/cycle_enumerator.hpp"
 #include "../include/deadlock_checker.hpp"
+
+// Prints peak memory usage to log_file in a cross-platform way
+void print_peak_memory(std::FILE* log_file) {
+    #if defined(_WIN32)
+        PROCESS_MEMORY_COUNTERS pmc;
+        if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc))) {
+            Logger::print(log_file, "Peak memory usage = {} MB", pmc.PeakWorkingSetSize / (1024.0 * 1024.0));
+        } else {
+            DWORD err = GetLastError();
+            Logger::print(log_file, LogType::ERR, "GetProcessMemoryInfo failed. Windows Error Code: {}", err);
+        }
+    #elif defined(__linux__) || defined(__APPLE__)
+        struct rusage usage;
+        if (getrusage(RUSAGE_SELF, &usage) == 0) {
+            Logger::print(log_file, "Peak memory usage = {} MB", usage.ru_maxrss / 1024.0);
+        } else {
+            // getrusage sets the global errno variable on failure
+            Logger::print(log_file, LogType::ERR, "getrusage failed. System Error: {}", std::strerror(errno));
+        }
+    #else
+        Logger::print(log_file, LogType::WARN, "Memory profiling not supported on this platform.");
+    #endif
+}
 
 int main(int argc, char *argv[]) {
     const uint8_t exp_args = 3;
@@ -144,44 +187,27 @@ int main(int argc, char *argv[]) {
     // TestVectorClock::test();
     // TestPredictor::test();
     
+    // Start timer
     auto start = std::chrono::steady_clock::now();
     
     // Preprocess trace file(fill metadata, determine events to be ignored etc...)
     BinParser trace_parser(trace_file);
-    // MetaInfo& meta_info1 = meta_info;
-    trace_parser.preprocess_trace();
-
     Logger::print(log_file, "----Trace info----");
     trace_parser.print_summary(log_file);
+    trace_parser.preprocess_trace();
 
-    auto end = std::chrono::steady_clock::now();
-    auto millis_passed_parse_trace = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-
-    // Read and handle events
+    // Re-Read and handle events
     EventHandler event_handler(meta_info.header.THREAD_COUNT, meta_info.header.VAR_COUNT, meta_info.header.LOCK_COUNT);
     trace_parser.parse_and_handle_trace(event_handler);
-
-    // Print summary
     event_handler.print_summary(log_file);
-    fflush(log_file);
 
-    end = std::chrono::steady_clock::now();
-    auto millis_passed_handle_events = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-
-    // Logger::print(LogType::INFO, "Finished event handling");
-    end = std::chrono::steady_clock::now();
-    auto millis_passed_build_neigh_list = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-
+    // Build the abstract dependency graph and enumerate cycles
     OrdDepGraphView graph_view(std::move(event_handler.abs_deps), event_handler.lock_dep_map);
     CycleEnumerator cycle_enumerator(graph_view);
     cycle_enumerator.enum_cycles();
-    
     Logger::print(log_file, "num cycles: {}", cycle_enumerator.res_cycles.size());
-    fflush(log_file);
-
-    end = std::chrono::steady_clock::now();
-    auto millis_passed_cycle_enum = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-
+    
+    // Identify abstract deadlock pattern
     DeadlockChecker dlk_checker(std::move(event_handler.cs_hist), std::move(event_handler.dep_loc_ev_map));
 
     // Each cycle might have multiple abstract deadlock patterns
@@ -198,16 +224,13 @@ int main(int argc, char *argv[]) {
 
     Logger::print(log_file, "num abstract: {}", abs_dlk_pattern_count);
     Logger::print(log_file, "num concrete: -1\n"); // Just to match the format
-    fflush(log_file);
     
-    end = std::chrono::steady_clock::now();
-    auto millis_passed_abs_dlk_check = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-    
+    // Check if patterns are sync preserving
     uint32_t real_dlk_count = 0;
-    std::vector<int> real_dlk_ind;
-
     std::set<std::vector<SimpleNode>> verified_patterns;
+
     for (auto& abs_dlk_pattern : all_abs_dlk_patterns){
+        // Don't look at already verified patterns
         if (verified_patterns.find(abs_dlk_pattern.nodes) != verified_patterns.end()){
             continue;
         }
@@ -219,19 +242,13 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    end = std::chrono::steady_clock::now();
-    auto millis_passed_sync_pres_check = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    auto end = std::chrono::steady_clock::now();
+    auto millis_passed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
     
     Logger::print(log_file, "\nnum deadlocks: {}", real_dlk_count);
+    Logger::print(log_file, "Time for analysis = {} milliseconds", millis_passed);
+    print_peak_memory(log_file);
 
-    Logger::print(log_file, "Time for parsing = {} milliseconds", millis_passed_parse_trace);
-    Logger::print(log_file, "Time for event handling = {} milliseconds", millis_passed_handle_events - millis_passed_parse_trace);
-    Logger::print(log_file, "Time for neight list building = {} milliseconds", millis_passed_build_neigh_list - millis_passed_handle_events);
-    Logger::print(log_file, "Time for cycle enumeration = {} milliseconds", millis_passed_cycle_enum - millis_passed_build_neigh_list);
-    Logger::print(log_file, "Time for abs deadlock checks = {} milliseconds", millis_passed_abs_dlk_check - millis_passed_cycle_enum);
-    Logger::print(log_file, "Time for sync pres check = {} milliseconds", millis_passed_sync_pres_check - millis_passed_abs_dlk_check);
-    Logger::print(log_file, "Total Time = {} milliseconds", millis_passed_sync_pres_check);
-    
     // Cleanup
     std::fclose(log_file);
     std::fclose(trace_file);

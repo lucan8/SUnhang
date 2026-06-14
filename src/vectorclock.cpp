@@ -11,21 +11,33 @@ AdaptiveVectorClock::AdaptiveVectorClock(ThreadIdT owner_tid) : owner_idx(1){
     // index 0: tid, index 1: value
     _raw_memory.push_back(owner_tid);
     _raw_memory.push_back(1);
+
+    // THIS IS ONLY FOR TESTING DENSE VCs
+    // is_dense = true;
+    // _raw_memory.resize(meta_info.header.THREAD_COUNT, 0);
+    // owner_idx = owner_tid;
+    // _raw_memory[owner_idx] = 1;
+
 }
 
 // INTERFACE FUNCTIONS THAT DECIDE WHICH (SPARSE OR DENSE) VERSION SHOULD BE USED
 
 // Merges this into other. Return true if any change occured, false otherwise
 bool AdaptiveVectorClock::merge_into(const AdaptiveVectorClock& other){
-    try_convert_to_dense();
+    bool res = false;
     
     if (!is_dense){
-        if (!other.is_dense) return merge_into_sparse(other);
-        else return sparse_merge_into_dense(other);
+        if (!other.is_dense) res = merge_into_sparse(other);
+        else res = sparse_merge_into_dense(other);
     } 
-    else if (other.is_dense) return merge_into_dense(other);
-    
-    return dense_merge_into_sparse(other);
+    else if (other.is_dense) res = merge_into_dense(other);
+    else res = dense_merge_into_sparse(other);
+
+    // It is important to try the conversion at the end to avoid having a sparse vc with more than T / 2
+    // active elements, as that will break other assumptions
+    try_convert_to_dense();
+
+    return res;
 }
 
 // It decrements other, merges into this and increments other back
@@ -58,14 +70,6 @@ bool AdaptiveVectorClock::operator<(const AdaptiveVectorClock& other) const {
     else if (other.is_dense) return less_than_dense(other);
     
     return dense_less_than_sparse(other);
-}
-
-bool AdaptiveVectorClock::operator>(const AdaptiveVectorClock& other) const{
-    return !(*this <= other);
-}
-
-bool AdaptiveVectorClock::operator==(const AdaptiveVectorClock& other) const{
-    return *this <= other && other <= *this;
 }
 
 // Increments the value pointed to by owner_idx

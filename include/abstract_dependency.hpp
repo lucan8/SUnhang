@@ -76,6 +76,6 @@ struct AbsDepConstItComp {
 };
 
 
-typedef std::unordered_map<ResourceIdT, SortedVector<AbsDepConstItT, AbsDepConstItComp>> LockDepMapT;
+typedef std::unordered_map<ResourceIdT, std::vector<AbsDepConstItT>> LockDepMapT;
 
 typedef std::unordered_map<AbsDepConstItT, std::unordered_map<SrcLocT, std::vector<Event>>, IteratorHasher> DepLocToEvMapT;

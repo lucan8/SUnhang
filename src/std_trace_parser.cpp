@@ -3,11 +3,12 @@
 #include "../include/std_trace_parser.hpp"
 #include "../include/meta_info.hpp"
 #include "../include/lockset.hpp"
+#include "../include/logger.hpp"
 
 const std::unordered_map<std::string, EventsT> StdParser::std_event_map = {
     {"r", EventsT::RD}, {"w", EventsT::WR},
     {"fork", EventsT::FORK}, {"join", EventsT::JOIN},
-    {"acq", EventsT::LK}, {"rel", EventsT::UK},
+    {"req", EventsT::REQ}, {"acq", EventsT::LK}, {"rel", EventsT::UK},
     {"wait", EventsT::WAIT}, {"notify", EventsT::NOTIFY}, 
     {"notifyAll", EventsT::NOTIFYALL}, {"broadcast", EventsT::NOTIFYALL}
 };
@@ -86,7 +87,10 @@ std::optional<EventInfo> StdParser::get_next_event() {
     
     // Check that the event is valid before proceeding
     auto ev_type_it = std_event_map.find(ev_type_c);
-    if (ev_type_it == std_event_map.end()) return {};
+    if (ev_type_it == std_event_map.end()){
+        // Logger::print(LogType::DBG, "Ignoring event with type: {}", ev_type_c);
+        return {};
+    } 
 
     char* target_c = std::strtok(nullptr, ")");
     if (!target_c) return {};
@@ -122,7 +126,8 @@ void StdParser::to_bin_fmt(FILE* out_bin_file){
     // Print metadata
     print_metadata(out_bin_file);
 
-    // Print binary events
+    // Print binary events. 
+    // If the type is smaller than 8 byes, print them one by one to avoid printing the padding too
     fwrite(events.data(), sizeof(events[0]), events.size(), out_bin_file);
 }
 
@@ -132,5 +137,5 @@ void StdParser::print_metadata(FILE* out_bin_file) const{
                            TraceBinFormatter::mask_var_count(var_id_map._map.size()),
                            TraceBinFormatter::mask_lock_count(lock_id_map._map.size())
                           );
-    fwrite(&meta_header, sizeof(meta_header), 1 , out_bin_file);
+    meta_header.store(out_bin_file);
 }

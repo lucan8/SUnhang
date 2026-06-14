@@ -2,7 +2,7 @@ set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 cmake_minimum_required(VERSION 4.0)
 
 project(SUnhang)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "../bin")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/../bin/SUnhang/")
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2")
@@ -34,6 +34,14 @@ set(CONV_TR_SRC
 add_executable(SUnhang src/main.cpp ${SUNHANG_SRC})
 add_executable(conv_trace src/conv_trace.cpp ${CONV_TR_SRC})
 
-# For std print
-target_link_libraries(SUnhang PRIVATE -lstdc++exp)
-target_link_libraries(conv_trace PRIVATE -lstdc++exp)
+# For std::print when using gcc or being in a MinGW environment
+set(EXP_FLAG "-lstdc++exp")
+if(MINGW)
+    message(STATUS "Running in a MinGW environment. Linking ${EXP_FLAG}")
+    target_link_libraries(SUnhang PRIVATE -lstdc++exp)
+    target_link_libraries(conv_trace PRIVATE -lstdc++exp)
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    message(STATUS "Compiling with a GNU compiler. Linking ${EXP_FLAG}")
+    target_link_libraries(SUnhang PRIVATE -lstdc++exp)
+    target_link_libraries(conv_trace PRIVATE -lstdc++exp)
+endif()

@@ -1,5 +1,7 @@
 import subprocess
-import settings
+from settings import settings
+from zipfile import ZipFile, ZIP_DEFLATED
+from pathlib import Path
 
 # Just runs the command and waits
 def run_cmd(cmd: list[str], stdout: str|None=None, timeout: int|None=None):
@@ -18,5 +20,17 @@ def run_cmd(cmd: list[str], stdout: str|None=None, timeout: int|None=None):
         stdout.close()
 
 
-def get_benchmarks():
-    return [path.stem for path in settings.trace_std_dir.iterdir()]
+def get_benchmarks() -> list[str]:
+    bench_java_enc = [path.stem for path in settings.trace_bin_java_enc_dir.iterdir()]
+    bench_local_enc = [path.stem for path in settings.trace_bin_loc_enc_dir.iterdir()]
+    bench_std = [path.stem for path in settings.trace_std_dir.iterdir()]
+
+    return list(set(bench_java_enc + bench_std + bench_local_enc))
+
+def unzip_file(zip_path: Path):
+    with ZipFile(zip_path, 'r') as my_zip:
+        my_zip.extractall(zip_path.parent)
+
+def zip_file(file_path: Path, zip_path: Path):
+    with ZipFile(zip_path, 'w',  ZIP_DEFLATED) as myzip:
+        myzip.write(file_path, arcname=file_path.name)

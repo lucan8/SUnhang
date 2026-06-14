@@ -1,18 +1,20 @@
 #include "../include/logger.hpp"
 
-void Logger::_print_log_type(LogType log_type){
+void Logger::_print_log_type(LogType log_type, std::FILE* out_file){
+    out_file = (out_file != nullptr) ? out_file : stdout;
+
     switch (log_type){
         case LogType::INFO:
-            std::print("[INFO]:");
+            std::print(out_file, "[INFO]:");
             break;
         case LogType::WARN:
-            std::print("[WARN]:");
+            std::print(out_file, "[WARN]:");
             break;
         case LogType::ERR:
-            std::print("[ERR]:");
+            std::print(out_file, "[ERR]:");
             break;
         case LogType::DBG:
-            std::print("[DBG]:");
+            std::print(out_file, "[DBG]:");
             break;
         default:
             break;

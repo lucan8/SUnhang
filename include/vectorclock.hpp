@@ -45,8 +45,6 @@ struct AdaptiveVectorClock {
 
     bool operator<=(const AdaptiveVectorClock& other) const;
     bool operator<(const AdaptiveVectorClock& other) const;
-    bool operator>(const AdaptiveVectorClock& other) const;
-    bool operator==(const AdaptiveVectorClock& other) const;
 
     // You better not call increment or decrement without owners!
     void increment();

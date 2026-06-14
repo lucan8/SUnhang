@@ -71,32 +71,14 @@ BinParser::BinParser(std::FILE* trace_file) : trace_file(trace_file){
     shared_locks.reset(meta_info.header.LOCK_COUNT);
     shared_vars.reset(meta_info.header.VAR_COUNT);
     meta_info.resize_notif_threads();
-    ignored_events.resize(meta_info.header.EVENT_COUNT, 0);
 }
 
-// Helper function for parse_full_trace. Should not be used anywhere else
-void BinParser::_update_last_write(std::vector<uint8_t>& ignored_events, EventIdT event_idx, EventsT event_type,
-                                ResourceIdT target, std::vector<EventIdT>& last_write) const{
-    if (event_type == EventsT::WR){
-        // Ignore the write before this and update
-        int last_write_ev_id = last_write[target];
-        if (last_write_ev_id != -1){
-            ignored_events[last_write_ev_id] = true;
-        }
-        last_write[target] = event_idx;
-    }
-    // Acknowledge the last write(make it so it is not ignored)
-    else if (event_type == EventsT::RD){
-        last_write[target] = -1;
-    }
-}
 
 void BinParser::preprocess_trace() {
     // Account for metadata loading
     long start_file_pos = std::ftell(trace_file);
 
     std::array<BinEvT, EV_BLOCK_CNT> bin_ev_block;
-    std::vector<EventIdT> last_write(meta_info.header.VAR_COUNT, -1);
 
     size_t read_ev_cnt = 0;
     EventIdT curr_ev_id = -1;
@@ -117,7 +99,6 @@ void BinParser::preprocess_trace() {
                 shared_locks.update(thread_id, target);
             } else if (is_access_type(event_type)) {
                 shared_vars.update(thread_id, target);
-                _update_last_write(ignored_events, curr_ev_id, event_type, target, last_write);
             } else if (is_notif_type(event_type)) {
                 meta_info.NOTIF_THREADS[thread_id] = 1;
                 // Calling wait/notify on an object makes the object shared
@@ -148,12 +129,6 @@ void BinParser::parse_and_handle_trace(EventHandler& event_handler) {
 
         for (size_t i = 0; i < read_ev_cnt; ++i) {
             curr_ev_id++;
-
-            // Don't process events that should be ignored
-            if (ignored_events[curr_ev_id]) {
-                continue;
-            }
-
             BinEvT bin_ev = bin_ev_block[i];
             
             // Only extract what's necessary to check the conditions
