@@ -62,4 +62,4 @@ class Settings:
         os.makedirs(self.trace_bin_loc_enc_dir, exist_ok=True)
         os.makedirs(self.trace_bin_java_enc_dir, exist_ok=True)
 
-settings = Settings("hand_made")
+settings = Settings("cond_var")
