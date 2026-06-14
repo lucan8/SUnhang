@@ -12,11 +12,11 @@ This is a C++23 deadlock predictor that combines the works of https://dl.acm.org
 - Java 21 (no extra dependencies)
 - at least 9 GB RAM (the `graphchi` benchmark is HUGE and `SPDOffline` loads it in memory)
 
-I personally ran this on  Windows 11, using Clang, in a MinGW environment.
+I personally ran this on  Windows 11, using Clang, in a MinGW environment. The code is (**hopefully**) cross-platform (**not-tested**)
 
 ## How to install and run
 
-1. git clone https://github.com/lucan8/SUnhang.git
+1. git clone https://github.com/lucan8/GSPDOffline
 2. cmake --build build
 3. python scripts/run.py
 

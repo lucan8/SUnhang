@@ -58,8 +58,8 @@ def _conv_trace(from_path: Path, to_path: Path, cmd: list[str]) -> Path:
     to_path_zip = to_path.with_suffix(".zip")
     from_path_zip = from_path.with_suffix(".zip")
 
-    print(from_path)
-    print(to_path)
+    # print(from_path)
+    # print(to_path)
 
     if to_path_zip.exists(): # Unzip already existing zipped trace
         unzip_file(to_path_zip)

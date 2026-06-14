@@ -22,9 +22,10 @@ def run_cmd(cmd: list[str], stdout: str|None=None, timeout: int|None=None):
 
 def get_benchmarks() -> list[str]:
     bench_java_enc = [path.stem for path in settings.trace_bin_java_enc_dir.iterdir()]
+    bench_local_enc = [path.stem for path in settings.trace_bin_loc_enc_dir.iterdir()]
     bench_std = [path.stem for path in settings.trace_std_dir.iterdir()]
 
-    return list(set(bench_java_enc + bench_std))
+    return list(set(bench_java_enc + bench_std + bench_local_enc))
 
 def unzip_file(zip_path: Path):
     with ZipFile(zip_path, 'r') as my_zip:

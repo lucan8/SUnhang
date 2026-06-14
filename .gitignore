@@ -19,4 +19,3 @@ benchmarks.zip
 .venv/
 trace_generator/
 benchmarks/hand_made
-*.zip
