@@ -113,6 +113,11 @@ def get_bin_fmt_pair(predictor: str) -> tuple[str, str]:
 
 def main():
     parser = optparse.OptionParser()
+
+    parser.add_option("--bs", "--bench_suite", dest="bench_suite", default="cond_var",
+                      help="run the script on the given benchmark suite. " \
+                            f"Should be one of {settings.available_bench_suites}" \
+                            "(Default: cond_var).")
     parser.add_option("-b", "--benchmarks", dest="benchmarks", default="all",
                       help="converts the trace from std to bin for the specified benchmarks. Default is all")
     parser.add_option("-i", "--ignore", dest="ignored_bench", default="",
@@ -127,6 +132,14 @@ def main():
                            "Default is ''(no predictor)")
     
     (options, args) = parser.parse_args()
+    
+    # Set benchmark suite
+    settings.set_bench_suite(options.bench_suite)
+    if settings.bench_suite == "":
+        print(f"[ERROR]: Invalid benchmark suite ({options.bench_suite}), should be one of {settings.available_bench_suites}")
+        return
+    
+    print(f"Benchmark suite: {settings.bench_suite}")
     
     # Set benchmarks
     if options.benchmarks == "all":

@@ -49,7 +49,11 @@ class Settings:
 
     def _set_output_paths(self):
         self.out_files_base = self.bench_dir / "output"
+        os.makedirs(self.out_files_base, exist_ok=True)
+
         self.table_out_dir = self.bench_dir / "tables"
+        os.makedirs(self.table_out_dir, exist_ok=True)
+
         self.table_out_path = self.table_out_dir / "main.tex"
         self.table_df_out_path = self.table_out_dir / "table.df"
     

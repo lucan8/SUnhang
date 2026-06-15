@@ -7,7 +7,7 @@ import optparse
 
 #TODO: Somehow save the verbosity when saving the dataframe 
 
-common_columns = [("Benchmark", ""), ("N", ""), ("T", ""), ("V", ""), ("L", ""), ("A/R", "")]
+comm_col = [("Benchmark", ""), ("N", ""), ("T", ""), ("V", ""), ("L", ""), ("A/R", "")]
 
 mini_col_base = ["Dlk", "Time(s)", "Mem(MB)"] # Used in both clean and verbose
 mini_col_extra = ["Dep", "Cyc", "Abs"] # Used only in verbose
@@ -24,9 +24,9 @@ mini_columns = []
 def set_verbosity(verb:bool):
     global verbose, mini_columns
     verbose = verb
-    mini_columns = get_mini_columns()
+    mini_columns = get_mini_col()
 
-def get_mini_columns():
+def get_mini_col():
     global verbose
     if verbose:
         return mini_col_verb
@@ -34,13 +34,13 @@ def get_mini_columns():
 
 # Returns the data from the log file in a format to be used for row construction in the table
 def from_log_file(file_path: Path) -> tuple[list, list]:
-    global verbose, mini_columns
+    global verbose, mini_columns, comm_col
 
     # print(file_path)
     file = open(file_path, 'r')
     common_dic = {}
     pred_dic = {}
-    empty_res = ([0] * (len(common_columns) - 1), [0] * (len(mini_columns))) 
+    empty_res = ([0] * (len(comm_col) - 1), [0] * (len(mini_columns))) 
 
     # Empty log file? Empty result
     lines = file.readlines()
@@ -48,14 +48,14 @@ def from_log_file(file_path: Path) -> tuple[list, list]:
         return empty_res
     
     # Common columns
-    for i in range(1, len(common_columns)):
+    for i in range(1, len(comm_col)):
         split_line = lines[i].strip().split(": ")
         common_dic[split_line[0].split()[1][:4]] = int(split_line[1])
 
     # Specific columns
     if verbose:
         for i in range(len(mini_col_extra)):
-            split_line = lines[len(common_columns) + i].strip().split(": ")
+            split_line = lines[len(comm_col) + i].strip().split(": ")
             pred_dic[split_line[0].split()[1][:4]] = int(split_line[1])
     
     # Deaadlocks, time and memory
@@ -65,12 +65,13 @@ def from_log_file(file_path: Path) -> tuple[list, list]:
     
     comm_l, pred_l = list(common_dic.values()), list(pred_dic.values())
     comm_l[0], comm_l[1] = comm_l[1], comm_l[0]
+    
     return comm_l, pred_l
 
 def get_df_col(predictors:list[str]=settings.available_predictors):
-    global mini_columns
+    global mini_columns, comm_col
 
-    tuples = common_columns + list(itertools.product(predictors, mini_columns))
+    tuples = comm_col + list(itertools.product(predictors, mini_columns))
     columns = pd.MultiIndex.from_tuples(tuples)
 
     print(f"[TABLE INFO]: Compiled {len(columns)} columns!")
@@ -106,13 +107,13 @@ def format_df(df: pd.DataFrame, predictors: list[str]=settings.available_predict
 # This was used to format the tables in the paper.
 # Each predictor only gives the dlk, time and memory
 def format_df_clean(df: pd.DataFrame, predictors: list[str]=settings.available_predictors):
-    global mini_columns, common_columns
+    global mini_columns, comm_col
 
     # Work on a copy to preserve the original structural layout
     res_df = df.copy()
     
     # Copy over and format the common metadata columns
-    for col in common_columns[1:]:
+    for col in comm_col[1:]:
         res_df[col] = df[col].astype(int).apply(format_suffix)
 
     for p in predictors:
@@ -128,18 +129,18 @@ def format_df_clean(df: pd.DataFrame, predictors: list[str]=settings.available_p
 
 # This was used during development
 def format_df_verbose(df: pd.DataFrame, predictors: list[str]=settings.available_predictors):
-    global mini_columns, common_columns
+    global mini_columns, comm_col
 
     sep = r"\textbackslash{}" 
     sub_header = sep.join(mini_columns)
     
     # Set new dataframe with only one concatenated subcolumn
-    new_tuples = common_columns + [(p, sub_header) for p in predictors]
+    new_tuples = comm_col + [(p, sub_header) for p in predictors]
     res_df = pd.DataFrame(columns=pd.MultiIndex.from_tuples(new_tuples))
 
     # Copy over the common stuff and apply formatting
-    res_df[common_columns[0]] = df[common_columns[0]]
-    for col in common_columns[1:]:
+    res_df[comm_col[0]] = df[comm_col[0]]
+    for col in comm_col[1:]:
         res_df[col] = df[col].astype(int).apply(format_suffix)
 
     # Convert the types of predictor columns and add the separator between them
@@ -184,7 +185,7 @@ def _format_total_row(latex_table: str):
     return latex_table
 
 def save_latex(df: pd.DataFrame, predictors: list[str] = settings.available_predictors):
-    num_common = len(common_columns)
+    num_common = len(comm_col)
     num_sub_cols = len(mini_columns)
 
     common_fmt = "|l|" + "c|" * (num_common - 1)
@@ -331,6 +332,12 @@ def run_lazy():
 
 def main():
     parser = optparse.OptionParser()
+
+    parser.add_option("--bs", "--bench_suite", dest="bench_suite", default="cond_var",
+                      help="run the script on the given benchmark suite. " \
+                            f"Should be one of {settings.available_bench_suites}" \
+                            "(Default: cond_var).")
+    
     parser.add_option("-p", "--predictor", dest="predictors", default="all",
                       help="compiles benchmarks only the desired predictors." \
                            "Specify the names of the predictors and seperate them with a comma " \
@@ -346,6 +353,14 @@ def main():
     
     (options, args) = parser.parse_args()
 
+    # Set benchmark suite
+    settings.set_bench_suite(options.bench_suite)
+    if settings.bench_suite == "":
+        print(f"[ERROR]: Invalid benchmark suite ({options.bench_suite}), should be one of {settings.available_bench_suites}")
+        return
+    
+    print(f"Benchmark suite: {settings.bench_suite}")
+    
     # Get predictors
     all_predictors = set(settings.available_predictors)
     if options.predictors == "all":

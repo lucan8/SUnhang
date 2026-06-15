@@ -1,4 +1,4 @@
-// TODO: CHANGE THE NAME OF THE REPO
+// TODO: DONT FORGET TO RUN GENERATED AND IGNORE TSP_DLF
 // TODO: Add the valid combinations to the help of conv_trace.py
 // TODO: Convert from local to java encoding as well
 // IMPORTANT: USING ACTUAL ORIGINAL TRACES
